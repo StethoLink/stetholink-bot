@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import type { ApprovalDecision, ConsultationStatus } from "@/shared/contracts";
 import { isFinalStatus } from "../hooks/draftState";
 import styles from "../styles/approval.module.css";
@@ -23,6 +23,12 @@ export function ApprovalControls({ status, submitting, error, onDecide }: Approv
   const [pending, setPending] = useState<ApprovalDecision>();
   const [comment, setComment] = useState("");
   const id = useId();
+
+  // A recorded decision changes the status; close the confirm step and clear the comment.
+  useEffect(() => {
+    setPending(undefined);
+    setComment("");
+  }, [status]);
   const final = isFinalStatus(status);
   const needsComment = pending === "request_changes";
   const canConfirm = !submitting && (!needsComment || comment.trim().length > 0);
