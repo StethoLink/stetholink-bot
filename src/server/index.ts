@@ -4,6 +4,10 @@ import { getModelProvider } from "@/server/ai/providers";
 import { createPatientContextService } from "@/server/clinical/patient-context/service";
 import { getClinicalDataAdapter } from "@/server/integrations/fhir";
 import { passthroughSafetyGuard } from "@/server/safety/guard";
+import { createConsultationRepository } from "@/server/database";
+import { createConsultationService } from "@/server/clinical/consultation/service";
+import type { ClinicianSession } from "@/server/auth/session";
+import { RouteError } from "@/server/http/respond";
 
 /** Composition root. API routes import from here; nothing else creates concrete dependencies. */
 export function getServices() {
@@ -19,3 +23,12 @@ export function getServices() {
 
 export { requireClinician } from "@/server/auth/session";
 export { contractResponse, errorResponse, handleRouteError } from "@/server/http/respond";
+export * as authRoutes from "@/server/auth/routes";
+
+export function getConsultations(session: ClinicianSession) {
+  if (!session.accessToken) throw new RouteError("unauthenticated", "Sign in with Supabase to save consultations");
+  return createConsultationService({
+    repository: createConsultationRepository(session.accessToken), provider: getModelProvider(),
+    safety: passthroughSafetyGuard, adapter: getClinicalDataAdapter(),
+  });
+}
