@@ -1,28 +1,50 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useReducer, useState } from "react";
 import { getApiClient, type StethoLinkApiClient } from "@/shared/api-client";
-import type { ApprovalDecision, ConsultationDraft } from "@/shared/contracts";
+import type { ApprovalDecision, CreateConsultationDraftRequest } from "@/shared/contracts";
+import { createDraft, decideDraft, draftReducer, initialDraftState, loadDraft } from "./draftState";
 
-/** Loads a draft and submits the clinician's decision. Approval is always an explicit user action. */
-export function useConsultationDraft(draftId: string, client: StethoLinkApiClient = getApiClient()) {
-  const [draft, setDraft] = useState<ConsultationDraft>();
-  const [error, setError] = useState<string>();
+/**
+ * Loads or generates a consultation draft and submits the clinician's decision.
+ * Approval is always an explicit user action; nothing here approves automatically.
+ */
+export function useConsultationDraft(draftId?: string, options: { client?: StethoLinkApiClient } = {}) {
+  const client = options.client ?? getApiClient();
+  const [state, dispatch] = useReducer(draftReducer, initialDraftState);
+  const [currentId, setCurrentId] = useState(draftId);
+
+  useEffect(() => setCurrentId(draftId), [draftId]);
 
   useEffect(() => {
-    client.getConsultationDraft(draftId).then(setDraft, () => setError("Could not load draft"));
-  }, [draftId, client]);
+    if (!currentId) return;
+    let active = true;
+    void loadDraft(client, (a) => active && dispatch(a), currentId);
+    return () => {
+      active = false;
+    };
+  }, [client, currentId]);
 
-  const decide = useCallback(
-    async (decision: ApprovalDecision, comment?: string) => {
-      try {
-        setDraft(await client.submitApproval({ draftId, decision, comment }));
-      } catch {
-        setError("Could not submit decision");
-      }
+  const reload = useCallback(() => {
+    if (currentId) void loadDraft(client, dispatch, currentId);
+  }, [client, currentId]);
+
+  const generate = useCallback(
+    async (request: CreateConsultationDraftRequest) => {
+      const draft = await createDraft(client, dispatch, request);
+      if (draft) setCurrentId(draft.id);
+      return draft;
     },
-    [client, draftId],
+    [client],
   );
 
-  return { draft, error, decide };
+  const decide = useCallback(
+    (decision: ApprovalDecision, comment?: string) => {
+      if (state.status !== "ready") return Promise.resolve();
+      return decideDraft(client, dispatch, { draftId: state.draft.id, decision, comment });
+    },
+    [client, state],
+  );
+
+  return { state, reload, generate, decide };
 }
