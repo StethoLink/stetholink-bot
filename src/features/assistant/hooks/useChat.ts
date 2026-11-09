@@ -1,37 +1,44 @@
 "use client";
 
-import { useCallback, useState } from "react";
-import { ApiClientError, getApiClient, type StethoLinkApiClient } from "@/shared/api-client";
-import type { ChatMessage, ChatRequest } from "@/shared/contracts";
-import { createId, nowIso } from "@/shared/utils";
+import { useCallback, useReducer, useRef } from "react";
+import { getApiClient, type StethoLinkApiClient } from "@/shared/api-client";
+import { chatReducer, initialChatState, lastFailedEntry, sendChat } from "./chatState";
 
-type Status = "idle" | "sending" | "error";
-
-export function useChat(options: { patientId?: string; client?: StethoLinkApiClient } = {}) {
+export function useChat(options: { patientId?: string; encounterId?: string; client?: StethoLinkApiClient } = {}) {
   const client = options.client ?? getApiClient();
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [conversationId, setConversationId] = useState<string>();
-  const [status, setStatus] = useState<Status>("idle");
-  const [error, setError] = useState<string>();
+  const [state, dispatch] = useReducer(chatReducer, initialChatState);
+  const stateRef = useRef(state);
+  stateRef.current = state;
 
   const send = useCallback(
-    async (text: string) => {
-      const request: ChatRequest = { message: text, conversationId, patientId: options.patientId };
-      setMessages((m) => [...m, { id: createId("local"), role: "clinician", content: text, createdAt: nowIso() }]);
-      setStatus("sending");
-      setError(undefined);
-      try {
-        const res = await client.sendChatMessage(request);
-        setConversationId(res.conversationId);
-        setMessages((m) => [...m, res.message]);
-        setStatus("idle");
-      } catch (e) {
-        setError(e instanceof ApiClientError ? e.message : "Something went wrong");
-        setStatus("error");
-      }
-    },
-    [client, conversationId, options.patientId],
+    (text: string) =>
+      sendChat(client, dispatch, {
+        text,
+        conversationId: stateRef.current.conversationId,
+        patientId: options.patientId,
+        encounterId: options.encounterId,
+      }),
+    [client, options.patientId, options.encounterId],
   );
 
-  return { messages, status, error, send };
+  const retry = useCallback(() => {
+    const failed = lastFailedEntry(stateRef.current);
+    if (!failed) return Promise.resolve();
+    return sendChat(client, dispatch, {
+      text: failed.message.content,
+      retryOf: failed.message.id,
+      conversationId: stateRef.current.conversationId,
+      patientId: options.patientId,
+      encounterId: options.encounterId,
+    });
+  }, [client, options.patientId, options.encounterId]);
+
+  return {
+    entries: state.entries,
+    status: state.status,
+    error: state.error,
+    canRetry: Boolean(lastFailedEntry(state)),
+    send,
+    retry,
+  };
 }

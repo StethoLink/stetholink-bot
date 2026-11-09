@@ -1,0 +1,48 @@
+.approve,
+.reject,
+.request_changes,
+.cancel {
+  border-radius: 0.375rem;
+  padding: 0.5rem 1rem;
+  font-weight: 500;
+  border: 1px solid transparent;
+}
+.approve {
+  background: #047857;
+  color: #fff;
+}
+.reject {
+  background: #b91c1c;
+  color: #fff;
+}
+.request_changes {
+  background: #fff;
+  color: #78350f;
+  border-color: #b45309;
+}
+.cancel {
+  background: #fff;
+  color: #1e293b;
+  border-color: #64748b;
+}
+.input {
+  width: 100%;
+  border: 1px solid #64748b;
+  border-radius: 0.375rem;
+  padding: 0.5rem;
+}
+.approve:focus-visible,
+.reject:focus-visible,
+.request_changes:focus-visible,
+.cancel:focus-visible,
+.input:focus-visible {
+  outline: 3px solid #0369a1;
+  outline-offset: 2px;
+}
+.approve:disabled,
+.reject:disabled,
+.request_changes:disabled,
+.cancel:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
