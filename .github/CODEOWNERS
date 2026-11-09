@@ -1,18 +1,34 @@
-# Replace the team handles with real GitHub users/teams.
-# Ownership map mirrors docs/agent-handoffs/OWNERSHIP.md.
-*                              @StethoLink/maintainers
+# Replace these team handles with real GitHub users or teams, then enable
+# "Require review from Code Owners" on main. Canonical map: docs/architecture/ARCHITECTURE.md §2.
+*                               @StethoLink/integration
 
-/src/app/(workspace)/          @StethoLink/frontend
-/src/features/                 @StethoLink/frontend
-/tests/frontend/               @StethoLink/frontend
+# Claude Code: frontend & clinical experience
+/src/app/(workspace)/           @StethoLink/frontend
+/src/features/                  @StethoLink/frontend
+/tests/frontend/                @StethoLink/frontend
 
-/src/app/api/                  @StethoLink/backend
-/src/server/                   @StethoLink/backend
-/supabase/                     @StethoLink/backend
-/tests/backend/                @StethoLink/backend
+# Codex: backend & intelligence
+/src/app/api/                   @StethoLink/backend
+/src/server/                    @StethoLink/backend
+/supabase/                      @StethoLink/backend
+/tests/backend/                 @StethoLink/backend
 
-/src/shared/                   @StethoLink/frontend @StethoLink/backend
-/src/app/layout.tsx            @StethoLink/frontend @StethoLink/backend
-/src/app/globals.css           @StethoLink/frontend @StethoLink/backend
-/docs/api-contracts/           @StethoLink/frontend @StethoLink/backend
-/tests/e2e/                    @StethoLink/maintainers
+# Shared contracts: owned by Codex, integration review required
+/src/shared/                    @StethoLink/backend @StethoLink/integration
+
+# Protected configuration: integration review required
+/package.json                   @StethoLink/integration
+/package-lock.json              @StethoLink/integration
+/tsconfig.json                  @StethoLink/integration
+/next.config.ts                 @StethoLink/integration
+/eslint.config.mjs              @StethoLink/integration
+/postcss.config.mjs             @StethoLink/integration
+/vitest.config.ts               @StethoLink/integration
+/src/app/layout.tsx             @StethoLink/integration
+/src/app/globals.css            @StethoLink/integration
+/.github/                       @StethoLink/integration
+/scripts/                       @StethoLink/integration
+/tests/e2e/                     @StethoLink/integration
+/AGENTS.md                      @StethoLink/integration
+/CLAUDE.md                      @StethoLink/integration
+/docs/architecture/             @StethoLink/integration

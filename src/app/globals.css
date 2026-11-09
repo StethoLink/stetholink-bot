@@ -1,4 +1,4 @@
-/* SHARED / LOCKED — feature-specific styles go in src/features/<feature>/styles/. */
+/* PROTECTED (integration owner). Feature styles go in src/features/<feature>/styles/. */
 @import "tailwindcss";
 
 :root {

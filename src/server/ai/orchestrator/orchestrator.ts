@@ -1,23 +1,38 @@
-import type { AiProvider, AssistantOrchestrator, SafetyGuard } from "@/shared/contracts";
+import type { ChatRequest, ChatResponse, PatientContext } from "@/shared/contracts";
 import { createId, nowIso } from "@/shared/utils";
-import { SYSTEM_PROMPT } from "@/server/ai/prompts/system";
+import { SYSTEM_INSTRUCTIONS } from "@/server/ai/prompts/system";
+import type { ModelProvider } from "@/server/ai/providers/types";
+import type { SafetyGuard } from "@/server/safety/guard";
 
-export function createOrchestrator(deps: {
-  provider: AiProvider;
+export interface OrchestratorDeps {
+  provider: ModelProvider;
   safety: SafetyGuard;
-}): AssistantOrchestrator {
+  loadPatientContext: (patientId: string) => Promise<PatientContext | null>;
+}
+
+/** Turns a chat request into a safety-checked recommendation. It has no UI or database dependencies. */
+export function createChatOrchestrator(deps: OrchestratorDeps) {
   return {
-    async handle(request) {
-      const consultationId = request.consultationId ?? createId("cons");
-      const text = await deps.provider.complete({
-        system: SYSTEM_PROMPT,
-        messages: [{ id: createId("msg"), role: "clinician", content: request.message, createdAt: nowIso() }],
+    async handle(request: ChatRequest): Promise<ChatResponse> {
+      const patient = request.patientId ? await deps.loadPatientContext(request.patientId) : null;
+      const contextNote = patient ? `\n\nPatient context (JSON): ${JSON.stringify(patient)}` : "";
+
+      const result = await deps.provider.generate({
+        instructions: SYSTEM_INSTRUCTIONS + contextNote,
+        messages: [{ role: "user", content: request.message }],
       });
-      const safety = await deps.safety.assess(text);
+      const safety = await deps.safety.assess(result.text);
+
       return {
-        consultationId,
-        reply: { id: createId("msg"), role: "assistant", content: text, createdAt: nowIso() },
+        conversationId: request.conversationId ?? createId("conv"),
+        message: {
+          id: createId("msg"),
+          role: "assistant",
+          content: safety.level === "blocked" ? "This response was withheld by the safety check." : result.text,
+          createdAt: nowIso(),
+        },
         safety,
+        requiresClinicianReview: true,
       };
     },
   };

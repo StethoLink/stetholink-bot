@@ -1,6 +1,7 @@
-import { NextResponse } from "next/server";
-import { API_VERSION } from "@/shared/constants";
+import { CONTRACT_VERSION } from "@/shared/constants";
+import { healthResponseSchema } from "@/shared/schemas";
+import { contractResponse } from "@/server";
 
 export function GET() {
-  return NextResponse.json({ status: "ok", version: API_VERSION });
+  return contractResponse(healthResponseSchema, { status: "ok", contractVersion: CONTRACT_VERSION });
 }

@@ -1,18 +1,9 @@
-# Agent Handoffs
+# Agent handoffs
 
-Asynchronous notes between Claude Code (frontend) and Codex (backend).
+The only channel for one agent to ask the other (or the integration owner) for something outside its own zone.
 
-**File name:** `YYYY-MM-DD-<claude|codex>-<topic>.md` — one file per handoff, never edit another agent's file (reply with a new file).
-
-**Template**
-```md
-# <topic>
-- From / To: claude → codex
-- Status: open | accepted | done
-- Branch / PR:
-## Need
-## Proposed contract change (if any)
-## Blocking?
-```
-
-Before starting work, read open handoffs addressed to you. See [OWNERSHIP.md](./OWNERSHIP.md).
+- **File name:** `YYYY-MM-DD-<codex|claude|integration>-<topic>.md`, created from [TEMPLATE.md](./TEMPLATE.md).
+- Create **new** files only. Reply in a new file that links the original. Never edit another agent's file.
+- Before starting a task, read open handoffs addressed to you.
+- Contract changes follow [CONTRACT-CHANGES.md](./CONTRACT-CHANGES.md).
+- Canonical rules: [../architecture/ARCHITECTURE.md](../architecture/ARCHITECTURE.md).

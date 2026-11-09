@@ -1,4 +1,4 @@
-// SHARED / LOCKED — changes require approval from both agent owners (see docs/agent-handoffs/OWNERSHIP.md).
+// PROTECTED (integration owner). See docs/architecture/ARCHITECTURE.md §2.
 import type { Metadata } from "next";
 import "./globals.css";
 

@@ -1,49 +1,120 @@
+/**
+ * Zod schemas for every contract. Each one is checked with `satisfies z.ZodType<Interface>`,
+ * so a schema that drifts from its interface fails `npm run typecheck`.
+ */
 import { z } from "zod";
-import { CONSULTATION_STATUSES, MESSAGE_ROLES, SAFETY_LEVELS } from "@/shared/constants";
+import {
+  ADMINISTRATIVE_SEXES,
+  API_ERROR_CODES,
+  APPROVAL_DECISIONS,
+  CONSULTATION_STATUSES,
+  DATA_SOURCES,
+  ENCOUNTER_STATUSES,
+  ENCOUNTER_TYPES,
+  MESSAGE_ROLES,
+  SAFETY_LEVELS,
+} from "@/shared/constants";
+import type {
+  ApiError,
+  ApprovalRequest,
+  ChatMessage,
+  ChatRequest,
+  ChatResponse,
+  ConsultationDraft,
+  EncounterContext,
+  PatientContext,
+  SafetyAssessment,
+} from "@/shared/contracts";
+
+const id = z.string().min(1).max(128);
+const isoDateTime = z.string().datetime({ offset: true });
+
+export const consultationStatusSchema = z.enum(CONSULTATION_STATUSES);
 
 export const patientContextSchema = z.object({
-  patientId: z.string().min(1),
-  displayName: z.string(),
-  ageYears: z.number().int().nonnegative().optional(),
-  sex: z.enum(["male", "female", "other", "unknown"]).optional(),
-  allergies: z.array(z.string()).default([]),
-  activeProblems: z.array(z.string()).default([]),
-  medications: z.array(z.string()).default([]),
-});
+  patientId: id,
+  displayName: z.string().min(1),
+  birthDate: z.string().date().optional(),
+  sex: z.enum(ADMINISTRATIVE_SEXES),
+  allergies: z.array(z.string()),
+  activeProblems: z.array(z.string()),
+  medications: z.array(z.string()),
+  source: z.enum(DATA_SOURCES),
+}) satisfies z.ZodType<PatientContext>;
+
+export const encounterContextSchema = z.object({
+  encounterId: id,
+  patientId: id,
+  type: z.enum(ENCOUNTER_TYPES),
+  status: z.enum(ENCOUNTER_STATUSES),
+  startedAt: isoDateTime,
+  location: z.string().optional(),
+  reasonForVisit: z.string().optional(),
+}) satisfies z.ZodType<EncounterContext>;
 
 export const chatMessageSchema = z.object({
-  id: z.string(),
+  id,
   role: z.enum(MESSAGE_ROLES),
   content: z.string(),
-  createdAt: z.string().datetime(),
-});
+  createdAt: isoDateTime,
+}) satisfies z.ZodType<ChatMessage>;
 
 export const safetyAssessmentSchema = z.object({
   level: z.enum(SAFETY_LEVELS),
-  reasons: z.array(z.string()).default([]),
-});
+  reasons: z.array(z.string()),
+}) satisfies z.ZodType<SafetyAssessment>;
 
-export const consultationSchema = z.object({
-  id: z.string(),
-  patientId: z.string(),
-  status: z.enum(CONSULTATION_STATUSES),
-  messages: z.array(chatMessageSchema),
-  createdAt: z.string().datetime(),
-  updatedAt: z.string().datetime(),
-});
+export const chatRequestSchema = z.object({
+  conversationId: id.optional(),
+  patientId: id.optional(),
+  encounterId: id.optional(),
+  message: z.string().trim().min(1).max(8000),
+}) satisfies z.ZodType<ChatRequest>;
 
-export const assistantRequestSchema = z.object({
-  consultationId: z.string().optional(),
-  patientId: z.string().optional(),
-  message: z.string().min(1).max(8000),
-});
-
-export const assistantResponseSchema = z.object({
-  consultationId: z.string(),
-  reply: chatMessageSchema,
+export const chatResponseSchema = z.object({
+  conversationId: id,
+  message: chatMessageSchema,
   safety: safetyAssessmentSchema,
-});
+  requiresClinicianReview: z.boolean(),
+}) satisfies z.ZodType<ChatResponse>;
+
+export const consultationDraftSchema = z.object({
+  id,
+  patientId: id,
+  encounterId: id.optional(),
+  status: consultationStatusSchema,
+  summary: z.string(),
+  assessment: z.string(),
+  plan: z.array(z.string()),
+  generatedBy: z.literal("ai"),
+  createdAt: isoDateTime,
+  updatedAt: isoDateTime,
+  reviewedBy: z.string().optional(),
+  reviewedAt: isoDateTime.optional(),
+}) satisfies z.ZodType<ConsultationDraft>;
+
+export const approvalRequestSchema = z.object({
+  draftId: id,
+  decision: z.enum(APPROVAL_DECISIONS),
+  comment: z.string().max(4000).optional(),
+}) satisfies z.ZodType<ApprovalRequest>;
 
 export const apiErrorSchema = z.object({
-  error: z.object({ code: z.string(), message: z.string() }),
+  error: z.object({
+    code: z.enum(API_ERROR_CODES),
+    message: z.string(),
+    requestId: z.string().optional(),
+  }),
+}) satisfies z.ZodType<ApiError>;
+
+export const healthResponseSchema = z.object({
+  status: z.literal("ok"),
+  contractVersion: z.string(),
 });
+export type HealthResponse = z.infer<typeof healthResponseSchema>;
+
+export const createConsultationDraftRequestSchema = z.object({
+  patientId: id,
+  encounterId: id.optional(),
+  conversationId: id.optional(),
+}) satisfies z.ZodType<import("@/shared/contracts").CreateConsultationDraftRequest>;

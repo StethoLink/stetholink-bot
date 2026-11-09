@@ -1,1 +1,2 @@
-export { AssistantPanel } from "./components/AssistantPanel";
+export { ChatPanel } from "./components/ChatPanel";
+export { useChat } from "./hooks/useChat";

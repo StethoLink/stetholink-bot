@@ -1,11 +1,15 @@
 ## Summary
 
-## Agent / owner
-- [ ] CLAUDE (frontend)  - [ ] CODEX (backend)  - [ ] Integration owner
+## Owner
+- [ ] Codex (`feature/ai-backend`)
+- [ ] Claude Code (`feature/clinical-ui`)
+- [ ] Integration
 
-## Zones touched
-- [ ] Only my owned zone
-- [ ] `src/shared/**` or other LOCKED file (contract change — linked ADR / api-contracts update)
+## Scope
+- [ ] Only files in my ownership zone (docs/architecture/ARCHITECTURE.md §2)
+- [ ] Touches a protected file or shared contract. Approved handoff: `docs/agent-handoffs/…`
 
-## Checks
+## Verification
 - [ ] `npm run check` passes
+- [ ] `npm run build` passes
+- [ ] No secrets, credentials, or real patient data

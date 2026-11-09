@@ -1,7 +1,11 @@
-import type { SafetyGuard } from "@/shared/contracts";
+import type { SafetyAssessment } from "@/shared/contracts";
 
-/** Placeholder guard: always "ok". Replace with real policy checks. */
-export const safetyGuard: SafetyGuard = {
+export interface SafetyGuard {
+  assess(text: string): Promise<SafetyAssessment>;
+}
+
+/** Placeholder: approves everything. Codex replaces this with real output policy checks. */
+export const passthroughSafetyGuard: SafetyGuard = {
   async assess() {
     return { level: "ok", reasons: [] };
   },

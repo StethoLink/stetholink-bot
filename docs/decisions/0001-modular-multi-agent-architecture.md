@@ -1,16 +1,13 @@
-# ADR 0001 — Modular architecture for parallel agent development
+# ADR 0001: Ownership-zoned modular architecture for parallel agents
 
-- Status: Accepted
-- Date: 2026-11-09
+- Status: Accepted · Date: 2026-11-09
 
 ## Context
-Claude Code and OpenAI Codex will develop StethoLink at the same time. Shared files cause merge conflicts and silent coupling.
+Codex and Claude Code will build StethoLink at the same time. Editing the same files leads to conflicts and hidden coupling.
 
 ## Decision
-- Split ownership by directory: Claude owns the UI (`(workspace)`, `features`), Codex owns the backend (`app/api`, `server`, `supabase`).
-- The only shared surface is `src/shared` (Zod contracts), changed via a dedicated contract PR.
-- Enforce boundaries with ESLint and CODEOWNERS; coordinate through `docs/agent-handoffs`.
+Split the repository into disjoint ownership zones (UI belongs to Claude, backend and AI belong to Codex). They meet only at `src/shared` contracts, which Codex owns and which change through an approval process. Enforce the split with ESLint import rules, CODEOWNERS, CI, and per-agent Git worktrees.
 
 ## Consequences
-+ Agents rarely touch the same file; contracts are explicit and runtime-validated.
-− Contract changes are serialized and need a short handoff.
+- Parallel work rarely conflicts, and the frontend can move ahead on the mock client.
+- Contract changes are serialized and need a handoff.
