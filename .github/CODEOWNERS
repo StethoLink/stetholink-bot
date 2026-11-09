@@ -1,0 +1,18 @@
+# Replace the team handles with real GitHub users/teams.
+# Ownership map mirrors docs/agent-handoffs/OWNERSHIP.md.
+*                              @StethoLink/maintainers
+
+/src/app/(workspace)/          @StethoLink/frontend
+/src/features/                 @StethoLink/frontend
+/tests/frontend/               @StethoLink/frontend
+
+/src/app/api/                  @StethoLink/backend
+/src/server/                   @StethoLink/backend
+/supabase/                     @StethoLink/backend
+/tests/backend/                @StethoLink/backend
+
+/src/shared/                   @StethoLink/frontend @StethoLink/backend
+/src/app/layout.tsx            @StethoLink/frontend @StethoLink/backend
+/src/app/globals.css           @StethoLink/frontend @StethoLink/backend
+/docs/api-contracts/           @StethoLink/frontend @StethoLink/backend
+/tests/e2e/                    @StethoLink/maintainers
