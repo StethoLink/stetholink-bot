@@ -16,7 +16,7 @@ type Entry<T> = { clinicianId: string; tenantId: string; expiresAt: number; valu
 const globals = globalThis as typeof globalThis & {
   stetholinkSmartSandbox?: { pending: Map<string, Entry<Pending>>; grants: Map<string, Entry<FhirLaunchGrant>> };
 };
-const store = globals.stetholinkSmartSandbox ??= { pending: new Map(), grants: new Map() };
+const store = globals.stetholinkSmartSandbox ??= { pending: new Map<string, Entry<Pending>>(), grants: new Map<string, Entry<FhirLaunchGrant>>() };
 
 function add<T>(entries: Map<string, Entry<T>>, clinicianId: string, value: T, expiresAt: number) {
   for (const [id, entry] of entries) if (entry.expiresAt <= Date.now()) entries.delete(id);
