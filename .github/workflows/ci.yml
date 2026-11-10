@@ -11,7 +11,7 @@ jobs:
     env:
       AI_PROVIDER: mock
       CLINICAL_DATA_SOURCE: synthetic
-      NEXT_PUBLIC_API_MODE: mock
+      NEXT_PUBLIC_API_MODE: http
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -22,4 +22,5 @@ jobs:
       - run: npm run typecheck
       - run: npm run lint
       - run: npm test
+      - run: node --test tests/smoke/*.test.mts
       - run: npm run build

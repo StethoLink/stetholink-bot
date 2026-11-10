@@ -2,7 +2,7 @@ import * as React from "react";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { EncounterSummaryView, PatientContextView, loadResource, type ResourceState } from "@/features/ehr-panel";
+import { EncounterSummaryView, PatientContextView, loadResource, type ResourceState } from "@/apps/embedded-app/features/ehr-panel";
 import { createMockApiClient } from "@/shared/api-client";
 
 // Vitest compiles JSX with the classic runtime until esbuild.jsx is set to "automatic".

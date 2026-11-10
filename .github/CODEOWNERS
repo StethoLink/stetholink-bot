@@ -3,31 +3,33 @@
 *                               @StethoLink/integration
 
 # Claude Code: frontend & clinical experience
-/src/app/(workspace)/           @StethoLink/frontend
-/src/features/                  @StethoLink/frontend
+/apps/embedded-app/app/(workspace)/           @StethoLink/frontend
+/apps/embedded-app/features/                  @StethoLink/frontend
 /tests/frontend/                @StethoLink/frontend
 
 # Codex: backend & intelligence
-/src/app/api/                   @StethoLink/backend
-/src/server/                    @StethoLink/backend
+/apps/embedded-app/app/api/                   @StethoLink/backend
+/apps/embedded-app/server/      @StethoLink/backend
+/core/                          @StethoLink/backend
+/platform/                      @StethoLink/backend
+/integrations/                  @StethoLink/backend @StethoLink/integration
 /supabase/                      @StethoLink/backend
 /tests/backend/                 @StethoLink/backend
 
 # Shared contracts: owned by Codex, integration review required
-/src/shared/                    @StethoLink/backend @StethoLink/integration
+/shared/                    @StethoLink/backend @StethoLink/integration
 
 # Protected configuration: integration review required
 /package.json                   @StethoLink/integration
 /package-lock.json              @StethoLink/integration
 /tsconfig.json                  @StethoLink/integration
-/next.config.ts                 @StethoLink/integration
+/apps/embedded-app/next.config.ts                 @StethoLink/integration
 /eslint.config.mjs              @StethoLink/integration
-/postcss.config.mjs             @StethoLink/integration
+/apps/embedded-app/postcss.config.mjs             @StethoLink/integration
 /vitest.config.ts               @StethoLink/integration
-/src/app/layout.tsx             @StethoLink/integration
-/src/app/globals.css            @StethoLink/integration
+/apps/embedded-app/app/layout.tsx             @StethoLink/integration
+/apps/embedded-app/app/globals.css            @StethoLink/integration
 /.github/                       @StethoLink/integration
-/scripts/                       @StethoLink/integration
 /tests/e2e/                     @StethoLink/integration
 /AGENTS.md                      @StethoLink/integration
 /CLAUDE.md                      @StethoLink/integration

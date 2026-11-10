@@ -1,20 +1,22 @@
 # API Contracts v1.0.0
 
-Human-readable mirror of `src/shared/contracts` (types), `src/shared/schemas` (validation), and `apiRoutes`.
-If they disagree, the code wins. Fix this doc in the same PR.
+Human-readable mirror of `shared/contracts` (types), `shared/schemas` (validation), and `apiRoutes`.
+Keep this reference aligned with the contracts.
 
 Every non-2xx response is an `ApiError`: `{ "error": { "code": ApiErrorCode, "message": string, "requestId"?: string } }`.
-Every route except `/api/health` requires an authenticated clinician (server-side).
+Clinical routes require a verified clinician session. The health and authentication bootstrap endpoints are public.
 
 | # | Method | Path | Request body | 2xx response | Status |
 |---|---|---|---|---|---|
 | 1 | GET | `/api/health` | — | `{ status: "ok", contractVersion }` | ✅ implemented |
 | 2 | POST | `/api/chat` | `ChatRequest` | `ChatResponse` | ✅ mock provider |
-| 3 | GET | `/api/patients/:patientId/context` | — | `PatientContext` | ✅ synthetic adapter |
-| 4 | GET | `/api/encounters/:encounterId` | — | `EncounterContext` | ✅ synthetic adapter |
-| 5 | POST | `/api/consultations/drafts` | `CreateConsultationDraftRequest` | `ConsultationDraft` (201) | ✅ Supabase persistence, synthetic context |
+| 3 | GET | `/api/patients/:patientId/context` | — | `PatientContext` | Synthetic or read-only SMART sandbox |
+| 4 | GET | `/api/encounters/:encounterId` | — | `EncounterContext` | Synthetic or read-only SMART sandbox |
+| 5 | POST | `/api/consultations/drafts` | `CreateConsultationDraftRequest` | `ConsultationDraft` (201) | Synthetic context with Supabase or development persistence |
 | 6 | GET | `/api/consultations/drafts/:draftId` | — | `ConsultationDraft` | ✅ clinician-owned rows |
-| 7 | POST | `/api/consultations/drafts/:draftId/approval` | `ApprovalRequest` | `ConsultationDraft` | ✅ atomic decision and audit |
+| 7 | POST | `/api/consultations/drafts/:draftId/approval` | `ApprovalRequest` | `ConsultationDraft` | Atomic in Supabase |
+| 8 | POST | `/api/consultations/drafts/:draftId/delivery` | `{ recipientId }` | `ConsultationDelivery` | Synthetic delivery |
+| 9 | GET | `/api/consultations/drafts/:draftId/delivery` | — | `ConsultationDelivery\|null` | Clinician-owned draft |
 
 ## Types
 
@@ -33,7 +35,8 @@ interface ApiError         { error: { code; message; requestId? } }
 ## Semantics
 - **Approval transitions:** `pending_approval|draft` + approve → `approved`, + reject → `rejected`, + request_changes → `draft`. Any other state returns `409 conflict`.
 - `reviewedBy` / `reviewedAt` are set by the server from the session and are ignored if a client sends them.
-- Draft persistence requires a Supabase clinician session. Development synthetic identity does not grant database access.
+- Synthetic development uses an in-memory repository. Supabase deployments use clinician-scoped persistence.
+- Delivery requires an approved draft and a recipient on the tenant allowlist. Synthetic delivery returns `{ draftId, recipientId, status, response? }`.
 - Generation supports synthetic patient/encounter context. `conversationId` is rejected with 400 until conversation persistence is implemented. An encounter must belong to the requested patient.
 - `/api/auth/login` provides the sign-in form (GET) and password sign-in (POST). `/api/auth/session` validates the session (GET); `/api/auth/logout` revokes it (POST). These bootstrap authentication endpoints do not require an existing clinician session. See `docs/decisions/supabase-connection.md`.
 - `safety.level === "blocked"` means `message.content` is a withheld notice, not model output.

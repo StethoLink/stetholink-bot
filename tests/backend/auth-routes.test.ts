@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { login, logout, loginPage } from "@/server/auth/routes";
+import { login, logout, loginPage } from "@/apps/embedded-app/server/auth-routes";
 const { jar, requestHeaders } = vi.hoisted(() => ({ jar: { get: vi.fn(), set: vi.fn(), delete: vi.fn() }, requestHeaders: new Headers({ host: "localhost" }) }));
 vi.mock("next/headers", () => ({ cookies: async () => jar, headers: async () => requestHeaders }));
-vi.mock("@/server/config/env", () => ({ getEnv: () => ({ NODE_ENV: "production", NEXT_PUBLIC_SUPABASE_URL: "https://example.supabase.co", NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: "public" }) }));
+vi.mock("@/platform/tenants/env", () => ({ getEnv: () => ({ NODE_ENV: "production", NEXT_PUBLIC_SUPABASE_URL: "https://example.supabase.co", NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: "public" }) }));
 const user = { id: "11111111-1111-4111-8111-111111111111", app_metadata: { role: "clinician" } };
 const tokens = { access_token: "access", refresh_token: "refresh", expires_in: 3600, user };
 afterEach(() => { vi.unstubAllGlobals(); vi.resetAllMocks(); requestHeaders.delete("origin"); });

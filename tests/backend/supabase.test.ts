@@ -1,18 +1,18 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { createSupabaseTransport, SupabaseError } from "@/server/auth/supabase";
-import { verifyClinician, requireClinician, requireSameOrigin } from "@/server/auth/session";
-import { createConsultationRepository } from "@/server/database";
-import { createConsultationService } from "@/server/clinical/consultation/service";
-import { syntheticClinicalAdapter } from "@/server/integrations/fhir/synthetic-adapter";
-import { mockProvider } from "@/server/ai/providers/mock-provider";
-import { passthroughSafetyGuard } from "@/server/safety/guard";
+import { createSupabaseTransport, SupabaseError } from "@/platform/auth/supabase";
+import { verifyClinician, requireClinician, requireSameOrigin } from "@/platform/auth/session";
+import { createConsultationRepository } from "@/platform/persistence";
+import { createConsultationService } from "@/core/consultation/service";
+import { syntheticClinicalAdapter } from "@/integrations/mock/connector";
+import { mockProvider } from "@/core/agent/providers/mock-provider";
+import { passthroughSafetyGuard } from "@/core/agent/safety/guard";
 
 const { jar, requestHeaders, env } = vi.hoisted(() => ({
   jar: { get: vi.fn(), set: vi.fn(), delete: vi.fn() }, requestHeaders: new Headers(),
   env: { AUTH_MODE: "supabase", NODE_ENV: "production", NEXT_PUBLIC_SUPABASE_URL: "https://example.supabase.co", NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: "sb_publishable_test" },
 }));
 vi.mock("next/headers", () => ({ cookies: async () => jar, headers: async () => requestHeaders }));
-vi.mock("@/server/config/env", () => ({ getEnv: () => env }));
+vi.mock("@/platform/tenants/env", () => ({ getEnv: () => env }));
 
 const uid = "11111111-1111-4111-8111-111111111111";
 const row = { id: "draft-1", patient_id: "syn-pt-001", encounter_id: null, status: "pending_approval", summary: "Synthetic summary", assessment: "Synthetic assessment", plan: [], generated_by: "ai", created_at: new Date().toISOString(), updated_at: new Date().toISOString(), reviewed_by: null, reviewed_at: null };

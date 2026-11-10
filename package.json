@@ -3,16 +3,15 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "start": "next start",
+    "dev": "next dev apps/embedded-app",
+    "build": "next build apps/embedded-app",
+    "start": "next start apps/embedded-app",
     "lint": "eslint",
-    "typecheck": "next typegen && tsc --noEmit",
+    "typecheck": "next typegen apps/embedded-app && tsc --noEmit",
     "test": "vitest run",
     "test:backend": "vitest run tests/backend",
     "test:frontend": "vitest run tests/frontend",
-    "check": "npm run typecheck && npm run lint && npm test",
-    "setup:worktrees": "bash scripts/setup-worktrees.sh"
+    "check": "npm run typecheck && npm run lint && npm test"
   },
   "dependencies": {
     "next": "15.5.29",

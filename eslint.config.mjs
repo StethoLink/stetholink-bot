@@ -1,28 +1,27 @@
-// LOCKED: integration review required (see docs/architecture/ARCHITECTURE.md §6).
-import { dirname } from "path";
-import { fileURLToPath } from "url";
+import { dirname } from "node:path";
+import { fileURLToPath } from "node:url";
 import { FlatCompat } from "@eslint/eslintrc";
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-const compat = new FlatCompat({ baseDirectory: __dirname });
-
+const compat = new FlatCompat({ baseDirectory: dirname(fileURLToPath(import.meta.url)) });
+const ui = "@/apps/embedded-app/features";
+const app = "@/apps/embedded-app/app";
+const server = "@/apps/embedded-app/server";
 const restrict = (patterns) => ({ "no-restricted-imports": ["error", { patterns }] });
-const NO_SERVER = { group: ["@/server", "@/server/*", "server-only"], message: "UI code must not import server code. Use @/shared/api-client." };
-const NO_API = { group: ["@/app/api/*"], message: "Do not import route handlers." };
-const NO_UI = { group: ["@/features/*", "@/app/*"], message: "Server code must not depend on UI code." };
-const NO_DB_FROM_AI = { group: ["@/server/database", "@/server/database/*"], message: "AI code must not access the database directly. Expose a narrow tool in ai/tools that calls a service." };
-const NO_DEEP_FEATURE = { group: ["@/features/*/*"], message: "Import a feature through its public index (e.g. @/features/assistant)." };
 
-/** Module boundaries. Canonical description: docs/architecture/ARCHITECTURE.md §3. */
-const eslintConfig = [
+export default [
   ...compat.extends("next/core-web-vitals", "next/typescript"),
-  { files: ["src/features/**", "src/app/(workspace)/**"], rules: restrict([NO_SERVER, NO_API, NO_DEEP_FEATURE]) },
-  { files: ["src/server/**"], rules: restrict([NO_UI]) },
-  { files: ["src/server/ai/**"], rules: restrict([NO_UI, NO_DB_FROM_AI]) },
-  { files: ["src/shared/**"], rules: restrict([NO_SERVER, NO_UI]) },
-  { files: ["src/app/api/**"], rules: restrict([NO_UI]) },
-  { ignores: ["node_modules/**", ".next/**", "out/**", "build/**", "next-env.d.ts"] },
+  { settings: { next: { rootDir: "apps/embedded-app/" } } },
+  {
+    files: ["apps/embedded-app/features/**/*.{ts,tsx}", "shared/api-client/**/*.ts"],
+    rules: restrict([{ group: [server, `${server}/**`, `${app}/**`, "@/platform/**", "@/integrations/**", "server-only"], message: "Use the app's HTTP client from browser code." }]),
+  },
+  {
+    files: ["core/**/*.ts"],
+    rules: restrict([{ group: ["@/apps/**", "@/platform/**", "@/integrations/**", "**/platform/**", "**/integrations/**", "next", "next/**"], message: "Core logic receives implementations through interfaces." }]),
+  },
+  {
+    files: ["platform/**/*.ts", "integrations/**/*.ts", "apps/embedded-app/server/**/*.ts", "apps/embedded-app/app/api/**/*.ts"],
+    rules: restrict([{ group: [ui, `${ui}/**`, `${app}/**`], message: "Server code cannot depend on app UI or route handlers." }]),
+  },
+  { ignores: ["**/node_modules/**", "**/.next/**", "**/out/**", "**/build/**", "**/next-env.d.ts"] },
 ];
-
-export default eslintConfig;

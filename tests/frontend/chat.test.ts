@@ -11,13 +11,13 @@ import {
   sendChat,
   type ChatAction,
   type ChatState,
-} from "@/features/assistant";
+} from "@/apps/embedded-app/features/assistant";
 import { ApiClientError, createMockApiClient, type StethoLinkApiClient } from "@/shared/api-client";
 
-// Vitest cannot run the PostCSS config (see docs/agent-handoffs/2026-11-09-claude-frontend-test-deps.md).
+// Mock CSS imports in the logic tests.
 // Vitest compiles JSX with the classic runtime until esbuild.jsx is set to "automatic".
 (globalThis as { React?: typeof React }).React = React;
-vi.mock("@/features/assistant/styles/chat.module.css", () => ({ default: {} }));
+vi.mock("@/apps/embedded-app/features/assistant/styles/chat.module.css", () => ({ default: {} }));
 
 
 function harness() {

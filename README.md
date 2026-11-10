@@ -1,31 +1,37 @@
-# StethoLink Bot
+# StethoLink
 
-Cloud-based clinical AI assistant for hospital systems.
-Next.js 15 (App Router) · TypeScript · Tailwind CSS v4 · Zod · Supabase · OpenAI · Vitest · Vercel.
+StethoLink is an EHR-embedded application for preparing, reviewing, and routing consultation requests. The same app and workflow can run with a synthetic connector or a hospital-specific connector.
 
-> **Scaffold only.** The AI provider is a mock, clinical data is synthetic, and the UI is a placeholder.
+## Run the synthetic workflow on Windows
 
-## Quick start
-```bash
-npm install
-cp .env.example .env.local
-npm run dev      # http://localhost:3000
-npm run check    # typecheck + lint + tests
+Use Node.js 22 and npm. From the repository root in PowerShell:
+
+```powershell
+Copy-Item .env.example apps/embedded-app/.env.local
+npm ci
+npm run dev
+```
+
+1. Open [the synthetic patient chart](http://localhost:3000/embed?patientId=syn-pt-001&encounterId=syn-enc-001).
+2. Choose **Prepare consultation for review** and review the draft.
+3. Approve the draft, enter `synthetic-consult-team` as the approved recipient, and send it. The mock connector returns a synthetic acknowledgement.
+4. For API verification, open [the health endpoint](http://localhost:3000/api/health).
+
+The default configuration uses the app's HTTP routes, the mock model and the synthetic connector. Drafts, approvals, and deliveries in dev-auth mode are in memory and reset when the server restarts. The mock recipient is configurable through `MOCK_RECIPIENT_IDS`.
+
+With Docker Desktop:
+
+```powershell
+docker build -t stetholink-dev .
+docker run --rm -p 127.0.0.1:3000:3000 --env-file .env.example stetholink-dev
+```
+
+## Verify
+
+```powershell
+npm run check
 npm run build
+node --test tests/smoke/*.test.mts
 ```
 
-## Parallel development
-```bash
-npm run setup:worktrees   # feature/ai-backend (Codex) + feature/clinical-ui (Claude)
-```
-
-| Zone | Owner |
-|---|---|
-| `src/app/(workspace)`, `src/features`, `tests/frontend` | Claude Code |
-| `src/app/api`, `src/server`, `supabase`, `tests/backend`, `src/shared` (contracts) | Codex |
-| Config, `layout.tsx`, `globals.css`, `.github`, `scripts`, `tests/e2e` | Integration owner |
-
-**Read first:** [docs/architecture/ARCHITECTURE.md](docs/architecture/ARCHITECTURE.md) (canonical) · [API contracts](docs/api-contracts/README.md) · [Handoffs](docs/agent-handoffs/README.md) · [ADRs](docs/decisions/) · [AGENTS.md](AGENTS.md) · [CLAUDE.md](CLAUDE.md)
-
-## Data & secrets
-Never commit real patient information or credentials. Use `.env.local` (gitignored) and the Vercel/Supabase secret stores.
+The smoke tests use Node 22.18+ and need no dependency installation. See the [architecture](docs/architecture/ARCHITECTURE.md) and [SMART sandbox setup](docs/openemr.md) for integration boundaries and limitations.
