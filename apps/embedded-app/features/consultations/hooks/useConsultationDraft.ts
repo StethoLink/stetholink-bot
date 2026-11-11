@@ -39,9 +39,13 @@ export function useConsultationDraft(draftId?: string, options: { client?: Steth
   );
 
   const decide = useCallback(
-    (decision: ApprovalDecision, comment?: string) => {
+    (decision: ApprovalDecision, recipientId?: string) => {
       if (state.status !== "ready") return Promise.resolve();
-      return decideDraft(client, dispatch, { draftId: state.draft.id, decision, comment });
+      const { id, version } = state.draft;
+      return decideDraft(client, dispatch, {
+        draftId: id, decision, recipientId, expectedVersion: version,
+        idempotencyKey: version ? `review:${version}:${decision}:${id}` : undefined,
+      });
     },
     [client, state],
   );

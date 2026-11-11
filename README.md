@@ -17,7 +17,7 @@ npm run dev
 3. Approve the draft, enter `synthetic-consult-team` as the approved recipient, and send it. The mock connector returns a synthetic acknowledgement.
 4. For API verification, open [the health endpoint](http://localhost:3000/api/health).
 
-The default configuration uses the app's HTTP routes, the mock model and the synthetic connector. Drafts, approvals, and deliveries in dev-auth mode are in memory and reset when the server restarts. The mock recipient is configurable through `MOCK_RECIPIENT_IDS`.
+The default configuration uses the app's HTTP routes, the mock model and the synthetic connector. Development auth can generate synthetic drafts. Physician decisions and mock delivery require the verified synthetic staging session and PostgreSQL. Set the permitted staging destinations with `MOCK_RECIPIENT_IDS`.
 
 With Docker Desktop:
 

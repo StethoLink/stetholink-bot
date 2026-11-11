@@ -78,11 +78,12 @@ try {
     await request(path + "/transitions", 404, { cookie, body: { action: "cancel", expectedVersion: 1, idempotencyKey: "foreign-cancel" } });
     await request(path, 404, { method: "PATCH", cookie, body: { expectedVersion: 1, idempotencyKey: "foreign-edit", summary: "Synthetic", assessment: "Synthetic", plan: [] } });
     await request(path + "/approval", profile === "observer" ? 403 : 404, { cookie,
-      body: { draftId: draft.id, decision: "approve", expectedVersion: 1, idempotencyKey: "foreign-approval" } });
+      body: { draftId: draft.id, decision: "approve", recipientId: "synthetic-consult-team", expectedVersion: 1, idempotencyKey: "foreign-approval" } });
   }
   const approve = async (decision: string, version: number, key: string, expected = 200) =>
     (await request(path + "/approval", expected, { cookie: physician,
-      body: { draftId: draft.id, decision, expectedVersion: version, idempotencyKey: key } })).json();
+      body: { draftId: draft.id, decision, expectedVersion: version, idempotencyKey: key,
+        ...(decision === "approve" ? { recipientId: "synthetic-consult-team" } : {}) } })).json();
   assert.equal((await approve("request_changes", 1, "human-request-changes")).status, "draft");
   const revisions = ["first-edit", "second-edit"].map((key) => ({ expectedVersion: 2, idempotencyKey: key,
     summary: "Synthetic revised summary " + key, assessment: "Synthetic revised assessment", plan: ["Physician review required"] }));
@@ -100,8 +101,11 @@ try {
   assert.deepEqual(await (await request(path, 200, { cookie: physician, method: "PATCH", body: revision })).json(), winner);
   await request(path, 409, { cookie: physician, method: "PATCH", body: { ...revision, summary: "Different synthetic command" } });
   await approve("approve", 3, "unsubmitted-approval", 409);
+  await request(path + "/delivery", 409, { cookie: physician, body: {
+    recipientId: "synthetic-consult-team", expectedVersion: 3, idempotencyKey: "unapproved-edited-dispatch",
+  } });
   await transition("submit", 3, "submit-edited");
-  const decisionBodies = ["human-approve-a", "human-approve-b"].map((key) => ({ draftId: draft.id, decision: "approve", expectedVersion: 4, idempotencyKey: key }));
+  const decisionBodies = ["human-approve-a", "human-approve-b"].map((key) => ({ draftId: draft.id, decision: "approve", recipientId: "synthetic-consult-team", expectedVersion: 4, idempotencyKey: key }));
   const decisions = await Promise.all(decisionBodies.map(async (body) => {
     const response = await fetch(base + path + "/approval", { method: "POST", headers: { cookie: physician, "content-type": "application/json" }, body: JSON.stringify(body) });
     return { status: response.status, body: await response.json() };
@@ -120,7 +124,9 @@ try {
   const responded = await transition("responded", 10, "mock-responded");
   assert.equal(responded.version, 11);
   await transition("cancel", 11, "cancel-responded", 409);
-  await request(path + "/delivery", 501, { cookie: physician, body: { recipientId: "synthetic-consult-team" } });
+  await request(path + "/delivery", 409, { cookie: physician, body: {
+    recipientId: "synthetic-consult-team", expectedVersion: 11, idempotencyKey: "duplicate-dispatch",
+  } });
   const history = await (await request(path + "/history", 200, { cookie: physician })).json();
   assert.equal(history.revisions.length, 11);
   assert.equal(history.events.length, 11);
@@ -131,6 +137,9 @@ try {
   const rejected = await (await request(root, 201, { cookie: physician, body: { ...create, idempotencyKey: "rejected-draft" } })).json();
   await request(root + "/" + rejected.id + "/approval", 200, { cookie: physician,
     body: { draftId: rejected.id, decision: "reject", expectedVersion: 1, idempotencyKey: "reject-human" } });
+  await request(root + "/" + rejected.id + "/delivery", 409, { cookie: physician, body: {
+    recipientId: "synthetic-consult-team", expectedVersion: 2, idempotencyKey: "rejected-dispatch",
+  } });
   // A genuinely fresh process restores sessions, pending drafts, grounding,
   // statuses, immutable history, attempts and exact retry responses from Postgres.
   await stop();

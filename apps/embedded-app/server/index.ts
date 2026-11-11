@@ -12,8 +12,6 @@ import { getEnv, syntheticStagingEnabled } from "@/platform/tenants/env";
 import { localSyntheticEnabled } from "@/platform/auth/session";
 import { RouteError } from "@/core/errors";
 import { getTenant } from "@/platform/tenants";
-import { routeConsultation } from "@/core/consultation/routing";
-import { auditConsultation } from "@/platform/audit";
 
 export function getClinicalServices(session: VerifiedLaunch) {
   const adapter = getClinicalDataAdapter(session);
@@ -30,15 +28,20 @@ export function getChat(session: VerifiedLaunch) {
 }
 
 export { requireClinician } from "@/platform/auth/session";
-export { contractResponse, errorResponse, handleRouteError } from "./http/respond";
+export { contractResponse, errorResponse, handleRouteError, readJson } from "./http/respond";
 export * as authRoutes from "./auth-routes";
 
 export function getConsultations(session: VerifiedLaunch) {
   if (session.source !== "synthetic") throw new RouteError("forbidden", "Consultation generation is limited to synthetic data");
   const actor = session.context;
   const tenant = getTenant();
+  if (actor.tenantId !== tenant.id || !actor.encounterId || !actor.scopes.includes("chart:read")) {
+    throw new RouteError("forbidden", "An authorized tenant encounter is required");
+  }
   const local = localSyntheticEnabled();
-  const durable = !local || !!getEnv().STETHOLINK_DATABASE_URL;
+  const env = getEnv();
+  const mockRouting = syntheticStagingEnabled(env);
+  const durable = !local || !!env.STETHOLINK_DATABASE_URL;
   const lifecycle = createConsultationRepository(actor, tenant.recipients);
   const repository = !durable
     ? mockConsultationRepository(tenant.id, actor.clinicianId, actor.patientId, actor.encounterId)
@@ -57,8 +60,7 @@ export function getConsultations(session: VerifiedLaunch) {
     },
     async transition(id: string, input: Parameters<typeof lifecycle.transition>[1]) {
       if (!durable) throw new RouteError("provider_unavailable", "Configure durable consultation storage");
-      if (!["submit", "cancel"].includes(input.action) &&
-          !(session.source === "synthetic" && getEnv().AI_PROVIDER === "mock" && (local || syntheticStagingEnabled(getEnv())))) {
+      if (!["submit", "cancel"].includes(input.action) && !mockRouting) {
         throw new RouteError("not_implemented", "Only synthetic mock lifecycle delivery is supported");
       }
       return lifecycle.transition(id, input);
@@ -68,21 +70,23 @@ export function getConsultations(session: VerifiedLaunch) {
       return lifecycle.history(id, beforeVersion);
     },
     create: (input: Parameters<typeof service.create>[0]) => service.create(input, actor),
-    approve: (input: Parameters<typeof service.approve>[0]) => service.approve(input, actor),
-    async route(draftId: string, recipientId: string) {
-      if (!local || durable || !adapter.consultations) throw new RouteError("not_implemented", "Durable hospital consultation delivery is not configured");
-      const result = await routeConsultation(repository, adapter.consultations, tenant.recipients, draftId, recipientId);
-      if ("code" in result) throw new RouteError(result.code, "Consultation cannot be routed");
-      auditConsultation({ action: "consultation.routed", tenantId: tenant.id, clinicianId: actor.clinicianId, draftId });
-      return result.delivery;
+    async approve(input: Parameters<typeof service.approve>[0]) {
+      if (local) throw new RouteError("forbidden", "A verified physician session is required");
+      return service.approve(input, actor);
+    },
+    async route(draftId: string, input: Parameters<typeof lifecycle.dispatch>[1]) {
+      if (!mockRouting) throw new RouteError("not_implemented", "Only synthetic mock lifecycle delivery is supported");
+      const draft = await lifecycle.dispatch(draftId, input);
+      return { draftId: draft.id, recipientId: input.recipientId, status: "submitted" as const };
     },
     async delivery(draftId: string) {
       if (!(await repository.get(draftId))) throw new RouteError("not_found", "Draft not found");
       if (durable) {
         const attempt = (await lifecycle.history(draftId)).attempts[0];
-        return attempt ? { draftId, recipientId: attempt.recipientId, status: attempt.status === "responded" ? "responded" as const : "submitted" as const } : null;
+        if (!attempt || !["sent", "accepted", "responded"].includes(attempt.status)) return null;
+        return { draftId, recipientId: attempt.recipientId, status: attempt.status === "responded" ? "responded" as const : "submitted" as const };
       }
-      return adapter.consultations?.status(draftId) ?? null;
+      return null;
     },
   };
 }

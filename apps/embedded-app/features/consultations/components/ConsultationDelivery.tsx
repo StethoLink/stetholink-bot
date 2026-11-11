@@ -8,8 +8,9 @@ interface Delivery {
   response?: string;
 }
 
-export function ConsultationDelivery({ draftId }: { draftId: string }) {
-  const [recipient, setRecipient] = useState("");
+export function ConsultationDelivery({ draftId, recipientId, version, canSend }: {
+  draftId: string; recipientId: string; version: number; canSend: boolean;
+}) {
   const [delivery, setDelivery] = useState<Delivery>();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -33,7 +34,7 @@ export function ConsultationDelivery({ draftId }: { draftId: string }) {
     try {
       const response = await fetch(url, {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ recipientId: recipient }),
+        body: JSON.stringify({ recipientId, expectedVersion: version, idempotencyKey: `send:${version}:${draftId}` }),
       });
       if (!response.ok) throw new Error("Delivery failed");
       setDelivery(await response.json() as Delivery);
@@ -47,13 +48,10 @@ export function ConsultationDelivery({ draftId }: { draftId: string }) {
   return <section aria-label="Route approved consultation" className="space-y-2">
     {delivery ? (
       <p role="status">Recipient {delivery.recipientId} · {delivery.status}. {delivery.response}</p>
-    ) : (
+    ) : canSend && (
       <>
-        <label className="block">Approved recipient ID
-          <input value={recipient} onChange={(event) => setRecipient(event.target.value)}
-            className="block rounded border px-2 py-1" />
-        </label>
-        <button type="button" disabled={busy || !recipient.trim()} onClick={() => void send()}
+        <p>Approved destination {recipientId}</p>
+        <button type="button" disabled={busy} onClick={() => void send()}
           className="rounded border px-3 py-2">Send approved consultation</button>
       </>
     )}

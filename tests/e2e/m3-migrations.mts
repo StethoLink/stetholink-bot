@@ -16,9 +16,11 @@ try {
     if (name.includes("durable_consultation")) await sql.unsafe(await readFile("supabase/tests/m3_before.sql", "utf8"));
     await sql.unsafe(await readFile("supabase/migrations/" + name, "utf8"));
     console.log("Applied", name);
-  }
-  for (const name of ["clinician_access.sql", "durable_lifecycle.sql"]) {
-    await sql.unsafe(await readFile("supabase/tests/" + name, "utf8"));
-    console.log("Passed", name);
+    const suites = name.includes("durable_consultation") ? ["clinician_access.sql", "durable_lifecycle.sql"] :
+      name.includes("clinician_approval_boundary") ? ["m4_approval_boundary.sql"] : [];
+    for (const suite of suites) {
+      await sql.unsafe(await readFile("supabase/tests/" + suite, "utf8"));
+      console.log("Passed", suite);
+    }
   }
 } finally { await sql.end(); }

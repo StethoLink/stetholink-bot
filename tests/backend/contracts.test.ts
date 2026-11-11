@@ -116,7 +116,10 @@ describe("M1 clinical data contracts", () => {
     for (const field of ["clinicianId", "reviewedBy", "status", "recipientId", "decision"]) {
       expect(consultationRequestSchema.safeParse({ ...ahmedConsultationRequest, [field]: "forged" }).success).toBe(false);
     }
-    expect(approvalRequestSchema.parse({ draftId: "syn-draft", decision: "approve", reviewedBy: "forged", clinicianId: "forged" })).toEqual({ draftId: "syn-draft", decision: "approve" });
+    const review = { draftId: "syn-draft", decision: "approve", expectedVersion: 1, idempotencyKey: "review-1" };
+    expect(approvalRequestSchema.safeParse(review).success).toBe(false);
+    expect(approvalRequestSchema.safeParse({ ...review, recipientId: "team-a", reviewedBy: "forged" }).success).toBe(false);
+    expect(approvalRequestSchema.parse({ ...review, recipientId: "team-a" })).toEqual({ ...review, recipientId: "team-a" });
   });
 
   it.each(API_ERROR_CODES)("reuses the existing API error code %s", (code) => {

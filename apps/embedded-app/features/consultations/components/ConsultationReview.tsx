@@ -4,10 +4,17 @@ import type { StethoLinkApiClient } from "@/shared/api-client";
 import { useConsultationDraft } from "../hooks/useConsultationDraft";
 import { ConsultationDelivery } from "./ConsultationDelivery";
 import { ApprovalControls } from "./ApprovalControls";
+import { ConsultationEditor } from "./ConsultationEditor";
 import { ConsultationDraftView } from "./ConsultationDraftView";
 
 /** Loads a draft and lets the clinician review and decide on it. */
-export function ConsultationReview({ draftId, client }: { draftId: string; client?: StethoLinkApiClient }) {
+export function ConsultationReview({ draftId, client, recipientIds, canReview = true, canRoute = false }: {
+  draftId: string;
+  client?: StethoLinkApiClient;
+  recipientIds?: readonly string[];
+  canReview?: boolean;
+  canRoute?: boolean;
+}) {
   const { state, reload, decide } = useConsultationDraft(draftId, { client });
 
   return (
@@ -29,14 +36,23 @@ export function ConsultationReview({ draftId, client }: { draftId: string; clien
       )}
       {state.status === "ready" && (
         <div className="space-y-4">
-          <ConsultationDraftView draft={state.draft} />
-          {state.draft.status === "approved" && <ConsultationDelivery draftId={state.draft.id} />}
-          <ApprovalControls
-            status={state.draft.status}
-            submitting={state.submitting}
-            error={state.submitError}
-            onDecide={(d, c) => void decide(d, c)}
-          />
+          {canReview && state.draft.status === "draft" && state.draft.version ? (
+            <ConsultationEditor key={state.draft.version} draft={state.draft} version={state.draft.version} onSaved={reload} />
+          ) : <ConsultationDraftView draft={state.draft} />}
+          {state.draft.approvedRecipientId && state.draft.version && (
+            <ConsultationDelivery key={state.draft.id} draftId={state.draft.id}
+              recipientId={state.draft.approvedRecipientId} version={state.draft.version}
+              canSend={canRoute && state.draft.status === "approved"} />
+          )}
+          {canReview && state.draft.status !== "draft" && (
+            <ApprovalControls
+              status={state.draft.status}
+              submitting={state.submitting}
+              error={state.submitError}
+              recipientIds={recipientIds}
+              onDecide={(decision, recipientId) => void decide(decision, recipientId)}
+            />
+          )}
         </div>
       )}
     </section>

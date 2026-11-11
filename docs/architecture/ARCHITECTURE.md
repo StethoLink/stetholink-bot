@@ -11,7 +11,6 @@ integrations/            FHIR, OpenEMR and synthetic connectors
 platform/auth/           Identity adapters and opaque server-side sessions
 platform/persistence/    PostgreSQL session and consultation storage
 platform/tenants/        Server-side tenant configuration
-platform/audit/          Structured routing events
 shared/                  HTTP contracts, validation and API client
 supabase/                PostgreSQL migrations, RLS and authorization tests
 ```
@@ -26,12 +25,12 @@ The platform creates a revocable session containing clinician UUID, tenant, role
 
 ## Database authorization
 
-Supabase can host PostgreSQL for a dedicated tenant. The backend uses a restricted login role and applies verified identity and chart context within each transaction. RLS checks tenant, clinician, patient, encounter and expiry. Browser roles have no direct draft privileges. Historical tenantless drafts are inaccessible from EHR sessions. A narrowly granted approval function checks physician role and scope, locks the scoped draft, and records the decision atomically. The runtime role cannot update approval state directly or edit the audit trail. [Persistence setup](../decisions/supabase-connection.md)
+Supabase can host PostgreSQL for a dedicated tenant. The backend uses a restricted login role and applies verified identity and chart context within each transaction. RLS checks tenant, clinician, patient, encounter and expiry. Browser roles have no direct draft privileges. Historical tenantless drafts are inaccessible from EHR sessions. The review command checks physician role and review scope, locks the scoped draft and records the decision against the reviewed version and selected destination. The routing command requires its own scope and checks that the immutable approval matches the chart, content and current tenant allowlist. The runtime role cannot update approval state directly or alter approval events and revisions. [Persistence setup](../decisions/supabase-connection.md)
 
 ## Synthetic staging and clinical safety
 
 A preview-only route verifies a server-configured secret and resolves fixed synthetic launch profiles. It exercises the same durable session and database boundaries as SMART. Local development opens a fixed synthetic chart for the mock workflow. Vercel production denies both synthetic authentication modes. [Staging checks](../../tests/e2e/README.md)
 
-Staging uses the deterministic mock model. Synthetic output checks reject invalid draft structures, unsafe formatting and selected unauthorized claims or treatment instructions. Generated drafts remain pending until physician review. SMART chart access is read-only. Deployed delivery returns 501. Local mock delivery reads the stored approval and checks the tenant recipient allowlist before sending to its in-memory transport.
+Staging uses the deterministic mock model. Synthetic output checks reject invalid draft structures, unsafe formatting and selected unauthorized claims or treatment instructions. Generated drafts remain pending until physician review. SMART chart access is read-only. The verified synthetic staging workflow records mock delivery atomically with the lifecycle event. Hospital delivery remains disabled.
 
 Before enabling a hospital integration, register the SMART client, provision the clinician mapping and restricted database login, verify actual launch and supported FHIR scopes, and test the embedding and cookie model with the hospital. Review provider and database data residency, schedule expiration cleanup, and configure infrastructure logs to omit OAuth query strings and clinical payloads. Durable clinical delivery and validation of model behavior with hospital data require separate integration work. [SMART setup](../openemr.md)

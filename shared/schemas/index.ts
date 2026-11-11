@@ -111,6 +111,7 @@ export const consultationDraftSchema = z.object({
   updatedAt: isoDateTime,
   reviewedBy: z.string().optional(),
   reviewedAt: isoDateTime.optional(),
+  approvedRecipientId: id.optional(),
   clinicalFacts: z.array(clinicalFactSchema).optional(),
   missingInformation: z.array(missingInformationSchema).optional(),
   attachments: z.array(attachmentReferenceSchema).optional(),
@@ -120,13 +121,19 @@ export const consultationDraftSchema = z.object({
   lifecycleStatus: consultationStatusSchema.optional(),
 }) satisfies z.ZodType<ConsultationDraft>;
 
-export const approvalRequestSchema = z.object({
+export const approvalRequestSchema = z.strictObject({
   draftId: id,
   decision: z.enum(APPROVAL_DECISIONS),
-  comment: z.string().max(4000).optional(),
-  expectedVersion: z.number().int().positive().optional(),
-  idempotencyKey: id.optional(),
-}) satisfies z.ZodType<ApprovalRequest>;
+  recipientId: id.optional(),
+  expectedVersion: z.number().int().positive().max(2147483647),
+  idempotencyKey: id,
+}).refine((input) => (input.decision === "approve") === (input.recipientId !== undefined)) satisfies z.ZodType<ApprovalRequest>;
+
+export const dispatchRequestSchema = z.strictObject({
+  recipientId: id,
+  expectedVersion: z.number().int().positive().max(2147483647),
+  idempotencyKey: id,
+}) satisfies z.ZodType<import("@/shared/contracts/consultation").DispatchRequest>;
 
 export const apiErrorSchema = z.object({
   error: z.object({
@@ -142,7 +149,7 @@ export const healthResponseSchema = z.object({
 });
 export type HealthResponse = z.infer<typeof healthResponseSchema>;
 
-export const createConsultationDraftRequestSchema = z.object({
+export const createConsultationDraftRequestSchema = z.strictObject({
   patientId: id,
   encounterId: id.optional(),
   conversationId: id.optional(),
@@ -151,13 +158,13 @@ export const createConsultationDraftRequestSchema = z.object({
 
 
 export const revisionRequestSchema = z.object({
-  expectedVersion: z.number().int().positive(), idempotencyKey: id,
+  expectedVersion: z.number().int().positive().max(2147483647), idempotencyKey: id,
   summary: z.string().min(1).max(16000), assessment: z.string().max(16000),
   plan: z.array(z.string().max(5000)).max(80),
 }).strict() satisfies z.ZodType<import("@/shared/contracts/consultation").RevisionRequest>;
 
 export const transitionRequestSchema = z.object({
-  expectedVersion: z.number().int().positive(), idempotencyKey: id,
+  expectedVersion: z.number().int().positive().max(2147483647), idempotencyKey: id,
   action: z.enum(["submit", "cancel", "queue", "sent", "accepted", "responded", "failed"]),
   recipientId: id.optional(),
 }).strict().refine((v) => v.action === "queue" ? !!v.recipientId : v.recipientId === undefined) satisfies z.ZodType<import("@/shared/contracts/consultation").TransitionRequest>;

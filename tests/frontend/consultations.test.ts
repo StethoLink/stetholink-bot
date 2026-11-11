@@ -62,7 +62,7 @@ describe("consultation draft state", () => {
     const client = createMockApiClient();
     const h = harness();
     await loadDraft(client, h.dispatch, "syn-draft-001");
-    await decideDraft(client, h.dispatch, { draftId: "syn-draft-001", decision, comment: "c" });
+    await decideDraft(client, h.dispatch, { draftId: "syn-draft-001", decision });
     const s = ready(h.get());
     expect(s.draft.status).toBe(status);
     expect(s.draft.reviewedBy).toBeDefined();
@@ -108,7 +108,7 @@ describe("consultation components", () => {
     const html = renderToStaticMarkup(
       createElement(ApprovalControls, { status: "pending_approval", submitting: false, onDecide: () => {} }),
     );
-    for (const label of ["Approve", "Reject", "Request changes"]) expect(html).toContain(`>${label}</button>`);
+    for (const label of ["Approve", "Reject", "Edit"]) expect(html).toContain(`>${label}</button>`);
   });
 
   it("hides decision buttons once a final decision exists", () => {

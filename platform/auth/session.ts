@@ -18,7 +18,7 @@ const launchSchema = z.object({
     roles: z.array(z.enum(["clinician", "physician"])).min(1),
     scopes: z.array(z.string()),
     patientId: z.string().min(1),
-    encounterId: z.string().min(1).optional(),
+    encounterId: z.string().min(1),
     expiresAt: z.number().int(),
     authorization: z.literal("active"),
   }),
@@ -80,7 +80,7 @@ export async function requireClinician(options: { navigation?: boolean } = {}): 
       source: "synthetic",
       context: {
         clinicianId: "11111111-1111-4111-8111-111111111111", tenantId: env.TENANT_ID,
-        roles: ["physician"], scopes: ["chart:read", "consultation:draft", "consultation:approve"],
+        roles: ["clinician"], scopes: ["chart:read", "consultation:draft"],
         patientId: "syn-pt-001", encounterId: "syn-enc-001", expiresAt: Date.now() + 60_000, authorization: "active",
       },
     };
