@@ -76,3 +76,62 @@ npm run build
 
 ## Client
 `@/shared/api-client` exports `StethoLinkApiClient`, `createMockApiClient()` (synthetic, in-memory, follows the same rules as above), `createHttpApiClient()` (validates every response), and `getApiClient()` (selected by `NEXT_PUBLIC_API_MODE`).
+
+## M2 grounded synthetic consultation drafting
+
+`ModelProvider` now supports an optional structured-output schema and a server-set synthetic classification. The consultation service uses the existing `SYSTEM_INSTRUCTIONS` and `PROMPT_VERSION` unchanged. Both the deterministic mock and OpenAI use the same output validation. A model's provider name cannot bypass validation.
+
+The model receives normalized synthetic facts, eligible evidence IDs and conflict groups only. Demographics, clinician identity, credentials, legacy clinical lists, free-text consultation intent, chat and attachments are excluded. Context is capped at 64 unique facts and 24,000 UTF-8 bytes; excess input is rejected rather than truncated. Non-synthetic adapters, patients or fact sources are rejected before model access. Adapter records, patient/encounter association, intent and HTTP output are validated.
+
+The structured model output is `{ evidenceIds: string[] }`. It may order documented, nonconflicting known evidence; it must retain every eligible fact. Core renders clinical assertions directly from the referenced source facts. Free-form model clinical claims, unexpected properties, fabricated or unknown evidence IDs, duplicate IDs, omitted facts and conflicting assertions selected as established evidence are rejected. This intentionally conservative extractive MVP does not generate diagnoses or treatment orders. It is not a clinically validated relevance or conflict-detection system: conflicting assertions with the same category and normalized label are flagged without resolving them; synonyms and implicit clinical contradictions still require physician review.
+
+`ConsultationDraft` gains an optional, backward-compatible `grounding` object:
+
+```ts
+{
+  reason: string | null;                 // documented encounter reason
+  question: string | null;               // trusted normalized consultation intent
+  specialty: string | null;              // trusted normalized consultation intent
+  evidenceIds: string[];                 // IDs into clinicalFacts; each fact has source/timestamp
+  gaps: string[];                        // explicit unknowns and completeness checks
+  conflicts: string[][];                 // unresolved source fact IDs
+  safetyFlags: ("clinician_review_required" | "conflicting_facts" |
+    "missing_investigations" | "incomplete_referral" | "insufficient_clinical_data")[];
+  provenance: { provider; model; promptVersion; contextVersion;
+    syntheticOnly: true; encounterReference: string | null };
+}
+```
+
+Drafts preserve `clinicalFacts` and `missingInformation`, including unknown investigations with no value or unit. Missing intent is `null`; missing investigation results are explicitly unknown. Empty legacy lists are never interpreted as negative findings. Legacy patients without normalized facts receive an insufficient-data flag; Core does not manufacture fact timestamps from their lists. False and zero source values are retained. Ahmed's original fixture is unchanged, including all unknown investigation results.
+
+`POST /api/consultations/drafts` retains its existing input and authenticated persistence workflow. Its summary, assessment and plan now contain grounded source citations, gaps, safety flags and prompt/provider provenance. Typed M2 metadata is returned at creation. **Persistence limitation:** the existing repository stores only these prose fields and provenance columns; subsequent saved-draft reads and approval responses do not hydrate the optional typed M2 metadata. Durable typed storage is outside M2's permitted paths. The staging preview below returns the complete typed draft without persistence.
+
+### Protected staging demo
+
+`POST /api/consultations/demo` accepts **no request body** and returns a validated `ConsultationDraft` (200) for the fixed fictional Ahmed cardiology case. It calls the existing verified clinician-session path, uses M0.5’s verified host-launch identity with an active, unexpired clinician or physician context, and rejects the development-auth bypass. Use the existing host session established by SMART or the secret-gated synthetic staging launch; no new login/account flow is introduced. Same-origin cookie protection is inherited from the existing session guard.
+
+The demo runs on Vercel `VERCEL_ENV=preview` (or authenticated local development). It is disabled on Vercel production and on production runtimes without the preview marker. It requires the synthetic tenant connector, cannot access stored drafts, and has no approval, persistence or delivery capability. Existing physician approval and tenant recipient allowlist behavior are unchanged. Vercel preview deployment protection remains enabled; no production settings need to change.
+
+### OpenAI controls and verification
+
+The existing server-only `AI_PROVIDER=openai`, `OPENAI_API_KEY` and `OPENAI_MODEL` select OpenAI. Missing credentials fail closed; mock is the default. Requests use the Responses API with strict JSON Schema and `store:false`, following [official structured-output documentation](https://developers.openai.com/api/docs/guides/structured-outputs). OpenAI is restricted to structured synthetic consultation requests; unclassified/unstructured chat cannot use it.
+
+| Optional server configuration | Default / behavior |
+|---|---|
+| `OPENAI_TIMEOUT_MS` | 30000; shared request/body/backoff deadline, maximum 60000 |
+| `OPENAI_MAX_RETRIES` | 1; maximum 2; only HTTP 429/500/502/503/504, bounded exponential backoff |
+| `OPENAI_MAX_INPUT_TOKENS` | 16000; conservative serialized UTF-8 byte bound plus 512 tokens of overhead, maximum 32000 |
+| `OPENAI_MAX_OUTPUT_TOKENS` | 2048; maximum 4096 |
+| `OPENAI_MAX_COST_USD` | 0.1 per generation, maximum 1; reserves the worst-case charge before each attempt, including failed attempts |
+| `OPENAI_INPUT_USD_PER_MILLION`, `OPENAI_OUTPUT_USD_PER_MILLION` | No default. Operator must supply verified upper-bound rates for the configured model; missing rates block live calls. Test rates are hypothetical. |
+
+The budget is an application estimate using operator-supplied rates, not an account-wide billing limit. No model price is guessed. Network ambiguity, timeouts, malformed responses, refusals, incomplete responses and permanent HTTP failures are not retried. Responses are bounded at 64,000 bytes; usage must fit reserved input and output limits. All provider failures are sanitized; credentials, patient/model payloads and provider error bodies are never logged. Provider deadline includes retries; token/cost reservations are per generation, not durable tenant quotas.
+
+```sh
+npx vitest run tests/backend/grounded-drafting.test.ts tests/backend/openai-provider.test.ts tests/backend/consultation-demo.test.ts
+npm run check
+node --test tests/smoke/*.test.mts
+npm run build
+```
+
+The separate `tests/backend/openai-synthetic-live.test.ts` runs only when `RUN_OPENAI_SYNTHETIC_LIVE_TEST=1` and an existing server-side key is present, and uses only the fixed synthetic Ahmed case with the same limits. Set verified pricing bounds before opting in. Credentials are unavailable in this implementation environment: **the live-provider criterion is BLOCKED**, and a skipped live test is not a pass. Mock/fake-transport tests do not prove a successful real OpenAI call.
