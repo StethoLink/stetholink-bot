@@ -25,4 +25,6 @@ export interface CreateConsultationDraftRequest {
   patientId: string;
   encounterId?: string;
   conversationId?: string;
+  /** Reuse the same key after a timeout; changing its request returns 409. */
+  idempotencyKey?: string;
 }

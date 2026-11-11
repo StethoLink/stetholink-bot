@@ -23,3 +23,31 @@ The script checks session issuance, revocation and expiry, physician identity, c
 Capture the exact commit SHA and deployment link for hosted verification. Staging simulates trusted identity and chart context. Signed SMART tests exercise the protocol with a test issuer. Hospital SSO requires a separate test against the registered EHR.
 
 CI runs the same HTTP test against the production build and a disposable PostgreSQL 17 instance with TLS. Run `bash tests/e2e/run-ci.sh` after `npm run build` on a Linux Docker host.
+
+## M3 durable consultation verification
+
+The CI script also runs `m3-migrations.mts` before starting the app. This harness
+requires a fresh, disposable loopback PostgreSQL database and owner connection
+in `STETHOLINK_TEST_OWNER_URL`. It creates the test roles, applies every migration,
+inserts synthetic pre-M3 records before the M3 migration, and runs both SQL suites.
+Use a fresh cluster for each run because roles are cluster-wide. Never use a live
+Supabase project or production connection. The synthetic baseline rows remain;
+the authorization and lifecycle SQL assertions roll back their own changes.
+
+```sh
+STETHOLINK_TEST_OWNER_URL=postgres://postgres@127.0.0.1:5432/postgres node tests/e2e/m3-migrations.mts
+```
+
+After the existing staging smoke run, CI stops the app and runs `m3-restart.mts`.
+It owns a loopback production-build app process, uses the restricted runtime
+connection and trusted test CA, and creates only synthetic verification records.
+It checks concurrent create replay, competing edits, metadata hydration, history
+and its version cursor, the review and mock delivery lifecycle, recipient denial,
+chart isolation, and durable replay after two complete app-process replacements.
+The same opaque session must work after replacement; no process memory can supply
+the restored draft or session. Only the app is restarted, not PostgreSQL.
+
+These checks verify local production-build persistence and restart behavior.
+They do not establish persistence across a hosted Vercel redeployment or a live
+Supabase project. Record those checks separately as BLOCKED until an authorized
+preview/database environment is available. No production deployment is required.

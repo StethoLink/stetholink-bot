@@ -53,6 +53,11 @@ export interface ConsultationDraft {
   missingInformation?: MissingInformation[];
   attachments?: AttachmentReference[];
   grounding?: ConsultationGrounding;
+  /** Durable aggregate identity and optimistic concurrency token (absent on legacy previews). */
+  tenantId?: string;
+  version?: number;
+  /** Canonical state; status retains pending_approval for existing HTTP clients. */
+  lifecycleStatus?: ConsultationStatus;
 }
 
 /** Clinician decision on a draft. The clinician's identity comes from the server session. */
@@ -60,4 +65,22 @@ export interface ApprovalRequest {
   draftId: string;
   decision: ApprovalDecision;
   comment?: string;
+  expectedVersion?: number;
+  idempotencyKey?: string;
+}
+
+export interface RevisionRequest {
+  expectedVersion: number;
+  idempotencyKey: string;
+  summary: string;
+  assessment: string;
+  plan: string[];
+}
+
+/** No approval command: decisions remain on the authenticated physician approval path. */
+export interface TransitionRequest {
+  expectedVersion: number;
+  idempotencyKey: string;
+  action: "submit" | "cancel" | "queue" | "sent" | "accepted" | "responded" | "failed";
+  recipientId?: string;
 }

@@ -106,10 +106,11 @@ export function createConsultationService(deps: { repository: ConsultationReposi
       }
       const draft = await preview({ ...input, patientId: actor.patientId, encounterId: actor.encounterId });
       const provenance = draft.grounding!.provenance;
-      // Existing persistence stores the grounded prose and source citations. Typed M2
-      // metadata is preview/create output only until the persistence owner adds storage.
-      const saved = await deps.repository.create(draft, actor.clinicianId, { provider: provenance.provider, model: provenance.model, promptVersion: provenance.promptVersion });
-      return consultationDraftSchema.parse({ ...saved, clinicalFacts: draft.clinicalFacts, missingInformation: draft.missingInformation, grounding: draft.grounding });
+      const provenanceFields = { provider: provenance.provider, model: provenance.model, promptVersion: provenance.promptVersion };
+      const saved = input.idempotencyKey
+        ? await deps.repository.create(draft, actor.clinicianId, provenanceFields, { key: input.idempotencyKey, request: { patientId: actor.patientId, encounterId: actor.encounterId } })
+        : await deps.repository.create(draft, actor.clinicianId, provenanceFields);
+      return consultationDraftSchema.parse(saved);
     },
   };
 }

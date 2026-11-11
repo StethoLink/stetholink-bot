@@ -40,7 +40,13 @@ begin
    begin
      perform public.record_ehr_consultation_approval('syn-rls-verification','approve',null);
      raise exception 'Unscoped approval allowed';
-   exception when no_data_found then null; end;
+   exception
+     when no_data_found then
+       if invalid ? 'expiresAt' then raise exception 'Expired chart did not fail authorization'; end if;
+     when insufficient_privilege then
+       -- M3 checks active authorization before looking up the scoped aggregate.
+       if not (invalid ? 'expiresAt') then raise; end if;
+   end;
  end loop;
  perform set_config('stetholink.context', (ctx || '{"roles":["clinician"]}')::text, true);
  begin

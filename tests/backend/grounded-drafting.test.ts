@@ -136,12 +136,16 @@ describe("grounded synthetic consultation drafting", () => {
     expect(draft.summary).not.toContain("No allergies");
   });
 
-  it("saves grounded prose and returns typed metadata even with a legacy repository projection", async () => {
-    const { deps, repository } = setup();
-    repository.create.mockImplementation(async (draft) => ({ ...draft, grounding: undefined, clinicalFacts: undefined, missingInformation: undefined }));
-    const result = await createConsultationService(deps).create(input, actor);
-    expect(result.grounding?.provenance.promptVersion).toBe(PROMPT_VERSION);
-    expect(repository.create).toHaveBeenCalledWith(expect.objectContaining({ summary: expect.stringContaining("synthetic-case-ahmed-v1") }), "verified-clinician", { provider: "mock", model: "mock-1", promptVersion: PROMPT_VERSION });
+  it("returns the saved snapshot on idempotent creates, without mixing in fresh model metadata", async () => {
+    const { deps, repository, service } = setup();
+    const saved = await service.preview(input);
+    saved.grounding!.gaps.push("Previously persisted synthetic gap");
+    repository.create.mockImplementation(async () => saved);
+    const result = await createConsultationService(deps).create({ ...input, idempotencyKey: "synthetic-create" }, actor);
+    expect(result).toEqual(saved);
+    expect(repository.create).toHaveBeenCalledWith(expect.objectContaining({ grounding: expect.any(Object) }), "verified-clinician",
+      { provider: "mock", model: "mock-1", promptVersion: PROMPT_VERSION },
+      { key: "synthetic-create", request: input });
   });
 
   it.each(["adapter", "patient", "fact"])("rejects nonsynthetic %s before model access", async (kind) => {
