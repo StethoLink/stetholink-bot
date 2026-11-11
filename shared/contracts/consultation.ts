@@ -49,6 +49,7 @@ export interface ConsultationDraft {
   /** Set by the server from the authenticated session, never by the client. */
   reviewedBy?: string;
   reviewedAt?: IsoDateTime;
+  approvedRecipientId?: string;
   clinicalFacts?: ClinicalFact[];
   missingInformation?: MissingInformation[];
   attachments?: AttachmentReference[];
@@ -64,7 +65,7 @@ export interface ConsultationDraft {
 export interface ApprovalRequest {
   draftId: string;
   decision: ApprovalDecision;
-  comment?: string;
+  recipientId?: string;
   expectedVersion?: number;
   idempotencyKey?: string;
 }
@@ -83,4 +84,10 @@ export interface TransitionRequest {
   idempotencyKey: string;
   action: "submit" | "cancel" | "queue" | "sent" | "accepted" | "responded" | "failed";
   recipientId?: string;
+}
+
+export interface DispatchRequest {
+  recipientId: string;
+  expectedVersion: number;
+  idempotencyKey: string;
 }

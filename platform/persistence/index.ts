@@ -11,6 +11,7 @@ const rowSchema = z.object({
   id: z.string(), tenant_id: z.string(), patient_id: z.string(), encounter_id: z.string().nullable(), status: z.string(),
   summary: z.string(), assessment: z.string(), plan: z.array(z.string()), generated_by: z.literal("ai"),
   created_at: z.coerce.date(), updated_at: z.coerce.date(), reviewed_by: z.string().nullable(), reviewed_at: z.coerce.date().nullable(),
+  approved_recipient_id: z.string().nullish(),
   version: z.number().int().positive(), clinical_metadata: z.object({
     grounding: consultationDraftSchema.shape.grounding,
     clinicalFacts: consultationDraftSchema.shape.clinicalFacts,
@@ -30,6 +31,7 @@ export function consultationFromRow(value: unknown) {
     summary: row.summary, assessment: row.assessment, plan: row.plan,
     generatedBy: row.generated_by, createdAt: row.created_at.toISOString(), updatedAt: row.updated_at.toISOString(),
     reviewedBy: row.reviewed_by ?? undefined, reviewedAt: row.reviewed_at?.toISOString(),
+    approvedRecipientId: row.approved_recipient_id ?? undefined,
   });
 }
 
@@ -60,8 +62,14 @@ export function createConsultationRepository(context: ClinicianContext, recipien
     },
     async approve(input) {
       return scoped(async (tx) => {
-        const [row] = await tx`select * from public.approve_ehr_consultation_versioned(${input.draftId}, ${input.decision},
-          ${input.comment ?? null}, ${input.expectedVersion ?? null}, ${input.idempotencyKey ?? null})`;
+        const [row] = await tx`select * from public.review_ehr_consultation(${input.draftId}, ${input.decision},
+          ${input.recipientId ?? null}, ${input.expectedVersion ?? null}, ${input.idempotencyKey ?? null})`;
+        return consultationFromRow(row);
+      });
+    },
+    async dispatch(id, { recipientId, expectedVersion, idempotencyKey }) {
+      return scoped(async (tx) => {
+        const [row] = await tx`select * from public.dispatch_ehr_consultation(${id}, ${recipientId}, ${expectedVersion}, ${idempotencyKey})`;
         return consultationFromRow(row);
       });
     },

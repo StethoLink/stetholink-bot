@@ -34,6 +34,11 @@ export function contractResponse<T>(schema: z.ZodType<T>, body: unknown, status 
   return NextResponse.json(parsed.data, { status, headers: { "Cache-Control": "no-store" } });
 }
 
+export async function readJson(request: Request): Promise<unknown> {
+  if (!/^application\/json(?:\s*;|$)/i.test(request.headers.get("content-type") ?? "")) return null;
+  return request.json().catch(() => null);
+}
+
 export function handleRouteError(err: unknown) {
   if (err instanceof AuthError) return errorResponse(err.code, err.message);
   if (err instanceof RouteError) return errorResponse(err.code, err.message);

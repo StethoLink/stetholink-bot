@@ -12,10 +12,10 @@ const secret = process.env.STAGING_LAUNCH_SECRET;
 assert.ok(secret && secret.length >= 32);
 let app: ChildProcess | undefined;
 
-async function start() {
+async function start(tenant = process.env.TENANT_ID) {
   app = spawn(process.execPath, ["node_modules/next/dist/bin/next", "start", "apps/embedded-app", "--hostname", "127.0.0.1", "--port", base.port], {
     env: { ...process.env, AUTH_MODE: "staging", VERCEL_ENV: "preview", VERCEL_TARGET_ENV: "preview",
-      AI_PROVIDER: "mock", CLINICAL_DATA_SOURCE: "synthetic", STAGING_SESSION_SECONDS: "900" },
+      AI_PROVIDER: "mock", CLINICAL_DATA_SOURCE: "synthetic", STAGING_SESSION_SECONDS: "900", TENANT_ID: tenant },
     stdio: "ignore",
   });
   for (let i = 0; i < 100; i++) {
@@ -103,7 +103,8 @@ try {
     action, expectedVersion, idempotencyKey: key + "-" + action + expectedVersion, ...(recipientId ? { recipientId } : {}),
   }, cookie);
   await transition("submit", 3);
-  const approval = { draftId: initial.id, decision: "approve", expectedVersion: 4, idempotencyKey: key + "-approve" };
+  const approval = { draftId: initial.id, decision: "approve", recipientId: "synthetic-consult-team",
+    expectedVersion: 4, idempotencyKey: key + "-approve" };
   const approved = await json(path + "/approval", 200, "POST", approval, cookie);
   assert.equal(approved.lifecycleStatus, "approved");
   await json(path + "/transitions", 403, "POST", { action: "queue", expectedVersion: 5, idempotencyKey: key + "-evil", recipientId: "forbidden" }, cookie);
@@ -129,6 +130,19 @@ try {
   assert.deepEqual(await json(drafts, 201, "POST", create, cookie), initial, "Create replay survives restart and later transitions");
   assert.deepEqual(await json(path + "/approval", 200, "POST", approval, cookie), approved);
   assert.deepEqual(await json(path, 200, "GET", undefined, cookie), responded, "Replays cannot regress durable state");
-  await json(path + "/approval", 409, "POST", { ...approval, decision: "reject" }, cookie);
+  const { recipientId, ...review } = approval;
+  await json(path + "/approval", 409, "POST", { ...review, decision: "reject" }, cookie);
+
+  // Use the same disposable database and opaque cookie from a separate tenant deployment.
+  await stop();
+  await start(initial.tenantId + "-other");
+  await json(path, 401, "GET", undefined, cookie);
+  await json(path + "/approval", 401, "POST", approval, cookie);
+  const foreign = await launch("physician");
+  await json(path, 404, "GET", undefined, foreign);
+  await json(path + "/approval", 404, "POST", approval, foreign);
+  await json(path + "/delivery", 404, "POST", {
+    recipientId, expectedVersion: 5, idempotencyKey: key + "-send",
+  }, foreign);
   console.log("Passed M3 HTTP concurrency, metadata, lifecycle, history, isolation, durable replay and two app-process replacements.");
 } finally { await stop(); }

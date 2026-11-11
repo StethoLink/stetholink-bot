@@ -8,30 +8,30 @@ import styles from "../styles/approval.module.css";
 const ACTION_LABEL: Record<ApprovalDecision, string> = {
   approve: "Approve",
   reject: "Reject",
-  request_changes: "Request changes",
+  request_changes: "Edit",
 };
 
 export interface ApprovalControlsProps {
   status: ConsultationStatus;
   submitting: boolean;
   error?: string;
-  onDecide: (decision: ApprovalDecision, comment?: string) => void;
+  recipientIds?: readonly string[];
+  onDecide: (decision: ApprovalDecision, recipientId?: string) => void;
 }
 
-/** Explicit, two-step clinician decision. Request changes requires a comment. */
-export function ApprovalControls({ status, submitting, error, onDecide }: ApprovalControlsProps) {
+/** Explicit, two-step clinician decision. */
+export function ApprovalControls({ status, submitting, error, recipientIds = [], onDecide }: ApprovalControlsProps) {
   const [pending, setPending] = useState<ApprovalDecision>();
-  const [comment, setComment] = useState("");
+  const [recipient, setRecipient] = useState("");
   const id = useId();
 
-  // A recorded decision changes the status; close the confirm step and clear the comment.
+  // A recorded decision changes the status; close the confirm step and clear the destination.
   useEffect(() => {
     setPending(undefined);
-    setComment("");
+    setRecipient("");
   }, [status]);
   const final = isFinalStatus(status);
-  const needsComment = pending === "request_changes";
-  const canConfirm = !submitting && (!needsComment || comment.trim().length > 0);
+  const canConfirm = !submitting && (pending !== "approve" || recipientIds.includes(recipient));
 
   if (final) {
     return (
@@ -50,7 +50,7 @@ export function ApprovalControls({ status, submitting, error, onDecide }: Approv
       {!pending ? (
         <div className="flex flex-wrap gap-2">
           {(Object.keys(ACTION_LABEL) as ApprovalDecision[]).map((d) => (
-            <button key={d} type="button" className={styles[d]} disabled={submitting} onClick={() => setPending(d)}>
+            <button key={d} type="button" className={styles[d]} disabled={submitting || (d === "approve" && recipientIds.length === 0)} onClick={() => setPending(d)}>
               {ACTION_LABEL[d]}
             </button>
           ))}
@@ -61,24 +61,21 @@ export function ApprovalControls({ status, submitting, error, onDecide }: Approv
           onSubmit={(e) => {
             e.preventDefault();
             if (!canConfirm) return;
-            onDecide(pending, comment.trim() || undefined);
+            onDecide(pending, pending === "approve" ? recipient : undefined);
           }}
         >
           <p className="text-sm font-medium" id={`${id}-confirm`}>
-            Confirm: {ACTION_LABEL[pending].toLowerCase()} this draft?
+            {ACTION_LABEL[pending]} this draft?
           </p>
-          <label htmlFor={`${id}-comment`} className="block text-sm">
-            Comment {needsComment ? "(required)" : "(optional)"}
-          </label>
-          <textarea
-            id={`${id}-comment`}
-            rows={3}
-            required={needsComment}
-            aria-required={needsComment}
-            className={styles.input}
-            value={comment}
-            onChange={(e) => setComment(e.target.value)}
-          />
+          {pending === "approve" && (
+            <label className="block text-sm">
+              Destination
+              <select className={styles.input} value={recipient} required onChange={(e) => setRecipient(e.target.value)}>
+                <option value="">Choose a destination</option>
+                {recipientIds.map((id) => <option key={id} value={id}>{id}</option>)}
+              </select>
+            </label>
+          )}
           <div className="flex flex-wrap gap-2">
             <button type="submit" className={styles[pending]} disabled={!canConfirm} aria-describedby={`${id}-confirm`}>
               {submitting ? "Submitting…" : `Confirm ${ACTION_LABEL[pending].toLowerCase()}`}

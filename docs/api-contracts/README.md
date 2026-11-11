@@ -15,7 +15,7 @@ Clinical routes require a verified clinician session. The health and authenticat
 | 5 | POST | `/api/consultations/drafts` | `CreateConsultationDraftRequest` | `ConsultationDraft` (201) | Synthetic context with Supabase or development persistence |
 | 6 | GET | `/api/consultations/drafts/:draftId` | — | `ConsultationDraft` | ✅ clinician-owned rows |
 | 7 | POST | `/api/consultations/drafts/:draftId/approval` | `ApprovalRequest` | `ConsultationDraft` | Atomic in Supabase |
-| 8 | POST | `/api/consultations/drafts/:draftId/delivery` | `{ recipientId }` | `ConsultationDelivery` | Local synthetic delivery. Deployed delivery returns 501 |
+| 8 | POST | `/api/consultations/drafts/:draftId/delivery` | `{ recipientId, expectedVersion, idempotencyKey }` | `ConsultationDelivery` | Verified synthetic staging only |
 | 9 | GET | `/api/consultations/drafts/:draftId/delivery` | — | `ConsultationDelivery\|null` | Clinician-owned draft |
 
 ## Types
@@ -27,8 +27,8 @@ interface PatientContext   { patientId; displayName; birthDate?; sex; allergies[
 interface EncounterContext { encounterId; patientId; type; status; startedAt; location?; reasonForVisit?; clinicalFacts?: ClinicalFact[] }
 interface ChatRequest      { message; conversationId?; patientId?; encounterId? }      // message: 1..8000 chars
 interface ChatResponse     { conversationId; message: ChatMessage; safety: SafetyAssessment; requiresClinicianReview }
-interface ConsultationDraft{ id; patientId; encounterId?; status; summary; assessment; plan[]; generatedBy:"ai"; createdAt; updatedAt; reviewedBy?; reviewedAt?; clinicalFacts?: ClinicalFact[]; missingInformation?: MissingInformation[]; attachments?: AttachmentReference[] }
-interface ApprovalRequest  { draftId; decision: "approve"|"reject"|"request_changes"; comment? }
+interface ConsultationDraft{ id; patientId; encounterId?; status; summary; assessment; plan[]; generatedBy:"ai"; createdAt; updatedAt; reviewedBy?; reviewedAt?; approvedRecipientId?; clinicalFacts?: ClinicalFact[]; missingInformation?: MissingInformation[]; attachments?: AttachmentReference[] }
+interface ApprovalRequest  { draftId; decision: "approve"|"reject"|"request_changes"; recipientId?; expectedVersion; idempotencyKey }
 interface ApiError         { error: { code; message; requestId? } }
 ```
 
@@ -108,9 +108,9 @@ Drafts preserve `clinicalFacts` and `missingInformation`, including unknown inve
 
 ### Protected staging demo
 
-`POST /api/consultations/demo` accepts **no request body** and returns a validated `ConsultationDraft` (200) for the fixed fictional Ahmed cardiology case. It calls the existing verified clinician-session path, uses M0.5’s verified host-launch identity with an active, unexpired clinician or physician context, and rejects the development-auth bypass. Use the existing host session established by SMART or the secret-gated synthetic staging launch; no new login/account flow is introduced. Same-origin cookie protection is inherited from the existing session guard.
+`POST /api/consultations/demo` accepts **no request body** and returns a validated `ConsultationDraft` (200) for the fixed fictional Ahmed cardiology case. It calls the existing verified clinician-session path, uses M0.5’s verified host-launch identity with an active, unexpired clinician or physician context, and rejects the development-auth bypass. Open the Ahmed fixture with the secret-gated synthetic staging profile `same-clinician-other-chart`. Same-origin cookie protection is inherited from the existing session guard.
 
-The demo runs on Vercel `VERCEL_ENV=preview` (or authenticated local development). It is disabled on Vercel production and on production runtimes without the preview marker. It requires the synthetic tenant connector, cannot access stored drafts, and has no approval, persistence or delivery capability. Existing physician approval and tenant recipient allowlist behavior are unchanged. Vercel preview deployment protection remains enabled; no production settings need to change.
+The demo runs on Vercel `VERCEL_ENV=preview` (or authenticated local development). It is disabled on Vercel production and on production runtimes without the preview marker. It requires the synthetic tenant connector, cannot access stored drafts, and has no approval, persistence or delivery capability. Vercel preview deployment protection remains enabled; no production settings need to change.
 
 ### OpenAI controls and verification
 
@@ -136,7 +136,7 @@ npm run build
 
 The separate `tests/backend/openai-synthetic-live.test.ts` runs only when `RUN_OPENAI_SYNTHETIC_LIVE_TEST=1` and an existing server-side key is present, and uses only the fixed synthetic Ahmed case with the same limits. Set verified pricing bounds before opting in. Credentials are unavailable in this implementation environment: **the live-provider criterion is BLOCKED**, and a skipped live test is not a pass. Mock/fake-transport tests do not prove a successful real OpenAI call.
 
-## M3 durable consultation lifecycle
+## Durable consultation lifecycle
 
 The existing EHR session supplies tenant, clinician, patient and encounter on every
 transaction. Deployed requests always use PostgreSQL. Local synthetic development
@@ -147,7 +147,7 @@ without a database and does not expose the durable lifecycle commands.
 | --- | --- | --- |
 | POST `/api/consultations/drafts` | Existing fields plus optional `idempotencyKey` | Original created snapshot on replay (201) |
 | PATCH `/api/consultations/drafts/:draftId` | `{expectedVersion,idempotencyKey,summary,assessment,plan}` | Revised editable draft |
-| POST `/api/consultations/drafts/:draftId/approval` | Existing approval fields plus optional `expectedVersion,idempotencyKey` | Physician decision; legacy signature remains supported |
+| POST `/api/consultations/drafts/:draftId/approval` | `{draftId,decision,expectedVersion,idempotencyKey,recipientId?}` | Versioned physician decision; recipient required for approval |
 | POST `/api/consultations/drafts/:draftId/transitions` | `{expectedVersion,idempotencyKey,action,recipientId?}` | Updated consultation; recipient required only for `queue` |
 | GET `/api/consultations/drafts/:draftId/history` | Optional exclusive `beforeVersion` cursor | Up to 20 revisions, corresponding events, latest 20 attempts and `nextBeforeVersion` |
 
@@ -160,17 +160,23 @@ rows remain stored and inaccessible. The state set additionally includes `queued
 
 Generated drafts start at `pending_review`. Physician `request_changes` makes a
 draft editable; `revise` requires `draft`, and `submit` returns it to review.
-Versioned approval requires pending review; legacy approval may still decide a
-changes-requested draft. Only the separate approval endpoint can approve or reject.
-`queue` requires stored physician approval and a tenant-allowed recipient.
-Mock progression is `queued -> sent -> accepted -> responded` (or `sent -> responded`).
-`failed` is allowed from queued/sent/accepted; a failed attempt can be requeued to
-the same recipient. Cancellation is allowed from draft/pending review/approved/
+Approve, Reject and Edit (`request_changes`) require an explicit physician
+decision on the displayed version. Approval records the selected allowlisted
+destination against the immutable approved revision. Approval events contain
+scope identifiers, decision, version, destination and timestamp.
+The edit action returns the draft to editing. Submit places the revised draft
+back in review for a new decision.
+
+Mock routing requires the dedicated routing scope. Queue and send require the
+same approved content, chart and destination. Sending checks the current
+allowlist again. The delivery endpoint records a synthetic send atomically.
+Mock transitions also support `queued -> sent -> accepted -> responded`
+(or `sent -> responded`). Attempts that fail before sending can be retried to
+the same recipient. A draft can record at most one successful send. Cancellation is allowed from draft/pending review/approved/
 queued/failed. Rejected, responded and cancelled records are terminal.
 
-Delivery transitions are bookkeeping for authenticated synthetic mock sessions
-only; they do not call a provider. Real delivery remains 501. The model has no
-approval or delivery tool. Each command locks the aggregate, checks the expected
+Delivery transitions and the delivery endpoint run in verified synthetic mock
+staging. Hospital delivery remains disabled. Model access is limited to drafting. Each command locks the aggregate, checks the expected
 version and records a revision/event atomically. Idempotency keys are scoped to
 the verified chart and clinician, serialize duplicate commands in PostgreSQL, and
 return the original snapshot even after later transitions. Reusing a key for a
@@ -181,5 +187,7 @@ record when a clinician revises prose; revisions preserve both for review.
 
 The runtime cannot directly update aggregates, insert approvals, or alter revision,
 event and idempotency history. All child tables enforce the same chart RLS and
-carry tenant/request identity. Delivery attempts are updated only by the private
-command engine; events and aggregate revisions preserve each transition.
+carry tenant/request identity. The private command engine updates attempts.
+Events and revisions preserve each transition. Historical approvals without
+a destination remain in history. Unsent drafts in the approved state return
+to review, and historical queued attempts require cancellation.

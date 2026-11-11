@@ -51,3 +51,14 @@ These checks verify local production-build persistence and restart behavior.
 They do not establish persistence across a hosted Vercel redeployment or a live
 Supabase project. Record those checks separately as BLOCKED until an authorized
 preview/database environment is available. No production deployment is required.
+
+
+## M4 clinician approval boundary
+
+CI applies the migrations in order, runs the historical M3 SQL tests against
+the M3 schema, then runs `supabase/tests/m4_approval_boundary.sql` against M4.
+The SQL suite covers tenant, patient, encounter and clinician isolation,
+session expiry, privileges, destination changes between queue and send,
+append-only audit records, and one send across replays. The production-build
+HTTP tests exercise forged request fields, cross-origin requests, cross-tenant
+sessions, approval and editing, and concurrent replay of synthetic delivery.

@@ -19,22 +19,8 @@ export function mockConsultationRepository(tenantId: string, clinicianId: string
       owned.set(draft.id, draft);
       return draft;
     },
-    async approve(input) {
-      const draft = owned.get(input.draftId);
-      if (!draft) throw new RouteError("not_found", "Draft not found");
-      if (draft.status !== "pending_approval") {
-        throw new RouteError("conflict", "Draft has already been reviewed");
-      }
-      const now = new Date().toISOString();
-      const updated: ConsultationDraft = {
-        ...draft,
-        status: input.decision === "approve" ? "approved" : input.decision === "reject" ? "rejected" : "draft",
-        reviewedAt: now,
-        reviewedBy: clinicianId,
-        updatedAt: now,
-      };
-      owned.set(updated.id, updated);
-      return updated;
+    async approve() {
+      throw new RouteError("forbidden", "A verified physician session is required");
     },
   };
 }

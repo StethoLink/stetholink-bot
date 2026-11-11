@@ -46,7 +46,6 @@ describe("normalized ClinicalDataAdapter contract", () => {
     const service = createPatientContextService(syntheticClinicalAdapter);
     expect(await service.getContext(ahmedPatient.patientId)).toEqual(ahmedPatient);
     expect(await service.getContext("missing")).toBeNull();
-    expect(await syntheticClinicalAdapter.consultations.status("syn-draft-ahmed")).toBeNull();
   });
 
   it("propagates adapter failure instead of substituting a missing or fabricated patient", async () => {

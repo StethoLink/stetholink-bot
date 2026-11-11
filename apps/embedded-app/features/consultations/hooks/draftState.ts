@@ -1,5 +1,5 @@
 import { ApiClientError, type StethoLinkApiClient } from "@/shared/api-client";
-import type { ApprovalDecision, ConsultationDraft, CreateConsultationDraftRequest } from "@/shared/contracts";
+import type { ApprovalRequest, ConsultationDraft, CreateConsultationDraftRequest } from "@/shared/contracts";
 
 export type DraftState =
   | { status: "idle" }
@@ -68,7 +68,7 @@ export async function createDraft(
 export async function decideDraft(
   client: StethoLinkApiClient,
   dispatch: (a: DraftAction) => void,
-  args: { draftId: string; decision: ApprovalDecision; comment?: string },
+  args: ApprovalRequest,
 ) {
   dispatch({ type: "submit" });
   try {

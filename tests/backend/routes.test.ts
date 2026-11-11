@@ -13,7 +13,7 @@ vi.mock("@/apps/embedded-app/server", async () => {
 const uid = "11111111-1111-4111-8111-111111111111";
 const draft = { id: "draft-1", patientId: "syn-pt-001", status: "pending_approval", summary: "Synthetic", assessment: "Synthetic", plan: [], generatedBy: "ai", createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
 afterEach(() => vi.resetAllMocks());
-const post = (body: unknown) => new Request("http://localhost/api/consultations/drafts", { method: "POST", body: JSON.stringify(body) });
+const post = (body: unknown) => new Request("http://localhost/api/consultations/drafts", { method: "POST", body: JSON.stringify(body), headers: { "content-type": "application/json" } });
 describe("consultation routes", () => {
   it("requires authentication before reading input or calling services", async () => {
     const { AuthError } = await import("@/platform/auth/session");
@@ -24,7 +24,9 @@ describe("consultation routes", () => {
   it("uses session identity and returns a validated created draft", async () => {
     session.mockResolvedValue({ clinicianId: uid, roles: ["clinician"] });
     consultations.create.mockResolvedValue(draft);
-    const res = await createDraft(post({ patientId: "syn-pt-001", clinicianId: "forged" }));
+    expect((await createDraft(post({ patientId: "syn-pt-001", clinicianId: "forged" }))).status).toBe(400);
+    expect(consultations.create).not.toHaveBeenCalled();
+    const res = await createDraft(post({ patientId: "syn-pt-001" }));
     expect(res.status).toBe(201);
     expect(await res.json()).toEqual(draft);
     expect(consultations.create).toHaveBeenCalledWith({ patientId: "syn-pt-001" });
@@ -40,13 +42,13 @@ describe("consultation routes", () => {
   });
   it("rejects mismatched approval body and URL", async () => {
     session.mockResolvedValue({ clinicianId: uid });
-    const res = await approveDraft(post({ draftId: "other", decision: "approve" }), { params: Promise.resolve({ draftId: "draft-1" }) });
+    const res = await approveDraft(post({ draftId: "other", decision: "approve", recipientId: "team-a", expectedVersion: 1, idempotencyKey: "review-1" }), { params: Promise.resolve({ draftId: "draft-1" }) });
     expect(res.status).toBe(400); expect(consultations.approve).not.toHaveBeenCalled();
   });
   it("returns a conflict for an already reviewed draft", async () => {
     const { default: postgres } = await import("postgres");
     session.mockResolvedValue({ clinicianId: uid }); consultations.approve.mockRejectedValue(Object.assign(new postgres.PostgresError("conflict"), { code: "P0001" }));
-    const res = await approveDraft(post({ draftId: "draft-1", decision: "approve" }), { params: Promise.resolve({ draftId: "draft-1" }) });
+    const res = await approveDraft(post({ draftId: "draft-1", decision: "approve", recipientId: "team-a", expectedVersion: 1, idempotencyKey: "review-1" }), { params: Promise.resolve({ draftId: "draft-1" }) });
     expect(res.status).toBe(409);
   });
 });

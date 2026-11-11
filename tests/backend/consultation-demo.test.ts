@@ -7,7 +7,7 @@ import { AuthError } from "@/platform/auth/session";
 import type { VerifiedLaunch } from "@/platform/auth/identity";
 
 const { session, localSyntheticEnabled, env, tenant } = vi.hoisted(() => ({
-  session: vi.fn(), localSyntheticEnabled: vi.fn(() => false), env: { NODE_ENV: "production" }, tenant: { connector: "synthetic" },
+  session: vi.fn(), localSyntheticEnabled: vi.fn(() => false), env: { NODE_ENV: "production" }, tenant: { id: "synthetic", connector: "synthetic" },
 }));
 vi.mock("@/platform/auth/session", async (original) => ({ ...await original<typeof import("@/platform/auth/session")>(), localSyntheticEnabled }));
 vi.mock("@/platform/tenants/env", () => ({ getEnv: () => env }));
@@ -20,7 +20,7 @@ const verified: VerifiedLaunch = {
   source: "synthetic",
   context: {
     clinicianId: "verified-synthetic-clinician", tenantId: "synthetic", roles: ["physician"],
-    scopes: ["consultation:draft"], patientId: "syn-pt-001", encounterId: "syn-enc-001",
+    scopes: ["chart:read", "consultation:draft"], patientId: "syn-pt-ahmed", encounterId: "syn-enc-ahmed",
     expiresAt: Date.now() + 600_000, authorization: "active",
   },
 };
@@ -42,6 +42,10 @@ describe("protected staging consultation demo", () => {
     expect(draft.status).toBe("pending_approval");
     expect(draft.reviewedBy).toBeUndefined();
     expect(draft.missingInformation?.find((fact) => fact.id === "ahmed-troponin")?.status).toBe("unknown");
+  });
+  it("rejects a verified session for a different chart", async () => {
+    session.mockResolvedValue({ ...verified, context: { ...verified.context, encounterId: "syn-enc-001" } });
+    expect((await POST(request())).status).toBe(403);
   });
   it("rejects all caller-supplied content and identity", async () => {
     const response = await POST(new Request(request(), { body: JSON.stringify({ patientId: "other", clinicianId: "forged", clinicalQuestion: "Never send this text to a model" }) }));
