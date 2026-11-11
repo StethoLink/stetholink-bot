@@ -1,32 +1,37 @@
 # StethoLink architecture
 
 ```text
-apps/embedded-app/       Next.js embedded UI, route handlers and composition
+apps/embedded-app/       Embedded UI, HTTP contracts and service composition
+core/auth/               Provider-neutral clinician authorization context
 core/agent/              Model interfaces, prompts, orchestration and safety checks
 core/tools/              Clinical connector and consultation transport interfaces
-core/consultation/       Draft generation, approval repository port and routing
+core/consultation/       Draft generation, approval and routing
 core/patient-context/    Patient-context service
-integrations/fhir/       SMART authorization helpers and patient-scoped R4 reads
-integrations/openemr/    OpenEMR connector using the generic FHIR implementation
-integrations/mock/       Synthetic patient data adapter, drafts and delivery
-platform/tenants/        Server environment and tenant configuration
-platform/auth/           Clinician authentication and SMART sandbox sessions
+integrations/            FHIR, OpenEMR and synthetic connectors
+platform/auth/           Identity adapters and opaque server-side sessions
+platform/persistence/    PostgreSQL session and consultation storage
+platform/tenants/        Server-side tenant configuration
 platform/audit/          Structured routing events
-platform/persistence/    Existing user-scoped Supabase repository
 shared/                  HTTP contracts, validation and API client
-supabase/                Existing schema, RLS, approval RPC, seeds and SQL tests
-tests/                   Backend, frontend and dependency-free smoke tests
+supabase/                PostgreSQL migrations, RLS and authorization tests
 ```
 
-The app composes the connector, model and repository. Core code depends on the interfaces and shared contracts. A connector may also provide a consultation transport when that EHR supports delivery. Connector implementations must enforce patient context, preserve approval and recipient constraints, and make delivery idempotent by draft ID.
+## EHR-first identity
 
-The HTTP routes derive clinician identity from the verified session. Supabase reads use the user's token with the existing RLS policies. Approval uses the existing transaction and the database records the reviewer. Routing reads the stored approval and checks the recipient against the tenant allowlist before calling the transport. The mock connector simulates both submission and a recipient response. Routing audit events include tenant, actor and draft identifiers. Request bodies and patient information are excluded from those events.
+The clinician launches StethoLink from an active EHR chart. SMART App Launch is the initial identity adapter. The server pins the FHIR base, authorization and token endpoints, OIDC issuer and JWKS endpoint to the tenant registration. It checks SMART discovery for the pinned endpoints and PKCE S256. State, nonce and the verifier live in a short-lived, single-use record bound to an opaque browser cookie.
 
-The deployment model is one configured tenant per app instance. Deployments using Supabase require a dedicated project per tenant. There is no shared database tenancy. Secrets stay in server-side environment variables. Public Supabase variables contain public connection information only.
+The callback exchanges the code and verifies the signed ID token, including issuer, audience, authorized party, nonce and expiration. A tenant-administered mapping binds the verified subject and `fhirUser` to a stable clinician UUID and role. The SMART grant supplies patient and encounter IDs. Authenticated FHIR reads confirm resource identity and the encounter's patient. The clinician uses their hospital session throughout the launch.
 
-## Safety and gaps
+The platform creates a revocable session containing clinician UUID, tenant, roles, scopes, chart context, expiry and active authorization. The EHR token remains server-side. Browser cookies contain opaque random handles and use HTTP-only, SameSite=Lax and Secure in deployed environments. Logout revokes the local session. A new launch replaces the prior chart session. The Core receives a `ClinicianContext` and typed interfaces. Future trusted identity adapters can supply the same context.
 
-- The synthetic workflow uses physician approval before routing. The mock transport produces an acknowledgement locally.
-- The OpenAI Responses provider is opt-in for synthetic data. The existing safety interface and clinician review gate remain. The existing guard does not provide clinically validated output screening.
-- Generic FHIR and OpenEMR support a read-only SMART sandbox in development. SMART registration values come from server configuration. Authorization uses state and PKCE and binds the resulting context to the verified clinician and tenant. These grants are in memory and expire within 15 minutes.
-- Live consultation generation and delivery, production SMART identity mapping and durable grant storage, EHR-specific result ingestion, and durable delivery auditing require additional implementation and hospital integration testing. The app denies model access and delivery for EHR connector modes.
+## Database authorization
+
+Supabase can host PostgreSQL for a dedicated tenant. The backend uses a restricted login role and applies verified identity and chart context within each transaction. RLS checks tenant, clinician, patient, encounter and expiry. Browser roles have no direct draft privileges. Historical tenantless drafts are inaccessible from EHR sessions. A narrowly granted approval function checks physician role and scope, locks the scoped draft, and records the decision atomically. The runtime role cannot update approval state directly or edit the audit trail. [Persistence setup](../decisions/supabase-connection.md)
+
+## Synthetic staging and clinical safety
+
+A preview-only route verifies a server-configured secret and resolves fixed synthetic launch profiles. It exercises the same durable session and database boundaries as SMART. Local development opens a fixed synthetic chart for the mock workflow. Vercel production denies both synthetic authentication modes. [Staging checks](../../tests/e2e/README.md)
+
+Staging uses the deterministic mock model. Synthetic output checks reject invalid draft structures, unsafe formatting and selected unauthorized claims or treatment instructions. Generated drafts remain pending until physician review. SMART chart access is read-only. Deployed delivery returns 501. Local mock delivery reads the stored approval and checks the tenant recipient allowlist before sending to its in-memory transport.
+
+Before enabling a hospital integration, register the SMART client, provision the clinician mapping and restricted database login, verify actual launch and supported FHIR scopes, and test the embedding and cookie model with the hospital. Review provider and database data residency, schedule expiration cleanup, and configure infrastructure logs to omit OAuth query strings and clinical payloads. Durable clinical delivery and validation of model behavior with hospital data require separate integration work. [SMART setup](../openemr.md)

@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { createChatOrchestrator } from "@/core/agent/orchestrator/orchestrator";
 import { mockProvider } from "@/core/agent/providers/mock-provider";
-import { passthroughSafetyGuard } from "@/core/agent/safety/guard";
+import { syntheticSafetyGuard } from "@/core/agent/safety/guard";
 import { chatResponseSchema } from "@/shared/schemas";
 
 describe("chat orchestrator", () => {
-  const deps = { provider: mockProvider, safety: passthroughSafetyGuard, loadPatientContext: async () => null };
+  const deps = { provider: mockProvider, safety: syntheticSafetyGuard, loadPatientContext: async () => null };
 
   it("returns a contract-valid response that requires clinician review", async () => {
     const res = chatResponseSchema.parse(await createChatOrchestrator(deps).handle({ message: "hello" }));

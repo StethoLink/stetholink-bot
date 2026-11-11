@@ -1,18 +1,5 @@
-# Database (Codex)
+# Persistence
 
-Supabase Postgres access. Rules:
-- Only repository functions in this folder query the database. Core code (`core/**`) must not import it (enforced by ESLint).
-- Use the service-role key only on the server, never with `NEXT_PUBLIC_`.
-- Schema changes go through `supabase/migrations/` and are append-only.
+The Core consumes the consultation repository interface. The PostgreSQL adapter uses a restricted backend role with transaction-local verified chart context. Draft RLS and the approval function enforce scope independently of the HTTP layer.
 
-The implemented repository uses the Supabase REST API with the signed-in user's access
-token and the public project key. It never uses a service-role key. RLS restricts draft
-and approval reads to the owning clinician. Approval writes go through
-`record_consultation_approval`, which locks the draft, verifies ownership and the
-trusted clinician role, records the audit entry, and changes the status atomically.
-
-`supabase/tests/clinician_access.sql` verifies ownership, denied direct updates,
-forged approvals, trusted role enforcement, duplicate review conflicts, and immutable
-audit entries against the real database. All synthetic fixtures roll back.
-
-See `docs/decisions/supabase-connection.md` for account setup and deployment settings.
+The migrations and SQL authorization tests are under `supabase/`. See the [connection decision](../../docs/decisions/supabase-connection.md) for provisioning and the [staging checks](../../tests/e2e/README.md) for verification.

@@ -20,7 +20,7 @@ function forbiddenImports(file: string, source: string): string[] {
     if (!specifier.startsWith("@/") && !specifier.startsWith(".")) return [specifier];
     const target = specifier.startsWith("@/") ? resolve(root, specifier.slice(2)) : resolve(dirname(file), specifier);
     const path = relative(root, target).replaceAll("\\", "/") + "/";
-    const allowed = relative(root, file).startsWith("core/") ? permittedModules : sharedModules;
+    const allowed = relative(root, file).replaceAll("\\", "/").startsWith("core/") ? permittedModules : sharedModules;
     return allowed.some((prefix) => path.startsWith(prefix)) ? [] : [specifier];
   });
 }

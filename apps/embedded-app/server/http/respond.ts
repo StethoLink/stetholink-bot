@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import type { z } from "zod";
 import type { ApiErrorCode } from "@/shared/contracts";
 import { AuthError } from "@/platform/auth/session";
-import { SupabaseError } from "@/platform/auth/supabase";
+import postgres from "postgres";
 
 import { RouteError } from "@/core/errors";
 export { RouteError } from "@/core/errors";
@@ -21,7 +21,7 @@ const STATUS: Record<ApiErrorCode, number> = {
 };
 
 export function errorResponse(code: ApiErrorCode, message: string) {
-  return NextResponse.json({ error: { code, message } }, { status: STATUS[code], headers: { "Cache-Control": "no-store" } });
+  return NextResponse.json({ error: { code, message } }, { status: STATUS[code], headers: { "Cache-Control": "no-store", "Referrer-Policy": "no-referrer" } });
 }
 
 /** Validates the outgoing body against its contract. A contract violation is a server bug and returns 500. */
@@ -37,11 +37,10 @@ export function contractResponse<T>(schema: z.ZodType<T>, body: unknown, status 
 export function handleRouteError(err: unknown) {
   if (err instanceof AuthError) return errorResponse(err.code, err.message);
   if (err instanceof RouteError) return errorResponse(err.code, err.message);
-  if (err instanceof SupabaseError) {
+  if (err instanceof postgres.PostgresError) {
     if (err.code === "P0002") return errorResponse("not_found", "Draft not found");
-    if (err.code === "P0001" || err.status === 409) return errorResponse("conflict", "Draft cannot be reviewed in its current state");
-    if (err.status === 401) return errorResponse("unauthenticated", "Sign in is required");
-    if (err.status === 403) return errorResponse("forbidden", "Access denied");
+    if (err.code === "P0001") return errorResponse("conflict", "Draft cannot be reviewed in its current state");
+    if (err.code === "42501") return errorResponse("forbidden", "Access denied");
     return errorResponse("provider_unavailable", "Database is temporarily unavailable");
   }
   console.error("Unhandled route error", err instanceof Error ? err.name : "unknown");

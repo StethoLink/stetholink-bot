@@ -7,8 +7,8 @@ const globals = globalThis as typeof globalThis & {
 };
 const drafts = globals.stetholinkMockDrafts ??= new Map();
 
-export function mockConsultationRepository(tenantId: string, clinicianId: string): ConsultationRepository {
-  const scope = JSON.stringify([tenantId, clinicianId]);
+export function mockConsultationRepository(tenantId: string, clinicianId: string, patientId: string, encounterId?: string): ConsultationRepository {
+  const scope = JSON.stringify([tenantId, clinicianId, patientId, encounterId]);
   const owned = drafts.get(scope) ?? new Map<string, ConsultationDraft>();
   drafts.set(scope, owned);
   return {

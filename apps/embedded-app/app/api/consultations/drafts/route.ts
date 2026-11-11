@@ -7,7 +7,7 @@ export async function POST(req: Request) {
     const session = await requireClinician();
     const input = createConsultationDraftRequestSchema.safeParse(await req.json().catch(() => null));
     if (!input.success) return errorResponse("invalid_request", "Invalid draft request");
-    return contractResponse(consultationDraftSchema, await getConsultations(session).create(input.data, session.clinicianId), 201);
+    return contractResponse(consultationDraftSchema, await getConsultations(session).create(input.data), 201);
   } catch (err) {
     return handleRouteError(err);
   }

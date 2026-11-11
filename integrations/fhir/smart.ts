@@ -10,7 +10,7 @@ export interface SmartRegistration {
   scope: string;
 }
 
-function secureEndpoint(value: string) {
+export function secureEndpoint(value: string) {
   const url = new URL(value);
   if (url.protocol !== "https:" || url.username || url.password || url.hash) {
     throw new Error("SMART endpoints must use trusted HTTPS URLs");
@@ -27,16 +27,17 @@ export function beginSmartLaunch(registration: SmartRegistration, issuer: string
   secureEndpoint(registration.redirectUri);
   const authorizationUrl = secureEndpoint(registration.authorizationEndpoint);
   const state = randomBytes(32).toString("base64url");
+  const nonce = randomBytes(32).toString("base64url");
   const verifier = randomBytes(32).toString("base64url");
   const challenge = createHash("sha256").update(verifier).digest("base64url");
   for (const [key, value] of Object.entries({
     response_type: "code", client_id: registration.clientId, redirect_uri: registration.redirectUri,
-    launch, scope: registration.scope, state, aud: registration.issuer,
+    launch, scope: registration.scope, state, nonce, aud: registration.issuer,
     code_challenge: challenge, code_challenge_method: "S256",
   })) authorizationUrl.searchParams.set(key, value);
   return {
     authorizationUrl,
-    pending: { state, verifier, issuer, expiresAt: Date.now() + 5 * 60_000 },
+    pending: { state, verifier, nonce, issuer, expiresAt: Date.now() + 5 * 60_000 },
   };
 }
 
@@ -48,7 +49,7 @@ export async function exchangeSmartCode(
   pending: PendingLaunch,
   callback: { state: string; code: string },
   request: typeof fetch = fetch,
-): Promise<{ grant: FhirLaunchGrant; expiresAt: number }> {
+): Promise<{ grant: FhirLaunchGrant; expiresAt: number; idToken?: string; scope?: string }> {
   const expected = Buffer.from(pending.state);
   const actual = Buffer.from(callback.state);
   if (!callback.code || pending.issuer !== registration.issuer || pending.expiresAt <= Date.now() ||
@@ -82,5 +83,7 @@ export async function exchangeSmartCode(
       patientId: token.patient, encounterId: token.encounter,
     },
     expiresAt: Date.now() + token.expires_in * 1000,
+    idToken: typeof token.id_token === "string" ? token.id_token : undefined,
+    scope: typeof token.scope === "string" ? token.scope : undefined,
   };
 }

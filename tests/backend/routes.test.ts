@@ -27,7 +27,7 @@ describe("consultation routes", () => {
     const res = await createDraft(post({ patientId: "syn-pt-001", clinicianId: "forged" }));
     expect(res.status).toBe(201);
     expect(await res.json()).toEqual(draft);
-    expect(consultations.create).toHaveBeenCalledWith({ patientId: "syn-pt-001" }, uid);
+    expect(consultations.create).toHaveBeenCalledWith({ patientId: "syn-pt-001" });
   });
   it("rejects invalid requests", async () => {
     session.mockResolvedValue({ clinicianId: uid });
@@ -44,8 +44,8 @@ describe("consultation routes", () => {
     expect(res.status).toBe(400); expect(consultations.approve).not.toHaveBeenCalled();
   });
   it("returns a conflict for an already reviewed draft", async () => {
-    const { SupabaseError } = await import("@/platform/auth/supabase");
-    session.mockResolvedValue({ clinicianId: uid }); consultations.approve.mockRejectedValue(new SupabaseError(400, "P0001"));
+    const { default: postgres } = await import("postgres");
+    session.mockResolvedValue({ clinicianId: uid }); consultations.approve.mockRejectedValue(Object.assign(new postgres.PostgresError("conflict"), { code: "P0001" }));
     const res = await approveDraft(post({ draftId: "draft-1", decision: "approve" }), { params: Promise.resolve({ draftId: "draft-1" }) });
     expect(res.status).toBe(409);
   });

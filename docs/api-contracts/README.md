@@ -15,7 +15,7 @@ Clinical routes require a verified clinician session. The health and authenticat
 | 5 | POST | `/api/consultations/drafts` | `CreateConsultationDraftRequest` | `ConsultationDraft` (201) | Synthetic context with Supabase or development persistence |
 | 6 | GET | `/api/consultations/drafts/:draftId` | — | `ConsultationDraft` | ✅ clinician-owned rows |
 | 7 | POST | `/api/consultations/drafts/:draftId/approval` | `ApprovalRequest` | `ConsultationDraft` | Atomic in Supabase |
-| 8 | POST | `/api/consultations/drafts/:draftId/delivery` | `{ recipientId }` | `ConsultationDelivery` | Synthetic delivery |
+| 8 | POST | `/api/consultations/drafts/:draftId/delivery` | `{ recipientId }` | `ConsultationDelivery` | Local synthetic delivery. Deployed delivery returns 501 |
 | 9 | GET | `/api/consultations/drafts/:draftId/delivery` | — | `ConsultationDelivery\|null` | Clinician-owned draft |
 
 ## Types
@@ -67,10 +67,10 @@ npm run build
 ## Semantics
 - **Approval transitions:** `pending_approval|draft` + approve → `approved`, + reject → `rejected`, + request_changes → `draft`. Any other state returns `409 conflict`.
 - `reviewedBy` / `reviewedAt` are set by the server from the session and are ignored if a client sends them.
-- Synthetic development uses an in-memory repository. Supabase deployments use clinician-scoped persistence.
+- Synthetic development uses an in-memory repository. Staging uses PostgreSQL persistence scoped to the verified tenant, clinician, patient and encounter.
 - Delivery requires an approved draft and a recipient on the tenant allowlist. Synthetic delivery returns `{ draftId, recipientId, status, response? }`.
 - Generation supports synthetic patient/encounter context. `conversationId` is rejected with 400 until conversation persistence is implemented. An encounter must belong to the requested patient.
-- `/api/auth/login` provides the sign-in form (GET) and password sign-in (POST). `/api/auth/session` validates the session (GET); `/api/auth/logout` revokes it (POST). These bootstrap authentication endpoints do not require an existing clinician session. See `docs/decisions/supabase-connection.md`.
+- The EHR opens `/api/smart/launch`, then returns to `/api/smart/callback`. `GET /api/auth/session` returns verified identity and chart context, and `POST /api/auth/logout` revokes the session. Preview staging uses the secret-gated `POST /api/staging/launch` route.
 - `safety.level === "blocked"` means `message.content` is a withheld notice, not model output.
 - Error code → HTTP status: invalid_request 400 · unauthenticated 401 · forbidden 403 · not_found 404 · conflict 409 · safety_blocked 422 · internal_error 500 · not_implemented 501 · provider_unavailable 503.
 

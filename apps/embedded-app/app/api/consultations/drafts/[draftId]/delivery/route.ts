@@ -12,6 +12,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ draftId: strin
     const input = requestSchema.safeParse(await req.json().catch(() => null));
     if (!input.success) return errorResponse("invalid_request", "Choose an approved recipient");
     const { draftId } = await ctx.params;
+    if (session.source === "smart") return errorResponse("not_implemented", "Durable hospital consultation delivery is not configured");
     return contractResponse(deliverySchema, await getConsultations(session).route(draftId, input.data.recipientId));
   } catch (error) {
     return handleRouteError(error);
