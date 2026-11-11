@@ -7,6 +7,12 @@ export interface ModelMessage {
 export interface ModelRequest {
   instructions: string;
   messages: ModelMessage[];
+  /** Set only after validating a synthetic adapter context; never from HTTP input. */
+  dataClassification?: "synthetic";
+  structuredOutput?: {
+    name: string;
+    schema: Record<string, unknown>;
+  };
 }
 
 export interface ModelResult {

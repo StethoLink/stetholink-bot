@@ -11,7 +11,13 @@ export function getModelProvider(): ModelProvider {
   const env = getEnv();
   switch (env.AI_PROVIDER) {
     case "openai":
-      return createOpenAIProvider({ apiKey: env.OPENAI_API_KEY, model: env.OPENAI_MODEL });
+      return createOpenAIProvider({
+        apiKey: env.OPENAI_API_KEY, model: env.OPENAI_MODEL,
+        timeoutMs: env.OPENAI_TIMEOUT_MS, maxRetries: env.OPENAI_MAX_RETRIES,
+        maxInputTokens: env.OPENAI_MAX_INPUT_TOKENS, maxOutputTokens: env.OPENAI_MAX_OUTPUT_TOKENS,
+        maxCostUsd: env.OPENAI_MAX_COST_USD,
+        inputUsdPerMillion: env.OPENAI_INPUT_USD_PER_MILLION, outputUsdPerMillion: env.OPENAI_OUTPUT_USD_PER_MILLION,
+      });
     case "mock":
       return mockProvider;
   }

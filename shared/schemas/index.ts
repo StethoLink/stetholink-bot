@@ -83,6 +83,21 @@ export const chatResponseSchema = z.object({
   requiresClinicianReview: z.boolean(),
 }) satisfies z.ZodType<ChatResponse>;
 
+export const consultationGroundingSchema = z.object({
+  reason: z.string().min(1).max(4000).nullable(),
+  question: z.string().min(1).max(4000).nullable(),
+  specialty: z.string().min(1).max(4000).nullable(),
+  evidenceIds: z.array(id).max(64),
+  gaps: z.array(z.string().max(5000)).max(80),
+  conflicts: z.array(z.array(id).max(64)).max(64),
+  safetyFlags: z.array(z.enum(["clinician_review_required", "conflicting_facts", "missing_investigations", "incomplete_referral", "insufficient_clinical_data"])).max(5),
+  provenance: z.object({
+    provider: z.string().min(1).max(128), model: z.string().min(1).max(256),
+    promptVersion: z.string().min(1).max(128), contextVersion: z.string().min(1).max(128),
+    syntheticOnly: z.literal(true), encounterReference: id.nullable(),
+  }).strict(),
+}).strict() satisfies z.ZodType<import("@/shared/contracts/consultation").ConsultationGrounding>;
+
 export const consultationDraftSchema = z.object({
   id,
   patientId: id,
@@ -99,6 +114,7 @@ export const consultationDraftSchema = z.object({
   clinicalFacts: z.array(clinicalFactSchema).optional(),
   missingInformation: z.array(missingInformationSchema).optional(),
   attachments: z.array(attachmentReferenceSchema).optional(),
+  grounding: consultationGroundingSchema.optional(),
 }) satisfies z.ZodType<ConsultationDraft>;
 
 export const approvalRequestSchema = z.object({
