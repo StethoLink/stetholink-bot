@@ -3,6 +3,13 @@ import type { ConsultationStatus } from "@/shared/contracts";
 const LABELS: Record<ConsultationStatus, { icon: string; text: string; className: string }> = {
   draft: { icon: "✎", text: "Draft (changes requested)", className: "border-slate-600 text-slate-800 bg-slate-50" },
   pending_approval: { icon: "…", text: "Awaiting clinician review", className: "border-amber-700 text-amber-900 bg-amber-50" },
+  pending_review: { icon: "…", text: "Awaiting clinician review", className: "border-amber-700 text-amber-900 bg-amber-50" },
+  queued: { icon: "…", text: "Queued (mock)", className: "border-slate-600 text-slate-800 bg-slate-50" },
+  sent: { icon: "✓", text: "Sent (mock)", className: "border-slate-600 text-slate-800 bg-slate-50" },
+  accepted: { icon: "✓", text: "Accepted (mock)", className: "border-slate-600 text-slate-800 bg-slate-50" },
+  responded: { icon: "✓", text: "Responded (mock)", className: "border-emerald-700 text-emerald-800 bg-emerald-50" },
+  failed: { icon: "✕", text: "Failed (mock)", className: "border-red-700 text-red-800 bg-red-50" },
+  cancelled: { icon: "✕", text: "Cancelled", className: "border-slate-600 text-slate-800 bg-slate-50" },
   approved: { icon: "✓", text: "Approved", className: "border-emerald-700 text-emerald-800 bg-emerald-50" },
   rejected: { icon: "✕", text: "Rejected", className: "border-red-700 text-red-800 bg-red-50" },
   archived: { icon: "▣", text: "Archived", className: "border-slate-600 text-slate-800 bg-slate-100" },

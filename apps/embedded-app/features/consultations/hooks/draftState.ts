@@ -37,7 +37,7 @@ const message = (e: unknown, fallback: string) => (e instanceof ApiClientError ?
 
 /** True when no further clinician decision can be recorded. */
 export function isFinalStatus(status: ConsultationDraft["status"]): boolean {
-  return status === "approved" || status === "rejected" || status === "archived";
+  return !["draft", "pending_approval", "pending_review"].includes(status);
 }
 
 export async function loadDraft(client: StethoLinkApiClient, dispatch: (a: DraftAction) => void, draftId: string) {

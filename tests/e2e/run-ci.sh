@@ -19,16 +19,8 @@ for _ in {1..30}; do
   sleep 1
 done
 psql() { docker exec -i "$db" psql -U postgres -v ON_ERROR_STOP=1 "$@"; }
-psql >/dev/null <<'SQL'
-create role anon;
-create role authenticated;
-create schema auth;
-create function auth.uid() returns uuid language sql stable as $$ select null::uuid $$;
-create function auth.jwt() returns jsonb language sql stable as $$ select null::jsonb $$;
-SQL
-for migration in supabase/migrations/*.sql; do psql < "$migration" >/dev/null; done
-psql < supabase/tests/clinician_access.sql >/dev/null
-echo 'Passed PostgreSQL authorization checks.'
+db_port=$(docker port "$db" 5432/tcp | cut -d: -f2)
+STETHOLINK_TEST_OWNER_URL="postgres://postgres@127.0.0.1:$db_port/postgres" node tests/e2e/m3-migrations.mts
 
 docker exec -u postgres "$db" openssl req -x509 -newkey rsa:2048 -nodes -days 1 -subj /CN=localhost \
   -addext subjectAltName=DNS:localhost -keyout /var/lib/postgresql/server.key \
@@ -41,7 +33,6 @@ alter system set ssl_key_file = '/var/lib/postgresql/server.key';
 select pg_reload_conf();
 SQL
 docker cp "$db:/var/lib/postgresql/server.crt" "$tmp/ca.crt"
-db_port=$(docker port "$db" 5432/tcp | cut -d: -f2)
 export STETHOLINK_DATABASE_URL="postgres://stetholink_runtime@localhost:$db_port/postgres"
 export STETHOLINK_DATABASE_CA
 STETHOLINK_DATABASE_CA=$(cat "$tmp/ca.crt")
@@ -58,3 +49,7 @@ for _ in {1..30}; do
   sleep 1
 done
 node tests/e2e/staging.mts
+kill "$app_pid"
+wait "$app_pid" || true
+app_pid=
+node tests/e2e/m3-restart.mts

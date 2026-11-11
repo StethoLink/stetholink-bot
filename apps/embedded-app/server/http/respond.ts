@@ -39,7 +39,9 @@ export function handleRouteError(err: unknown) {
   if (err instanceof RouteError) return errorResponse(err.code, err.message);
   if (err instanceof postgres.PostgresError) {
     if (err.code === "P0002") return errorResponse("not_found", "Draft not found");
-    if (err.code === "P0001") return errorResponse("conflict", "Draft cannot be reviewed in its current state");
+    if (err.code === "P0001") return errorResponse("conflict", "Consultation command conflicts with its state, version or idempotency key");
+    if (err.code === "22023") return errorResponse("invalid_request", "Invalid consultation command");
+    if (["23505", "40001", "40P01", "55P03"].includes(err.code)) return errorResponse("conflict", "Consultation changed; retry with the same idempotency key or reload");
     if (err.code === "42501") return errorResponse("forbidden", "Access denied");
     return errorResponse("provider_unavailable", "Database is temporarily unavailable");
   }

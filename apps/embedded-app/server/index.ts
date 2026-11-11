@@ -8,6 +8,7 @@ import { createConsultationRepository } from "@/platform/persistence";
 import { mockConsultationRepository } from "@/integrations/mock/repository";
 import { createConsultationService } from "@/core/consultation/service";
 import type { VerifiedLaunch } from "@/platform/auth/identity";
+import { getEnv, syntheticStagingEnabled } from "@/platform/tenants/env";
 import { localSyntheticEnabled } from "@/platform/auth/session";
 import { RouteError } from "@/core/errors";
 import { getTenant } from "@/platform/tenants";
@@ -37,19 +38,39 @@ export function getConsultations(session: VerifiedLaunch) {
   const actor = session.context;
   const tenant = getTenant();
   const local = localSyntheticEnabled();
-  const repository = local
+  const durable = !local || !!getEnv().STETHOLINK_DATABASE_URL;
+  const lifecycle = createConsultationRepository(actor, tenant.recipients);
+  const repository = !durable
     ? mockConsultationRepository(tenant.id, actor.clinicianId, actor.patientId, actor.encounterId)
-    : createConsultationRepository(actor);
+    : lifecycle;
   const { adapter } = getClinicalServices(session);
   const service = createConsultationService({
     repository, provider: getModelProvider(), safety: syntheticSafetyGuard, adapter,
   });
   return {
     get: service.get,
+    async revise(id: string, input: Parameters<typeof lifecycle.revise>[1]) {
+      if (!durable) throw new RouteError("provider_unavailable", "Configure durable consultation storage");
+      const safety = await syntheticSafetyGuard.assess([input.summary, input.assessment, ...input.plan].join("\n"));
+      if (safety.level === "blocked") throw new RouteError("safety_blocked", "Revision withheld by safety check");
+      return lifecycle.revise(id, input);
+    },
+    async transition(id: string, input: Parameters<typeof lifecycle.transition>[1]) {
+      if (!durable) throw new RouteError("provider_unavailable", "Configure durable consultation storage");
+      if (!["submit", "cancel"].includes(input.action) &&
+          !(session.source === "synthetic" && getEnv().AI_PROVIDER === "mock" && (local || syntheticStagingEnabled(getEnv())))) {
+        throw new RouteError("not_implemented", "Only synthetic mock lifecycle delivery is supported");
+      }
+      return lifecycle.transition(id, input);
+    },
+    async history(id: string, beforeVersion?: number) {
+      if (!durable) throw new RouteError("provider_unavailable", "Configure durable consultation storage");
+      return lifecycle.history(id, beforeVersion);
+    },
     create: (input: Parameters<typeof service.create>[0]) => service.create(input, actor),
     approve: (input: Parameters<typeof service.approve>[0]) => service.approve(input, actor),
     async route(draftId: string, recipientId: string) {
-      if (!local || !adapter.consultations) throw new RouteError("not_implemented", "Durable hospital consultation delivery is not configured");
+      if (!local || durable || !adapter.consultations) throw new RouteError("not_implemented", "Durable hospital consultation delivery is not configured");
       const result = await routeConsultation(repository, adapter.consultations, tenant.recipients, draftId, recipientId);
       if ("code" in result) throw new RouteError(result.code, "Consultation cannot be routed");
       auditConsultation({ action: "consultation.routed", tenantId: tenant.id, clinicianId: actor.clinicianId, draftId });
@@ -57,7 +78,11 @@ export function getConsultations(session: VerifiedLaunch) {
     },
     async delivery(draftId: string) {
       if (!(await repository.get(draftId))) throw new RouteError("not_found", "Draft not found");
-      return local ? adapter.consultations?.status(draftId) ?? null : null;
+      if (durable) {
+        const attempt = (await lifecycle.history(draftId)).attempts[0];
+        return attempt ? { draftId, recipientId: attempt.recipientId, status: attempt.status === "responded" ? "responded" as const : "submitted" as const } : null;
+      }
+      return adapter.consultations?.status(draftId) ?? null;
     },
   };
 }

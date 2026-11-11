@@ -104,7 +104,7 @@ The structured model output is `{ evidenceIds: string[] }`. It may order documen
 
 Drafts preserve `clinicalFacts` and `missingInformation`, including unknown investigations with no value or unit. Missing intent is `null`; missing investigation results are explicitly unknown. Empty legacy lists are never interpreted as negative findings. Legacy patients without normalized facts receive an insufficient-data flag; Core does not manufacture fact timestamps from their lists. False and zero source values are retained. Ahmed's original fixture is unchanged, including all unknown investigation results.
 
-`POST /api/consultations/drafts` retains its existing input and authenticated persistence workflow. Its summary, assessment and plan now contain grounded source citations, gaps, safety flags and prompt/provider provenance. Typed M2 metadata is returned at creation. **Persistence limitation:** the existing repository stores only these prose fields and provenance columns; subsequent saved-draft reads and approval responses do not hydrate the optional typed M2 metadata. Durable typed storage is outside M2's permitted paths. The staging preview below returns the complete typed draft without persistence.
+`POST /api/consultations/drafts` retains its existing input and authenticated persistence workflow. Its summary, assessment and plan contain grounded source citations, gaps, safety flags and prompt/provider provenance. M3 now persists and hydrates the typed M2 metadata on later reads, approvals and revision snapshots. Older drafts without typed metadata remain readable without inventing missing metadata. The staging preview below returns the complete typed draft without persistence.
 
 ### Protected staging demo
 
@@ -135,3 +135,51 @@ npm run build
 ```
 
 The separate `tests/backend/openai-synthetic-live.test.ts` runs only when `RUN_OPENAI_SYNTHETIC_LIVE_TEST=1` and an existing server-side key is present, and uses only the fixed synthetic Ahmed case with the same limits. Set verified pricing bounds before opting in. Credentials are unavailable in this implementation environment: **the live-provider criterion is BLOCKED**, and a skipped live test is not a pass. Mock/fake-transport tests do not prove a successful real OpenAI call.
+
+## M3 durable consultation lifecycle
+
+The existing EHR session supplies tenant, clinician, patient and encounter on every
+transaction. Deployed requests always use PostgreSQL. Local synthetic development
+uses PostgreSQL when configured; the original in-memory demo remains available
+without a database and does not expose the durable lifecycle commands.
+
+| Method/path | Body or query | Result |
+| --- | --- | --- |
+| POST `/api/consultations/drafts` | Existing fields plus optional `idempotencyKey` | Original created snapshot on replay (201) |
+| PATCH `/api/consultations/drafts/:draftId` | `{expectedVersion,idempotencyKey,summary,assessment,plan}` | Revised editable draft |
+| POST `/api/consultations/drafts/:draftId/approval` | Existing approval fields plus optional `expectedVersion,idempotencyKey` | Physician decision; legacy signature remains supported |
+| POST `/api/consultations/drafts/:draftId/transitions` | `{expectedVersion,idempotencyKey,action,recipientId?}` | Updated consultation; recipient required only for `queue` |
+| GET `/api/consultations/drafts/:draftId/history` | Optional exclusive `beforeVersion` cursor | Up to 20 revisions, corresponding events, latest 20 attempts and `nextBeforeVersion` |
+
+Durable responses add `tenantId`, `version` and canonical `lifecycleStatus`.
+For compatibility, HTTP `status` still returns `pending_approval` while
+`lifecycleStatus` and database status use `pending_review`. Existing tenant-scoped
+pending rows are migrated with a preserved baseline revision. Tenantless historical
+rows remain stored and inaccessible. The state set additionally includes `queued`,
+`sent`, `accepted`, `responded`, `failed` and `cancelled`.
+
+Generated drafts start at `pending_review`. Physician `request_changes` makes a
+draft editable; `revise` requires `draft`, and `submit` returns it to review.
+Versioned approval requires pending review; legacy approval may still decide a
+changes-requested draft. Only the separate approval endpoint can approve or reject.
+`queue` requires stored physician approval and a tenant-allowed recipient.
+Mock progression is `queued -> sent -> accepted -> responded` (or `sent -> responded`).
+`failed` is allowed from queued/sent/accepted; a failed attempt can be requeued to
+the same recipient. Cancellation is allowed from draft/pending review/approved/
+queued/failed. Rejected, responded and cancelled records are terminal.
+
+Delivery transitions are bookkeeping for authenticated synthetic mock sessions
+only; they do not call a provider. Real delivery remains 501. The model has no
+approval or delivery tool. Each command locks the aggregate, checks the expected
+version and records a revision/event atomically. Idempotency keys are scoped to
+the verified chart and clinician, serialize duplicate commands in PostgreSQL, and
+return the original snapshot even after later transitions. Reusing a key for a
+different command or supplying a stale version returns 409. Authorization is
+rechecked before replay. Without a key, legacy creates retain their previous
+non-idempotent behavior. Generated metadata remains the original source/provenance
+record when a clinician revises prose; revisions preserve both for review.
+
+The runtime cannot directly update aggregates, insert approvals, or alter revision,
+event and idempotency history. All child tables enforce the same chart RLS and
+carry tenant/request identity. Delivery attempts are updated only by the private
+command engine; events and aggregate revisions preserve each transition.

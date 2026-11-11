@@ -3,7 +3,14 @@ export const CONTRACT_VERSION = "1.1.0";
 
 export const CONSULTATION_STATUSES = [
   "draft",
-  "pending_approval",
+  "pending_approval", // Compatibility alias for pending_review.
+  "pending_review",
+  "queued",
+  "sent",
+  "accepted",
+  "responded",
+  "failed",
+  "cancelled",
   "approved",
   "rejected",
   "archived",
