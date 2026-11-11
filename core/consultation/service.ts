@@ -104,11 +104,15 @@ export function createConsultationService(deps: { repository: ConsultationReposi
           input.patientId !== actor.patientId || (input.encounterId !== undefined && input.encounterId !== actor.encounterId)) {
         throw new RouteError("forbidden", "Draft context does not match the active chart");
       }
-      const draft = await preview({ ...input, patientId: actor.patientId, encounterId: actor.encounterId });
+      const chart = { patientId: actor.patientId, encounterId: actor.encounterId };
+      // Physician-entered intent is bound to the verified chart; it is never model input.
+      const intent = input.specialty !== undefined && input.clinicalQuestion !== undefined
+        ? { ...chart, specialty: input.specialty, clinicalQuestion: input.clinicalQuestion } : undefined;
+      const draft = await preview({ ...chart, conversationId: input.conversationId }, intent);
       const provenance = draft.grounding!.provenance;
       const provenanceFields = { provider: provenance.provider, model: provenance.model, promptVersion: provenance.promptVersion };
       const saved = input.idempotencyKey
-        ? await deps.repository.create(draft, actor.clinicianId, provenanceFields, { key: input.idempotencyKey, request: { patientId: actor.patientId, encounterId: actor.encounterId } })
+        ? await deps.repository.create(draft, actor.clinicianId, provenanceFields, { key: input.idempotencyKey, request: intent ? { ...chart, specialty: intent.specialty, clinicalQuestion: intent.clinicalQuestion } : chart })
         : await deps.repository.create(draft, actor.clinicianId, provenanceFields);
       return consultationDraftSchema.parse(saved);
     },

@@ -64,20 +64,28 @@ begin
  select * into d from public.change_ehr_consultation(d.id,'submit',4,'submit-1','{}');
  select * into d from public.approve_ehr_consultation_versioned(d.id,'approve',null,5,'approval-1');
  if d.version<>6 or d.status<>'approved' then raise exception 'Physician approval failed'; end if;
+ -- Clinician lifecycle commands cannot queue, send or record provider outcomes.
+ foreach t in array array['queue','sent','accepted','responded','failed'] loop
+  begin
+   perform public.change_ehr_consultation(d.id,t,6,'clinician-'||t,'{"recipientId":"team-a"}');
+   raise exception using errcode='XX000',message='Clinician lifecycle reached delivery state';
+  exception when invalid_parameter_value then null; end;
+ end loop;
  begin
-  perform public.change_ehr_consultation(d.id,'queue',6,'forbidden-recipient','{"recipientId":"evil"}');
+  perform public.dispatch_ehr_consultation(d.id,6,'forbidden-recipient','evil','{"providerId":"evil","tenantId":"synthetic-test-a","syntheticOnly":true}');
   raise exception using errcode='XX000',message='Recipient allowlist bypassed';
  exception when insufficient_privilege then null; end;
- select * into d from public.change_ehr_consultation(d.id,'queue',6,'queue-1','{"recipientId":"team-a"}');
- select * into d from public.change_ehr_consultation(d.id,'failed',7,'failed-1','{}');
+ select * into d from public.dispatch_ehr_consultation(d.id,6,'queue-1','team-a','{"providerId":"team-a","tenantId":"synthetic-test-a","syntheticOnly":true}');
+ select * into d from public.record_ehr_dispatch_result((select id from public.consultation_delivery_attempts where draft_id=d.id and attempt_number=1),'failed',null,'transport_error');
  begin
-  perform public.change_ehr_consultation(d.id,'queue',8,'redirect','{"recipientId":"team-b"}');
+  perform public.dispatch_ehr_consultation(d.id,8,'redirect','team-b','{"providerId":"team-b","tenantId":"synthetic-test-a","syntheticOnly":true}');
   raise exception using errcode='XX000',message='Retry recipient redirected';
  exception when raise_exception then null; end;
- select * into d from public.change_ehr_consultation(d.id,'queue',8,'queue-2','{"recipientId":"team-a"}');
- select * into d from public.change_ehr_consultation(d.id,'sent',9,'sent-1','{}');
- select * into d from public.change_ehr_consultation(d.id,'accepted',10,'accepted-1','{}');
- select * into d from public.change_ehr_consultation(d.id,'responded',11,'responded-1','{}');
+ select * into d from public.dispatch_ehr_consultation(d.id,8,'queue-2','team-a','{"providerId":"team-a","tenantId":"synthetic-test-a","syntheticOnly":true}');
+ select * into d from public.record_ehr_dispatch_result((select id from public.consultation_delivery_attempts where draft_id=d.id and attempt_number=2),'sent','ref-2',null);
+ perform public.record_provider_callback('synthetic-test-a',(select id from public.consultation_delivery_attempts where draft_id=d.id and attempt_number=2),'team-a','r-accepted','accepted','{"syntheticOnly":true}');
+ perform public.record_provider_callback('synthetic-test-a',(select id from public.consultation_delivery_attempts where draft_id=d.id and attempt_number=2),'team-a','r-report','report','{"syntheticOnly":true,"report":{"summary":"Synthetic report"}}');
+ select * into d from public.consultation_drafts where id=d.id;
  if d.status<>'responded' or d.version<>12 or (select count(*) from public.consultation_delivery_attempts where draft_id=d.id)<>2
   then raise exception 'Mock attempt history incorrect'; end if;
  select * into saved from public.approve_ehr_consultation_versioned(d.id,'approve',null,5,'approval-1');

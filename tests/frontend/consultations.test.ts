@@ -119,3 +119,28 @@ describe("consultation components", () => {
     expect(html).toContain("decision has been recorded");
   });
 });
+
+import { awaitingProvider, describeDelivery } from "@/apps/embedded-app/features/consultations";
+import type { ConsultationDeliveryView } from "@/shared/contracts";
+
+describe("delivery status wording", () => {
+  const view = (status: ConsultationDeliveryView["status"], failureCode?: ConsultationDeliveryView["attempts"][number]["failureCode"]): ConsultationDeliveryView => ({
+    draftId: "d", version: 3, status, provider: null, responses: [], report: null, canSend: false, canRetry: false, canSimulate: false,
+    attempts: failureCode ? [{ requestId: "8d5f6f0e-6f0e-4d7c-9b65-0f7a4f0f5a11", number: 1, providerId: "p", status: failureCode === "provider_rejected" ? "rejected" : "failed",
+      failureCode, createdAt: "2026-01-15T10:00:00.000Z", updatedAt: "2026-01-15T10:00:00.000Z" }] : [],
+  });
+
+  it("states the delivery state and an actionable reason for each failure", () => {
+    expect(describeDelivery(view("approved"))).toEqual({ state: "Approved. Not sent yet.", problem: undefined });
+    expect(describeDelivery(view("responded")).state).toBe("The specialist has responded.");
+    expect(describeDelivery(view("failed", "transport_error")).problem).toMatch(/retry/i);
+    expect(describeDelivery(view("failed", "transport_timeout")).problem).toMatch(/late reply/i);
+    expect(describeDelivery(view("failed", "provider_rejected")).problem).toMatch(/declined/i);
+  });
+
+  it("keeps checking only while a provider reply is outstanding", () => {
+    expect(["queued", "sent", "accepted"].every((status) => awaitingProvider(view(status as ConsultationDeliveryView["status"])))).toBe(true);
+    expect(["approved", "responded", "failed", "cancelled"].some((status) => awaitingProvider(view(status as ConsultationDeliveryView["status"])))).toBe(false);
+    expect(awaitingProvider(null)).toBe(false);
+  });
+});

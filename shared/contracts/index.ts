@@ -7,5 +7,6 @@ export type * from "./errors";
 export type * from "./clinical-data";
 export type * from "./clinician";
 export type * from "./attachment";
+export type * from "./provider";
 export type { CreateConsultationDraftRequest } from "./routes";
 export { apiRoutes } from "./routes";

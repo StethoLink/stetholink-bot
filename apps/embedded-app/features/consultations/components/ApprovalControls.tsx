@@ -36,7 +36,7 @@ export function ApprovalControls({ status, submitting, error, onDecide }: Approv
   if (final) {
     return (
       <p className="text-sm text-slate-700" role="status">
-        A decision has been recorded. No further action is available.
+        {status === "rejected" ? "This draft was rejected. No further action is available." : "The physician's decision has been recorded."}
       </p>
     );
   }

@@ -66,7 +66,9 @@ const approved = await (await request(path + "/approval", 200, { cookie: physici
 assert.equal(approved.status, "approved");
 assert.equal(approved.reviewedBy, identity.clinicianId);
 await request(path + "/approval", 409, { cookie: physician, body });
-await request(path + "/delivery", 501, { cookie: physician, body: { recipientId: "synthetic-consult-team" } });
+await request(path + "/delivery", 400, { cookie: physician, body: { recipientId: "synthetic-cardiology" } });
+await request(path + "/delivery", 409, { cookie: physician, body: { providerId: "synthetic-cardiology", expectedVersion: approved.version, idempotencyKey: "staging-incomplete" } });
+await request("/api/provider/v1/callbacks", 401, { body: {} });
 
 const revocable = await launch("physician");
 await request("/api/auth/logout", 204, { cookie: revocable, body: {} });
@@ -75,4 +77,4 @@ const expiryWait = identity.expiresAt - Date.now() + 500;
 assert.ok(expiryWait <= 60_000, "Use STAGING_SESSION_SECONDS=45 for the smoke run");
 await setTimeout(Math.max(0, expiryWait));
 await request(session, 401, { cookie: physician });
-console.log("Passed synthetic staging launch, expiry, chart binding, draft, physician approval, isolation, and delivery denial.");
+console.log("Passed synthetic staging launch, expiry, chart binding, draft, physician approval, isolation, and refusal to route an incomplete referral or accept an unsigned provider callback.");

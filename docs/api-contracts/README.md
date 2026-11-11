@@ -15,8 +15,8 @@ Clinical routes require a verified clinician session. The health and authenticat
 | 5 | POST | `/api/consultations/drafts` | `CreateConsultationDraftRequest` | `ConsultationDraft` (201) | Synthetic context with Supabase or development persistence |
 | 6 | GET | `/api/consultations/drafts/:draftId` | — | `ConsultationDraft` | ✅ clinician-owned rows |
 | 7 | POST | `/api/consultations/drafts/:draftId/approval` | `ApprovalRequest` | `ConsultationDraft` | Atomic in Supabase |
-| 8 | POST | `/api/consultations/drafts/:draftId/delivery` | `{ recipientId }` | `ConsultationDelivery` | Local synthetic delivery. Deployed delivery returns 501 |
-| 9 | GET | `/api/consultations/drafts/:draftId/delivery` | — | `ConsultationDelivery\|null` | Clinician-owned draft |
+| 8 | POST | `/api/consultations/drafts/:draftId/delivery` | `DispatchRequest` | `ConsultationDeliveryView` | Synthetic providers; see M5/M6 below |
+| 9 | GET | `/api/consultations/drafts/:draftId/delivery` | — | `ConsultationDeliveryView\|null` | Clinician-owned draft |
 
 ## Types
 
@@ -68,7 +68,7 @@ npm run build
 - **Approval transitions:** `pending_approval|draft` + approve → `approved`, + reject → `rejected`, + request_changes → `draft`. Any other state returns `409 conflict`.
 - `reviewedBy` / `reviewedAt` are set by the server from the session and are ignored if a client sends them.
 - Synthetic development uses an in-memory repository. Staging uses PostgreSQL persistence scoped to the verified tenant, clinician, patient and encounter.
-- Delivery requires an approved draft and a recipient on the tenant allowlist. Synthetic delivery returns `{ draftId, recipientId, status, response? }`.
+- Delivery requires a physician, an approved draft and an eligible provider on the tenant allowlist. See M5/M6 below.
 - Generation supports synthetic patient/encounter context. `conversationId` is rejected with 400 until conversation persistence is implemented. An encounter must belong to the requested patient.
 - The EHR opens `/api/smart/launch`, then returns to `/api/smart/callback`. `GET /api/auth/session` returns verified identity and chart context, and `POST /api/auth/logout` revokes the session. Preview staging uses the secret-gated `POST /api/staging/launch` route.
 - `safety.level === "blocked"` means `message.content` is a withheld notice, not model output.
@@ -183,3 +183,26 @@ The runtime cannot directly update aggregates, insert approvals, or alter revisi
 event and idempotency history. All child tables enforce the same chart RLS and
 carry tenant/request identity. Delivery attempts are updated only by the private
 command engine; events and aggregate revisions preserve each transition.
+
+
+## M5/M6 provider routing and specialist responses
+
+These supersede the M3 delivery transitions: `POST .../transitions` now accepts only `submit` and `cancel`. Delivery and provider outcome states cannot be set by a clinician command.
+
+| Method/path | Body | Result |
+| --- | --- | --- |
+| POST `/api/consultations/drafts` | adds optional `specialty` + `clinicalQuestion` (both or neither) | Draft with the physician's intent in `grounding` |
+| GET `/api/consultations/drafts` | — | Up to 20 recent consultations for the verified chart |
+| GET `/api/consultations/drafts/:draftId/providers` | — | Allowed, active providers offering the draft's specialty |
+| POST `/api/consultations/drafts/:draftId/delivery` | `{providerId, expectedVersion, idempotencyKey}` | `ConsultationDeliveryView` after the send attempt |
+| GET `/api/consultations/drafts/:draftId/delivery` | — | Delivery state, attempts, responses and the specialist report |
+| POST `/api/consultations/drafts/:draftId/delivery/simulate` | `{}` | Synthetic only: the mock specialist sends its next signed callback |
+| POST `/api/provider/v1/callbacks` | `ProviderCallback` (signed) | `{requestId, disposition: "applied"\|"ignored"\|"duplicate"}` |
+
+Routing errors: 403 not a physician, provider not allowed, suspended or wrong specialty; 404 not this clinician's chart; 409 not approved, missing specialty/question, stale version, redirect to another provider, or provider declined; 501 outside synthetic environments. A transport failure is not an HTTP error: the view returns `status: "failed"` with a `failureCode` and `canRetry`.
+
+Provider contract 1.0 (`shared/contracts/provider.ts`). The envelope a provider receives: `{contractVersion, requestId, attempt, tenantId, providerId, specialty, reason, question, summary, assessment, plan[], clinicalFacts[], missingInformation[], attachments[] (references only), safetyFlags[], approval{approvedBy, approvedAt}, syntheticOnly: true}`. A callback: `{contractVersion, requestId, providerId, responseId, kind: "accepted"|"rejected"|"report", sentAt, reason?, report?{summary, recommendations[], responder}, syntheticOnly: true}`.
+
+Callback authentication: headers `x-stetholink-provider`, `x-stetholink-timestamp` (ms, within 5 minutes) and `x-stetholink-signature` = hex HMAC-SHA256 of `<timestamp>.<raw body>` with that provider's secret. Unauthenticated 401; body provider differs from the authenticated one 403; unknown request, other tenant or other provider's request 404; closed, superseded, already answered or reused response id with different content 409. Resending the same `responseId` returns `duplicate` and changes nothing.
+
+Known limits: one tenant per deployment with an environment allowlist (no provider administration); after a provider declines, the consultation must be cancelled and prepared again; no rate limiting on the callback route; synthetic providers only.

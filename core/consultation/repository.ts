@@ -6,7 +6,7 @@ export interface ConsultationRepository {
     provider: string;
     model: string;
     promptVersion: string;
-  }, retry?: { key: string; request: { patientId: string; encounterId?: string } }): Promise<ConsultationDraft>;
+  }, retry?: { key: string; request: { patientId: string; encounterId?: string; specialty?: string; clinicalQuestion?: string } }): Promise<ConsultationDraft>;
   approve(input: ApprovalRequest): Promise<ConsultationDraft>;
 }
 

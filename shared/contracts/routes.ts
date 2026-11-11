@@ -27,4 +27,7 @@ export interface CreateConsultationDraftRequest {
   conversationId?: string;
   /** Reuse the same key after a timeout; changing its request returns 409. */
   idempotencyKey?: string;
+  /** Physician-entered consultation intent. Supply both or neither; never sent to the model. */
+  specialty?: string;
+  clinicalQuestion?: string;
 }

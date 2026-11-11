@@ -5,7 +5,7 @@ import { requireSameOrigin, saveSession } from "@/platform/auth/session";
 import type { IdentityAdapter } from "@/platform/auth/identity";
 import { contractResponse, errorResponse, handleRouteError } from "@/apps/embedded-app/server/http/respond";
 
-const inputSchema = z.strictObject({ profile: z.enum(["physician", "same-clinician-other-chart", "other-clinician", "observer"]) });
+const inputSchema = z.strictObject({ profile: z.enum(["physician", "same-clinician-other-chart", "other-clinician", "observer", "cardiology-demo"]) });
 type Profile = z.infer<typeof inputSchema>["profile"];
 const digest = (secret: string) => createHash("sha256").update(secret).digest();
 
@@ -22,8 +22,8 @@ const adapter: IdentityAdapter<Profile> = {
         tenantId: env.TENANT_ID,
         roles: [physician ? "physician" : "clinician"],
         scopes: physician ? ["chart:read", "consultation:draft", "consultation:approve"] : ["chart:read", "consultation:draft"],
-        patientId: otherChart ? "syn-pt-002" : "syn-pt-001",
-        encounterId: otherChart ? undefined : "syn-enc-001",
+        patientId: otherChart ? "syn-pt-002" : profile === "cardiology-demo" ? "syn-pt-ahmed" : "syn-pt-001",
+        encounterId: otherChart ? undefined : profile === "cardiology-demo" ? "syn-enc-ahmed" : "syn-enc-001",
         expiresAt: Date.now() + env.STAGING_SESSION_SECONDS * 1000,
         authorization: "active",
       },

@@ -28,6 +28,7 @@ import type {
 import { attachmentReferenceSchema, clinicalFactSchema, missingInformationSchema } from "./clinical-data";
 
 export * from "./clinical-data";
+export * from "./provider";
 
 const id = z.string().min(1).max(128);
 const isoDateTime = z.string().datetime({ offset: true });
@@ -147,7 +148,9 @@ export const createConsultationDraftRequestSchema = z.object({
   encounterId: id.optional(),
   conversationId: id.optional(),
   idempotencyKey: id.optional(),
-}) satisfies z.ZodType<import("@/shared/contracts").CreateConsultationDraftRequest>;
+  specialty: z.string().trim().min(1).max(200).optional(),
+  clinicalQuestion: z.string().trim().min(1).max(4000).optional(),
+}).refine((v) => (v.specialty === undefined) === (v.clinicalQuestion === undefined), "Provide the specialty and clinical question together") satisfies z.ZodType<import("@/shared/contracts").CreateConsultationDraftRequest>;
 
 
 export const revisionRequestSchema = z.object({
@@ -158,16 +161,15 @@ export const revisionRequestSchema = z.object({
 
 export const transitionRequestSchema = z.object({
   expectedVersion: z.number().int().positive(), idempotencyKey: id,
-  action: z.enum(["submit", "cancel", "queue", "sent", "accepted", "responded", "failed"]),
-  recipientId: id.optional(),
-}).strict().refine((v) => v.action === "queue" ? !!v.recipientId : v.recipientId === undefined) satisfies z.ZodType<import("@/shared/contracts/consultation").TransitionRequest>;
+  action: z.enum(["submit", "cancel"]),
+}).strict() satisfies z.ZodType<import("@/shared/contracts/consultation").TransitionRequest>;
 
 export const consultationHistorySchema = z.object({
   revisions: z.array(z.object({ version: z.number().int().positive(), draft: consultationDraftSchema })),
   events: z.array(z.object({ version: z.number().int().positive(), type: z.string(),
     fromStatus: consultationStatusSchema.nullable(), toStatus: consultationStatusSchema, at: isoDateTime })),
   attempts: z.array(z.object({ id: z.string(), number: z.number().int().positive(), recipientId: id,
-    status: z.enum(["queued", "sent", "accepted", "responded", "failed", "cancelled"]),
+    status: z.enum(["queued", "sent", "accepted", "responded", "failed", "cancelled", "rejected"]),
     createdAt: isoDateTime, updatedAt: isoDateTime, transport: z.literal("mock") })),
   nextBeforeVersion: z.number().int().positive().nullable(),
 });

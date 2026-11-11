@@ -5,10 +5,13 @@ import { useConsultationDraft } from "../hooks/useConsultationDraft";
 import { ConsultationDelivery } from "./ConsultationDelivery";
 import { ApprovalControls } from "./ApprovalControls";
 import { ConsultationDraftView } from "./ConsultationDraftView";
+import { ConsultationEditor } from "./ConsultationEditor";
+
+const ROUTABLE = ["approved", "queued", "sent", "accepted", "responded", "failed", "cancelled"];
 
 /** Loads a draft and lets the clinician review and decide on it. */
 export function ConsultationReview({ draftId, client }: { draftId: string; client?: StethoLinkApiClient }) {
-  const { state, reload, decide } = useConsultationDraft(draftId, { client });
+  const { state, reload, refresh, decide } = useConsultationDraft(draftId, { client });
 
   return (
     <section aria-label="Consultation review" className="rounded-lg border border-slate-200 bg-white p-4">
@@ -30,7 +33,10 @@ export function ConsultationReview({ draftId, client }: { draftId: string; clien
       {state.status === "ready" && (
         <div className="space-y-4">
           <ConsultationDraftView draft={state.draft} />
-          {state.draft.status === "approved" && <ConsultationDelivery draftId={state.draft.id} />}
+          {state.draft.status === "draft" && state.draft.version !== undefined && (
+            <ConsultationEditor key={state.draft.version} draft={state.draft} onSaved={refresh} />
+          )}
+          {ROUTABLE.includes(state.draft.status) && <ConsultationDelivery draftId={state.draft.id} onChanged={refresh} />}
           <ApprovalControls
             status={state.draft.status}
             submitting={state.submitting}

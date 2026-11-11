@@ -8,12 +8,17 @@ import { createConsultationRepository } from "@/platform/persistence";
 import { mockConsultationRepository } from "@/integrations/mock/repository";
 import { createConsultationService } from "@/core/consultation/service";
 import type { VerifiedLaunch } from "@/platform/auth/identity";
-import { getEnv, syntheticStagingEnabled } from "@/platform/tenants/env";
+import { getEnv } from "@/platform/tenants/env";
 import { localSyntheticEnabled } from "@/platform/auth/session";
 import { RouteError } from "@/core/errors";
 import { getTenant } from "@/platform/tenants";
-import { routeConsultation } from "@/core/consultation/routing";
+import { createProviderRouter } from "@/core/routing/router";
 import { auditConsultation } from "@/platform/audit";
+import { getProviderRegistry, getProviderTransport, providerCallbackSecret, syntheticRoutingEnabled } from "@/platform/providers";
+import { CALLBACK_HEADERS, signProviderCallback } from "@/platform/providers/callback-auth";
+import { mockSpecialistCallback, mockSpecialistNextStep } from "@/integrations/mock/specialist";
+import type { DispatchRequest } from "@/shared/contracts";
+import { receiveProviderCallback } from "./provider-callbacks";
 
 export function getClinicalServices(session: VerifiedLaunch) {
   const adapter = getClinicalDataAdapter(session);
@@ -47,20 +52,28 @@ export function getConsultations(session: VerifiedLaunch) {
   const service = createConsultationService({
     repository, provider: getModelProvider(), safety: syntheticSafetyGuard, adapter,
   });
+  // Routing needs durable storage and is limited to synthetic sessions with synthetic providers.
+  const routing = durable && session.source === "synthetic" && syntheticRoutingEnabled();
+  const router = createProviderRouter({
+    repository: lifecycle, registry: getProviderRegistry(), transport: getProviderTransport, tenantId: tenant.id,
+    timeoutMs: getEnv().PROVIDER_TIMEOUT_MS, simulator: routing, audit: auditConsultation,
+  });
+  function requireRouting() {
+    if (!durable) throw new RouteError("provider_unavailable", "Configure durable consultation storage");
+    if (!routing) throw new RouteError("not_implemented", "Hospital consultation delivery is not configured");
+  }
   return {
     get: service.get,
+    list: async () => durable ? lifecycle.list() : [],
     async revise(id: string, input: Parameters<typeof lifecycle.revise>[1]) {
       if (!durable) throw new RouteError("provider_unavailable", "Configure durable consultation storage");
       const safety = await syntheticSafetyGuard.assess([input.summary, input.assessment, ...input.plan].join("\n"));
       if (safety.level === "blocked") throw new RouteError("safety_blocked", "Revision withheld by safety check");
       return lifecycle.revise(id, input);
     },
+    /** Clinician bookkeeping only (submit, cancel). Delivery states are never set from here. */
     async transition(id: string, input: Parameters<typeof lifecycle.transition>[1]) {
       if (!durable) throw new RouteError("provider_unavailable", "Configure durable consultation storage");
-      if (!["submit", "cancel"].includes(input.action) &&
-          !(session.source === "synthetic" && getEnv().AI_PROVIDER === "mock" && (local || syntheticStagingEnabled(getEnv())))) {
-        throw new RouteError("not_implemented", "Only synthetic mock lifecycle delivery is supported");
-      }
       return lifecycle.transition(id, input);
     },
     async history(id: string, beforeVersion?: number) {
@@ -69,20 +82,41 @@ export function getConsultations(session: VerifiedLaunch) {
     },
     create: (input: Parameters<typeof service.create>[0]) => service.create(input, actor),
     approve: (input: Parameters<typeof service.approve>[0]) => service.approve(input, actor),
-    async route(draftId: string, recipientId: string) {
-      if (!local || durable || !adapter.consultations) throw new RouteError("not_implemented", "Durable hospital consultation delivery is not configured");
-      const result = await routeConsultation(repository, adapter.consultations, tenant.recipients, draftId, recipientId);
-      if ("code" in result) throw new RouteError(result.code, "Consultation cannot be routed");
-      auditConsultation({ action: "consultation.routed", tenantId: tenant.id, clinicianId: actor.clinicianId, draftId });
-      return result.delivery;
+    async route(draftId: string, input: DispatchRequest) {
+      requireRouting();
+      return router.route(draftId, input, actor);
+    },
+    async providers(draftId: string) {
+      if (!routing) {
+        if (!(await repository.get(draftId))) throw new RouteError("not_found", "Draft not found");
+        return [];
+      }
+      return (await router.eligible(draftId)).map(({ id, displayName, specialties, transport }) => ({ id, displayName, specialties, transport }));
     },
     async delivery(draftId: string) {
+      if (durable) return router.view(draftId);
       if (!(await repository.get(draftId))) throw new RouteError("not_found", "Draft not found");
-      if (durable) {
-        const attempt = (await lifecycle.history(draftId)).attempts[0];
-        return attempt ? { draftId, recipientId: attempt.recipientId, status: attempt.status === "responded" ? "responded" as const : "submitted" as const } : null;
+      return null;
+    },
+    /**
+     * Demo aid: plays the synthetic specialist's next message. It is signed and sent through
+     * the same verification and correlation path as a real provider callback.
+     */
+    async simulateSpecialist(draftId: string) {
+      requireRouting();
+      if (!(await lifecycle.get(draftId))) throw new RouteError("not_found", "Draft not found");
+      const [latest] = await lifecycle.deliveries(draftId);
+      const secret = latest && providerCallbackSecret(latest.providerId);
+      if (!latest?.envelope || !secret || !["sent", "accepted"].includes(latest.status)) {
+        throw new RouteError("conflict", "There is no delivered synthetic request awaiting a specialist reply");
       }
-      return adapter.consultations?.status(draftId) ?? null;
+      const body = JSON.stringify(mockSpecialistCallback(latest.envelope, mockSpecialistNextStep(latest.providerId, latest.status)));
+      const timestamp = String(Date.now());
+      await receiveProviderCallback(new Headers({
+        [CALLBACK_HEADERS.provider]: latest.providerId, [CALLBACK_HEADERS.timestamp]: timestamp,
+        [CALLBACK_HEADERS.signature]: signProviderCallback(secret, timestamp, body),
+      }), body);
+      return router.view(draftId);
     },
   };
 }

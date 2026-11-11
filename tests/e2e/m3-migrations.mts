@@ -17,7 +17,7 @@ try {
     await sql.unsafe(await readFile("supabase/migrations/" + name, "utf8"));
     console.log("Applied", name);
   }
-  for (const name of ["clinician_access.sql", "durable_lifecycle.sql"]) {
+  for (const name of ["clinician_access.sql", "durable_lifecycle.sql", "provider_routing.sql"]) {
     await sql.unsafe(await readFile("supabase/tests/" + name, "utf8"));
     console.log("Passed", name);
   }
