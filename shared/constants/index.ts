@@ -1,5 +1,5 @@
 export const APP_NAME = "StethoLink";
-export const CONTRACT_VERSION = "1.0.0";
+export const CONTRACT_VERSION = "1.1.0";
 
 export const CONSULTATION_STATUSES = [
   "draft",
