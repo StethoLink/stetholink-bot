@@ -25,6 +25,9 @@ import type {
   PatientContext,
   SafetyAssessment,
 } from "@/shared/contracts";
+import { attachmentReferenceSchema, clinicalFactSchema, missingInformationSchema } from "./clinical-data";
+
+export * from "./clinical-data";
 
 const id = z.string().min(1).max(128);
 const isoDateTime = z.string().datetime({ offset: true });
@@ -40,6 +43,7 @@ export const patientContextSchema = z.object({
   activeProblems: z.array(z.string()),
   medications: z.array(z.string()),
   source: z.enum(DATA_SOURCES),
+  clinicalFacts: z.array(clinicalFactSchema).optional(),
 }) satisfies z.ZodType<PatientContext>;
 
 export const encounterContextSchema = z.object({
@@ -50,6 +54,7 @@ export const encounterContextSchema = z.object({
   startedAt: isoDateTime,
   location: z.string().optional(),
   reasonForVisit: z.string().optional(),
+  clinicalFacts: z.array(clinicalFactSchema).optional(),
 }) satisfies z.ZodType<EncounterContext>;
 
 export const chatMessageSchema = z.object({
@@ -91,6 +96,9 @@ export const consultationDraftSchema = z.object({
   updatedAt: isoDateTime,
   reviewedBy: z.string().optional(),
   reviewedAt: isoDateTime.optional(),
+  clinicalFacts: z.array(clinicalFactSchema).optional(),
+  missingInformation: z.array(missingInformationSchema).optional(),
+  attachments: z.array(attachmentReferenceSchema).optional(),
 }) satisfies z.ZodType<ConsultationDraft>;
 
 export const approvalRequestSchema = z.object({
