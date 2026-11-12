@@ -61,3 +61,9 @@ npx vitest run tests/backend/openai-referral-live.test.ts
 A skipped live test is unverified, not passed.
 
 - `tests/e2e/browser/consultation-flow.mjs`: the whole workflow in a browser. Set `EXPECT_LIVE_MODEL=1` to require a model-written draft.
+
+## Live verification record
+
+On 2026-11-12 the live tests and the browser walk-through passed with `OPENAI_MODEL=gpt-5` (served as `gpt-5-2025-08-07`), `OPENAI_REASONING_EFFORT=low`, `OPENAI_MAX_OUTPUT_TOKENS=8000`, `OPENAI_TIMEOUT_MS=60000`, on the fictional Omar chart, from a development container against a disposable local PostgreSQL. A draft took about 21 s (2,095 input and 1,300 output tokens) and a revision about 30 s. The specialist was the simulated provider. This was not a cloud deployment, and the cost figures shown were computed from placeholder upper-bound rates, not verified prices.
+
+At this latency the default `OPENAI_TIMEOUT_MS=30000` is too tight for this model; use 60000.
