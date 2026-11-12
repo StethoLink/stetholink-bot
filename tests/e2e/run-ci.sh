@@ -53,3 +53,5 @@ kill "$app_pid"
 wait "$app_pid" || true
 app_pid=
 node tests/e2e/m3-restart.mts
+STETHOLINK_TEST_OWNER_URL="postgres://postgres@127.0.0.1:$db_port/postgres" node tests/e2e/m5-m6-flow.mts
+node tests/e2e/m7-assistant-flow.mts

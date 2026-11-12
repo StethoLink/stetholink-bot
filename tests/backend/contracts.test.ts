@@ -13,7 +13,7 @@ describe("synthetic fixtures satisfy contracts", () => {
   });
 
   it("retains the two M0 patients and adds Ahmed with a matching cardiology encounter", () => {
-    expect(syntheticPatients.map((p) => p.patientId)).toEqual(["syn-pt-001", "syn-pt-002", "syn-pt-ahmed"]);
+    expect(syntheticPatients.map((p) => p.patientId)).toEqual(["syn-pt-001", "syn-pt-002", "syn-pt-ahmed", "syn-pt-omar"]);
     expect(patientContextSchema.parse(ahmedPatient)).toEqual(ahmedPatient);
     expect(encounterContextSchema.parse(ahmedEncounter)).toEqual(ahmedEncounter);
     expect(ahmedEncounter.patientId).toBe(ahmedPatient.patientId);

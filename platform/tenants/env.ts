@@ -3,17 +3,26 @@ import { z } from "zod";
 
 const envSchema = z.object({
   TENANT_ID: z.string().min(1).max(128).default("local-synthetic"),
-  MOCK_RECIPIENT_IDS: z.string().default("synthetic-consult-team"),
+  MOCK_RECIPIENT_IDS: z.string().default("synthetic-cardiology,synthetic-cardiology-declines,synthetic-cardiology-offline,synthetic-radiology"),
+  MOCK_PROVIDER_SECRET: z.string().min(32).optional(),
+  PROVIDER_TIMEOUT_MS: z.coerce.number().int().min(100).max(30_000).default(10_000),
+  LOCAL_SYNTHETIC_CHART: z.enum(["alpha", "ahmed", "omar"]).default("alpha"),
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
   VERCEL_ENV: z.string().optional(),
   VERCEL_TARGET_ENV: z.string().optional(),
   AI_PROVIDER: z.enum(["mock", "openai"]).default("mock"),
+  // Preview staging stays on the deterministic mock unless a live model is explicitly allowed.
+  // Only synthetic charts are ever sent, whichever value is set.
+  STAGING_LIVE_MODEL: z.enum(["disabled", "enabled"]).default("disabled"),
+  // Cumulative model spend allowed per server instance per UTC day (in addition to the per-call limit).
+  AI_DAILY_BUDGET_USD: z.coerce.number().positive().max(1000).default(2),
   OPENAI_API_KEY: z.string().optional(),
   OPENAI_MODEL: z.string().min(1).max(128).default("gpt-5"),
   OPENAI_TIMEOUT_MS: z.coerce.number().int().min(1).max(60_000).default(30_000),
   OPENAI_MAX_RETRIES: z.coerce.number().int().min(0).max(2).default(1),
   OPENAI_MAX_INPUT_TOKENS: z.coerce.number().int().min(1).max(32_000).default(16_000),
-  OPENAI_MAX_OUTPUT_TOKENS: z.coerce.number().int().min(1).max(4096).default(2048),
+  OPENAI_MAX_OUTPUT_TOKENS: z.coerce.number().int().min(1).max(16_000).default(2048),
+  OPENAI_REASONING_EFFORT: z.enum(["minimal", "low", "medium", "high"]).optional(),
   OPENAI_MAX_COST_USD: z.coerce.number().positive().max(1).default(0.1),
   OPENAI_INPUT_USD_PER_MILLION: z.coerce.number().positive().max(1000).optional(),
   OPENAI_OUTPUT_USD_PER_MILLION: z.coerce.number().positive().max(1000).optional(),
@@ -39,7 +48,7 @@ export type ServerEnv = z.infer<typeof envSchema>;
 export function syntheticStagingEnabled(env: ServerEnv) {
   return env.AUTH_MODE === "staging" && env.VERCEL_ENV === "preview" &&
     (!env.VERCEL_TARGET_ENV || env.VERCEL_TARGET_ENV === "preview") &&
-    env.CLINICAL_DATA_SOURCE === "synthetic" && env.AI_PROVIDER === "mock";
+    env.CLINICAL_DATA_SOURCE === "synthetic" && (env.AI_PROVIDER === "mock" || env.STAGING_LIVE_MODEL === "enabled");
 }
 
 let cached: ServerEnv | undefined;

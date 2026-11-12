@@ -1,5 +1,5 @@
 import { contractResponse, errorResponse, getConsultations, handleRouteError, readJson, requireClinician } from "@/apps/embedded-app/server";
-import { consultationDraftSchema, createConsultationDraftRequestSchema } from "@/shared/schemas";
+import { consultationDraftSchema, consultationListSchema, createConsultationDraftRequestSchema } from "@/shared/schemas";
 
 /** Generate a recommendation and persist it under the verified clinician's ownership. */
 export async function POST(req: Request) {
@@ -8,6 +8,16 @@ export async function POST(req: Request) {
     const input = createConsultationDraftRequestSchema.safeParse(await readJson(req));
     if (!input.success) return errorResponse("invalid_request", "Invalid draft request");
     return contractResponse(consultationDraftSchema, await getConsultations(session).create(input.data), 201);
+  } catch (err) {
+    return handleRouteError(err);
+  }
+}
+
+/** Recent consultations for the verified chart, so a physician can return to them later. */
+export async function GET() {
+  try {
+    const session = await requireClinician();
+    return contractResponse(consultationListSchema, await getConsultations(session).list());
   } catch (err) {
     return handleRouteError(err);
   }

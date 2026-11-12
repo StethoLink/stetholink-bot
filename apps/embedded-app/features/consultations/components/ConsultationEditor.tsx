@@ -1,64 +1,55 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import type { ConsultationDraft } from "@/shared/contracts";
+import { deliveryApi, DeliveryError } from "../hooks/deliveryState";
 
-export function ConsultationEditor({ draft, version, onSaved }: {
-  draft: ConsultationDraft;
-  version: number;
-  onSaved: () => void;
-}) {
+const field = "mt-1 block w-full rounded border border-slate-400 px-2 py-1 text-sm font-normal";
+
+/** Physician edits to a draft that was returned for changes. Saving sends it back for review; it never approves. */
+export function ConsultationEditor({ draft, onSaved }: { draft: ConsultationDraft; onSaved: () => void }) {
   const [summary, setSummary] = useState(draft.summary);
   const [assessment, setAssessment] = useState(draft.assessment);
   const [plan, setPlan] = useState(draft.plan.join("\n"));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const planChanged = plan !== draft.plan.join("\n");
-  const dirty = summary !== draft.summary || assessment !== draft.assessment || planChanged;
-  const url = `/api/consultations/drafts/${encodeURIComponent(draft.id)}`;
+  const keys = useRef({ revise: crypto.randomUUID(), submit: crypto.randomUUID() });
 
-  async function save(action: "revise" | "submit") {
+  async function save() {
+    if (!draft.version) return;
     setBusy(true);
     setError("");
-    const base = { expectedVersion: version, idempotencyKey: `${action}:${version}:${draft.id}` };
     try {
-      const response = await fetch(action === "revise" ? url : url + "/transitions", {
-        method: action === "revise" ? "PATCH" : "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(action === "revise"
-          ? { ...base, summary, assessment, plan: planChanged ? plan.split("\n").filter(Boolean) : draft.plan }
-          : { ...base, action }),
+      const revised = await deliveryApi.revise(draft.id, {
+        expectedVersion: draft.version, idempotencyKey: keys.current.revise, summary, assessment,
+        plan: plan.split("\n").map((line) => line.trim()).filter(Boolean),
       });
-      if (!response.ok) throw new Error("Draft update failed");
+      await deliveryApi.submit(draft.id, { expectedVersion: revised.version ?? draft.version + 1, idempotencyKey: keys.current.submit });
       onSaved();
-    } catch {
-      setError("The draft could not be updated. Reload the draft before trying again.");
-    } finally {
+    } catch (e) {
+      setError(e instanceof DeliveryError ? e.message : "Your edits could not be saved.");
       setBusy(false);
     }
   }
 
-  return <form className="space-y-3" onSubmit={(event) => {
-    event.preventDefault();
-    if (dirty && !busy) void save("revise");
-  }}>
-    <label className="block">Summary
-      <textarea className="block w-full rounded border p-2" required maxLength={16000}
-        value={summary} onChange={(event) => setSummary(event.target.value)} />
-    </label>
-    <label className="block">Assessment
-      <textarea className="block w-full rounded border p-2" maxLength={16000}
-        value={assessment} onChange={(event) => setAssessment(event.target.value)} />
-    </label>
-    <label className="block">Plan (one item per line)
-      <textarea className="block w-full rounded border p-2"
-        value={plan} onChange={(event) => setPlan(event.target.value)} />
-    </label>
-    <div className="flex gap-2">
-      <button type="submit" disabled={busy || !dirty} className="rounded border px-3 py-2">Save edits</button>
-      <button type="button" disabled={busy || dirty} onClick={() => void save("submit")}
-        className="rounded border px-3 py-2">Submit for review</button>
-    </div>
-    {error && <p role="alert">{error}</p>}
-  </form>;
+  return (
+    <form aria-label="Edit consultation" className="space-y-2 rounded border border-slate-400 p-3"
+      onSubmit={(event) => { event.preventDefault(); void save(); }}>
+      <h3 className="text-sm font-semibold">Edit consultation</h3>
+      <p className="text-xs text-slate-700">Your edits replace the wording only. The source facts and missing information stay attached.</p>
+      <label className="block text-sm font-medium">Summary
+        <textarea rows={8} required value={summary} onChange={(event) => setSummary(event.target.value)} className={field} />
+      </label>
+      <label className="block text-sm font-medium">Assessment
+        <textarea rows={4} value={assessment} onChange={(event) => setAssessment(event.target.value)} className={field} />
+      </label>
+      <label className="block text-sm font-medium">Plan (one item per line)
+        <textarea rows={6} value={plan} onChange={(event) => setPlan(event.target.value)} className={field} />
+      </label>
+      <button type="submit" disabled={busy || !summary.trim() || !draft.version} className="rounded border border-slate-700 px-3 py-2 text-sm font-medium disabled:opacity-50">
+        {busy ? "Saving…" : "Save edits and return to review"}
+      </button>
+      {error && <p role="alert" className="text-sm text-red-800">{error}</p>}
+    </form>
+  );
 }

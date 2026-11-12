@@ -28,6 +28,7 @@ import type {
 import { attachmentReferenceSchema, clinicalFactSchema, missingInformationSchema } from "./clinical-data";
 
 export * from "./clinical-data";
+export * from "./provider";
 
 const id = z.string().min(1).max(128);
 const isoDateTime = z.string().datetime({ offset: true });
@@ -96,6 +97,17 @@ export const consultationGroundingSchema = z.object({
     promptVersion: z.string().min(1).max(128), contextVersion: z.string().min(1).max(128),
     syntheticOnly: z.literal(true), encounterReference: id.nullable(),
   }).strict(),
+  authoring: z.object({
+    mode: z.literal("model_authored"),
+    physicianRequest: z.string().min(1).max(2000),
+    rejectedStatements: z.number().int().nonnegative().max(1000),
+    liveInference: z.boolean(),
+    usage: z.object({
+      inputTokens: z.number().int().nonnegative(), outputTokens: z.number().int().nonnegative(),
+      estimatedCostUsd: z.number().nonnegative().nullable(), latencyMs: z.number().int().nonnegative(),
+      attempts: z.number().int().positive(),
+    }).strict().nullable(),
+  }).strict().optional(),
 }).strict() satisfies z.ZodType<import("@/shared/contracts/consultation").ConsultationGrounding>;
 
 export const consultationDraftSchema = z.object({
@@ -129,12 +141,6 @@ export const approvalRequestSchema = z.strictObject({
   idempotencyKey: id,
 }).refine((input) => (input.decision === "approve") === (input.recipientId !== undefined)) satisfies z.ZodType<ApprovalRequest>;
 
-export const dispatchRequestSchema = z.strictObject({
-  recipientId: id,
-  expectedVersion: z.number().int().positive().max(2147483647),
-  idempotencyKey: id,
-}) satisfies z.ZodType<import("@/shared/contracts/consultation").DispatchRequest>;
-
 export const apiErrorSchema = z.object({
   error: z.object({
     code: z.enum(API_ERROR_CODES),
@@ -154,7 +160,11 @@ export const createConsultationDraftRequestSchema = z.strictObject({
   encounterId: id.optional(),
   conversationId: id.optional(),
   idempotencyKey: id.optional(),
-}) satisfies z.ZodType<import("@/shared/contracts").CreateConsultationDraftRequest>;
+  specialty: z.string().trim().min(1).max(200).optional(),
+  clinicalQuestion: z.string().trim().min(1).max(4000).optional(),
+  request: z.string().trim().min(8).max(2000).optional(),
+}).refine((v) => (v.specialty === undefined) === (v.clinicalQuestion === undefined), "Provide the specialty and clinical question together")
+  .refine((v) => v.request === undefined || v.specialty === undefined, "Send either a natural-language request or a structured intent") satisfies z.ZodType<import("@/shared/contracts").CreateConsultationDraftRequest>;
 
 
 export const revisionRequestSchema = z.object({
@@ -163,18 +173,24 @@ export const revisionRequestSchema = z.object({
   plan: z.array(z.string().max(5000)).max(80),
 }).strict() satisfies z.ZodType<import("@/shared/contracts/consultation").RevisionRequest>;
 
+export const modelRevisionRequestSchema = z.object({
+  instruction: z.string().trim().min(3).max(1000),
+  expectedVersion: z.number().int().positive().max(2147483647),
+  // Three lifecycle commands derive their keys from this one.
+  idempotencyKey: z.string().min(1).max(100),
+}).strict() satisfies z.ZodType<import("@/shared/contracts/consultation").ModelRevisionRequest>;
+
 export const transitionRequestSchema = z.object({
   expectedVersion: z.number().int().positive().max(2147483647), idempotencyKey: id,
-  action: z.enum(["submit", "cancel", "queue", "sent", "accepted", "responded", "failed"]),
-  recipientId: id.optional(),
-}).strict().refine((v) => v.action === "queue" ? !!v.recipientId : v.recipientId === undefined) satisfies z.ZodType<import("@/shared/contracts/consultation").TransitionRequest>;
+  action: z.enum(["submit", "cancel"]),
+}).strict() satisfies z.ZodType<import("@/shared/contracts/consultation").TransitionRequest>;
 
 export const consultationHistorySchema = z.object({
   revisions: z.array(z.object({ version: z.number().int().positive(), draft: consultationDraftSchema })),
   events: z.array(z.object({ version: z.number().int().positive(), type: z.string(),
     fromStatus: consultationStatusSchema.nullable(), toStatus: consultationStatusSchema, at: isoDateTime })),
   attempts: z.array(z.object({ id: z.string(), number: z.number().int().positive(), recipientId: id,
-    status: z.enum(["queued", "sent", "accepted", "responded", "failed", "cancelled"]),
+    status: z.enum(["queued", "sent", "accepted", "responded", "failed", "cancelled", "rejected"]),
     createdAt: isoDateTime, updatedAt: isoDateTime, transport: z.literal("mock") })),
   nextBeforeVersion: z.number().int().positive().nullable(),
 });

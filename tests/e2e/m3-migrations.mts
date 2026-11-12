@@ -17,7 +17,8 @@ try {
     await sql.unsafe(await readFile("supabase/migrations/" + name, "utf8"));
     console.log("Applied", name);
     const suites = name.includes("durable_consultation") ? ["clinician_access.sql", "durable_lifecycle.sql"] :
-      name.includes("clinician_approval_boundary") ? ["m4_approval_boundary.sql"] : [];
+      name.includes("clinician_approval_boundary") ? ["m4_approval_boundary.sql"] :
+      name.includes("provider_routing") ? ["provider_routing.sql"] : [];
     for (const suite of suites) {
       await sql.unsafe(await readFile("supabase/tests/" + suite, "utf8"));
       console.log("Passed", suite);

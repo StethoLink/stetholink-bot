@@ -62,3 +62,11 @@ session expiry, privileges, destination changes between queue and send,
 append-only audit records, and one send across replays. The production-build
 HTTP tests exercise forged request fields, cross-origin requests, cross-tenant
 sessions, approval and editing, and concurrent replay of synthetic delivery.
+
+## M5/M6 routing and specialist response
+
+`tests/e2e/m5-m6-flow.mts` runs the whole synthetic consultation over HTTP against a disposable loopback PostgreSQL: grounded Ahmed draft, approval gate, provider eligibility and allowlist, one durable request under concurrent sends, provider failure and retry, signed callback identity and correlation, duplicate/late/out-of-order callbacks, clinician readback, cross-clinician isolation and two app restarts. `supabase/tests/provider_routing.sql` covers the same rules at the database boundary. Both run in `tests/e2e/run-ci.sh`. Use the `cardiology-demo` staging launch profile for the Ahmed chart.
+
+## Consultation assistant
+
+`tests/e2e/m7-assistant-flow.mts` runs the natural-language request, revision, approval, routing and history over HTTP with the deterministic mock. It checks the workflow and its boundaries, not model quality. `tests/e2e/browser/consultation-flow.mjs` walks the same path in Chromium against a running synthetic staging app (`STAGING_BASE_URL`, `STAGING_LAUNCH_SECRET`; needs Playwright, which is not a project dependency). With `EXPECT_LIVE_MODEL=1` it requires a model-written draft. The specialist is always the simulated provider. Live model tests are described in the [assistant guide](../../docs/ai/consultation-assistant.md).

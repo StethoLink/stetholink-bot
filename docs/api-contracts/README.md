@@ -15,8 +15,8 @@ Clinical routes require a verified clinician session. The health and authenticat
 | 5 | POST | `/api/consultations/drafts` | `CreateConsultationDraftRequest` | `ConsultationDraft` (201) | Synthetic context with Supabase or development persistence |
 | 6 | GET | `/api/consultations/drafts/:draftId` | — | `ConsultationDraft` | ✅ clinician-owned rows |
 | 7 | POST | `/api/consultations/drafts/:draftId/approval` | `ApprovalRequest` | `ConsultationDraft` | Atomic in Supabase |
-| 8 | POST | `/api/consultations/drafts/:draftId/delivery` | `{ recipientId, expectedVersion, idempotencyKey }` | `ConsultationDelivery` | Verified synthetic staging only |
-| 9 | GET | `/api/consultations/drafts/:draftId/delivery` | — | `ConsultationDelivery\|null` | Clinician-owned draft |
+| 8 | POST | `/api/consultations/drafts/:draftId/delivery` | `DispatchRequest` | `ConsultationDeliveryView` | Synthetic providers; see M5/M6 below |
+| 9 | GET | `/api/consultations/drafts/:draftId/delivery` | — | `ConsultationDeliveryView\|null` | Clinician-owned draft |
 
 ## Types
 
@@ -68,7 +68,7 @@ npm run build
 - **Approval transitions:** `pending_approval|draft` + approve → `approved`, + reject → `rejected`, + request_changes → `draft`. Any other state returns `409 conflict`.
 - `reviewedBy` / `reviewedAt` are set by the server from the session and are ignored if a client sends them.
 - Synthetic development uses an in-memory repository. Staging uses PostgreSQL persistence scoped to the verified tenant, clinician, patient and encounter.
-- Delivery requires an approved draft and a recipient on the tenant allowlist. Synthetic delivery returns `{ draftId, recipientId, status, response? }`.
+- Delivery requires a physician, an approved draft and an eligible provider on the tenant allowlist. See M5/M6 below.
 - Generation supports synthetic patient/encounter context. `conversationId` is rejected with 400 until conversation persistence is implemented. An encounter must belong to the requested patient.
 - The EHR opens `/api/smart/launch`, then returns to `/api/smart/callback`. `GET /api/auth/session` returns verified identity and chart context, and `POST /api/auth/logout` revokes the session. Preview staging uses the secret-gated `POST /api/staging/launch` route.
 - `safety.level === "blocked"` means `message.content` is a withheld notice, not model output.
@@ -191,3 +191,38 @@ carry tenant/request identity. The private command engine updates attempts.
 Events and revisions preserve each transition. Historical approvals without
 a destination remain in history. Unsent drafts in the approved state return
 to review, and historical queued attempts require cancellation.
+
+## M5/M6 provider routing and specialist responses
+
+These supersede the M3 delivery transitions: `POST .../transitions` now accepts only `submit` and `cancel`. Delivery and provider outcome states cannot be set by a clinician command.
+
+| Method/path | Body | Result |
+| --- | --- | --- |
+| POST `/api/consultations/drafts` | adds optional `specialty` + `clinicalQuestion` (both or neither) | Draft with the physician's intent in `grounding` |
+| GET `/api/consultations/drafts` | — | Up to 20 recent consultations for the verified chart |
+| GET `/api/consultations/drafts/:draftId/providers` | — | Allowed, active providers offering the draft's specialty |
+| POST `/api/consultations/drafts/:draftId/approval` | `{draftId, decision, recipientId (approve only), expectedVersion, idempotencyKey}` | Draft; an approval records its destination in `approvedRecipientId` |
+| POST `/api/consultations/drafts/:draftId/delivery` | `{providerId, expectedVersion, idempotencyKey}`; `providerId` must be the approved destination | `ConsultationDeliveryView` after the send attempt |
+| GET `/api/consultations/drafts/:draftId/delivery` | — | Delivery state, attempts, responses and the specialist report |
+| POST `/api/consultations/drafts/:draftId/delivery/simulate` | `{}` | Synthetic only: the mock specialist sends its next signed callback |
+| POST `/api/provider/v1/callbacks` | `ProviderCallback` (signed) | `{requestId, disposition: "applied"\|"ignored"\|"duplicate"}` |
+
+Routing errors: 403 not a physician with the `consultation:route` scope, provider not allowed, suspended, wrong specialty or not the approved destination; 404 not this clinician's chart; 409 not approved, missing specialty/question, stale version, already routed elsewhere, or provider declined; 501 outside synthetic environments. A transport failure is not an HTTP error: the view returns `status: "failed"` with a `failureCode` and `canRetry`.
+
+Provider contract 1.0 (`shared/contracts/provider.ts`). The envelope a provider receives: `{contractVersion, requestId, attempt, tenantId, providerId, specialty, reason, question, summary, assessment, plan[], clinicalFacts[], missingInformation[], attachments[] (references only), safetyFlags[], approval{approvedBy, approvedAt}, syntheticOnly: true}`. A callback: `{contractVersion, requestId, providerId, responseId, kind: "accepted"|"rejected"|"report", sentAt, reason?, report?{summary, recommendations[], responder}, syntheticOnly: true}`.
+
+Callback authentication: headers `x-stetholink-provider`, `x-stetholink-timestamp` (ms, within 5 minutes) and `x-stetholink-signature` = hex HMAC-SHA256 of `<timestamp>.<raw body>` with that provider's secret. Unauthenticated 401; body provider differs from the authenticated one 403; unknown request, other tenant or other provider's request 404; closed, superseded, already answered or reused response id with different content 409. Resending the same `responseId` returns `duplicate` and changes nothing.
+
+Known limits: one tenant per deployment with an environment allowlist (no provider administration); after a provider declines, the consultation must be cancelled and prepared again; no rate limiting on the callback route; synthetic providers only.
+
+
+## Consultation assistant
+
+| Method/path | Body | Result |
+| --- | --- | --- |
+| POST `/api/consultations/drafts` | `{patientId, encounterId?, request, idempotencyKey?}`. `request` is 8 to 2000 characters and cannot be combined with `specialty`/`clinicalQuestion` | Model-authored draft (201). `grounding.authoring` holds the request, whether inference was live, statements removed and token use |
+| POST `/api/consultations/drafts/:draftId/ai-revision` | `{instruction, expectedVersion, idempotencyKey}` | The draft after reopen, revise and resubmit (version + 3 from review, + 2 from draft), awaiting review |
+
+Errors: 400 no specialty named or invalid input; 403 chart mismatch, or a non-physician reopening a draft in review; 409 stale version, not awaiting review, or not drafted by the assistant; 422 the model's output failed grounding or safety checks; 503 the model was unavailable, timed out, or a cost or spending limit was reached. A failed request stores nothing and never falls back to another generator.
+
+`summary` holds the consultation request as text: header lines, then sections whose statements end with `[fact-id]` citations (`shared/utils/referral-text.ts`). `assessment` holds missing information from the chart. `plan` holds AI suggestions, each prefixed `AI suggestion, not from the chart:`.

@@ -55,14 +55,14 @@ await request("/api/consultations/demo", 400, { cookie: ahmed, body: { patientId
 await request("/api/patients/syn-pt-002/context", 404, { cookie: physician });
 await request(drafts, 403, { cookie: physician, body: { patientId: "syn-pt-002" } });
 await request(drafts, 403, { cookie: physician, body: { patientId: "syn-pt-001", encounterId: "other-encounter" } });
-const draft = await (await request(drafts, 201, { cookie: physician, body: { patientId: "syn-pt-001" } })).json();
+const draft = await (await request(drafts, 201, { cookie: physician, body: { patientId: "syn-pt-001", specialty: "Cardiology", clinicalQuestion: "Synthetic staging question for the routing boundary." } })).json();
 assert.equal(draft.status, "pending_approval");
 assert.equal(draft.encounterId, "syn-enc-001");
 const path = drafts + "/" + encodeURIComponent(draft.id);
-const recipientId = "synthetic-consult-team";
+const recipientId = "synthetic-cardiology";
 const body = { draftId: draft.id, decision: "approve", recipientId,
   expectedVersion: draft.version, idempotencyKey: draft.id + "-review" };
-const send = { recipientId, expectedVersion: draft.version + 1, idempotencyKey: draft.id + "-send" };
+const send = { providerId: recipientId, expectedVersion: draft.version + 1, idempotencyKey: draft.id + "-send" };
 await request(path + "/delivery", 409, { cookie: physician, body: { ...send, expectedVersion: draft.version } });
 await request(path + "/approval", 400, { cookie: physician, body: { ...body, reviewedBy: identity.clinicianId, status: "approved" } });
 await request(path + "/approval", 400, { cookie: physician, body: { ...body, expectedVersion: undefined } });
@@ -83,16 +83,31 @@ assert.equal(approved.reviewedBy, identity.clinicianId);
 assert.equal(approved.approvedRecipientId, recipientId);
 assert.deepEqual(await (await request(path + "/approval", 200, { cookie: physician, body })).json(), approved);
 await request(path + "/approval", 409, { cookie: physician, body: { ...body, idempotencyKey: "different-review" } });
+assert.deepEqual((await (await request(path + "/providers", 200, { cookie: physician })).json()).map((p: { id: string }) => p.id).sort(),
+  ["synthetic-cardiology", "synthetic-cardiology-declines", "synthetic-cardiology-offline"]);
 await request(path + "/delivery", 400, { cookie: physician, body: { ...send, tenantId: "another-tenant" } });
-await request(path + "/delivery", 403, { cookie: physician, body: { ...send, recipientId: "unlisted-team" } });
+await request(path + "/delivery", 400, { cookie: physician, body: { recipientId, expectedVersion: send.expectedVersion, idempotencyKey: send.idempotencyKey } });
+await request(path + "/delivery", 403, { cookie: physician, body: { ...send, providerId: "unlisted-team" } });
+// Allowed for the tenant and the specialty, but not the destination the physician approved.
+await request(path + "/delivery", 403, { cookie: physician, body: { ...send, providerId: "synthetic-cardiology-offline" } });
+await request(path + "/transitions", 400, { cookie: physician, body: { action: "sent", expectedVersion: send.expectedVersion, idempotencyKey: "clinician-sent" } });
+await request("/api/provider/v1/callbacks", 401, { body: {} });
 const [receipt, replay] = await Promise.all([
   request(path + "/delivery", 200, { cookie: physician, body: send }),
   request(path + "/delivery", 200, { cookie: physician, body: send }),
 ].map(async (response) => (await response).json()));
-assert.deepEqual(receipt, { draftId: draft.id, recipientId, status: "submitted" });
-assert.deepEqual(replay, receipt);
-assert.deepEqual(await (await request(path + "/delivery", 200, { cookie: physician })).json(), receipt);
-await request(path + "/delivery", 409, { cookie: physician, body: { ...send, idempotencyKey: "different-send" } });
+for (const view of [receipt, replay]) {
+  assert.equal(view.status, "sent");
+  assert.equal(view.provider.id, recipientId);
+  assert.equal(view.attempts.length, 1);
+}
+assert.equal(replay.attempts[0].requestId, receipt.attempts[0].requestId);
+const stored = await (await request(path + "/delivery", 200, { cookie: physician })).json();
+assert.equal(stored.status, "sent");
+assert.equal(stored.attempts[0].requestId, receipt.attempts[0].requestId);
+// A new command for a consultation that is already with the provider reports; it never sends again.
+const again = await (await request(path + "/delivery", 200, { cookie: physician, body: { ...send, expectedVersion: stored.version, idempotencyKey: "different-send" } })).json();
+assert.equal(again.attempts.length, 1);
 const history = await (await request(path + "/history", 200, { cookie: physician })).json();
 assert.equal(history.attempts.length, 1);
 assert.equal(history.events.filter((event: { toStatus: string }) => event.toStatus === "sent").length, 1);
@@ -106,4 +121,4 @@ await setTimeout(Math.max(0, expiryWait));
 await request(session, 401, { cookie: physician });
 await request(path + "/approval", 401, { cookie: physician, body });
 await request(path + "/delivery", 401, { cookie: physician, body: send });
-console.log("Passed M4 HTTP boundaries: clinician and chart binding, expiry, forged fields, origin, recipient policy and replay-safe dispatch.");
+console.log("Passed M4-M6 HTTP boundaries: clinician and chart binding, expiry, forged fields, origin, approved-destination routing, replay-safe dispatch and unsigned callback refusal.");

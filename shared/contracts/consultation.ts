@@ -32,6 +32,32 @@ export interface ConsultationGrounding {
     syntheticOnly: true;
     encounterReference: string | null;
   };
+  /** Present when a language model wrote the draft from the physician's natural-language request. */
+  authoring?: ConsultationAuthoring;
+}
+
+/** Token use for one model call. Cost is an estimate from operator-configured upper-bound rates. */
+export interface ModelUsage {
+  inputTokens: number;
+  outputTokens: number;
+  estimatedCostUsd: number | null;
+  latencyMs: number;
+  attempts: number;
+}
+
+/**
+ * Record of the original generation. Every model statement was checked against the cited
+ * chart facts before it was stored; the physician still reviews all of it.
+ */
+export interface ConsultationAuthoring {
+  mode: "model_authored";
+  /** The physician's request, verbatim. */
+  physicianRequest: string;
+  /** Model statements removed because they were not supported by the facts they cited. */
+  rejectedStatements: number;
+  /** False for the deterministic demo fallback, which performs no model inference. */
+  liveInference: boolean;
+  usage: ModelUsage | null;
 }
 
 /** AI-generated draft. Stays a draft until a clinician approves it. */
@@ -70,6 +96,13 @@ export interface ApprovalRequest {
   idempotencyKey?: string;
 }
 
+/** Natural-language revision by the model. Documented facts, sources, specialty and question cannot change. */
+export interface ModelRevisionRequest {
+  instruction: string;
+  expectedVersion: number;
+  idempotencyKey: string;
+}
+
 export interface RevisionRequest {
   expectedVersion: number;
   idempotencyKey: string;
@@ -78,16 +111,12 @@ export interface RevisionRequest {
   plan: string[];
 }
 
-/** No approval command: decisions remain on the authenticated physician approval path. */
+/**
+ * Clinician lifecycle commands only. Approval stays on the physician approval path;
+ * delivery and provider outcomes come from the router and verified provider callbacks.
+ */
 export interface TransitionRequest {
   expectedVersion: number;
   idempotencyKey: string;
-  action: "submit" | "cancel" | "queue" | "sent" | "accepted" | "responded" | "failed";
-  recipientId?: string;
-}
-
-export interface DispatchRequest {
-  recipientId: string;
-  expectedVersion: number;
-  idempotencyKey: string;
+  action: "submit" | "cancel";
 }

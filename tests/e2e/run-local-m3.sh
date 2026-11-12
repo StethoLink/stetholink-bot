@@ -32,3 +32,5 @@ STAGING_LAUNCH_SECRET=$(openssl rand -hex 32)
 export AUTH_MODE=staging VERCEL_ENV=preview VERCEL_TARGET_ENV=preview
 export AI_PROVIDER=mock CLINICAL_DATA_SOURCE=synthetic TENANT_ID=ci-synthetic STAGING_SESSION_SECONDS=900
 node tests/e2e/m3-persistence.mts
+node tests/e2e/m5-m6-flow.mts
+node tests/e2e/m7-assistant-flow.mts

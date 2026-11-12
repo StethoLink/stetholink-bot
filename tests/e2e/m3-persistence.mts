@@ -69,7 +69,9 @@ try {
     (await request(path + "/transitions", expected, { cookie: physician,
       body: { action, expectedVersion: version, idempotencyKey: key, ...(recipientId ? { recipientId } : {}) } })).json();
   await transition("approve", 1, "illegal-ai-approval", 400);
-  await transition("queue", 1, "premature-queue", 409, "synthetic-consult-team");
+  // Delivery and provider outcomes are not clinician commands (M5/M6 own them).
+  for (const action of ["queue", "sent", "accepted", "responded", "failed"]) await transition(action, 1, "clinician-" + action, 400);
+  await transition("queue", 1, "clinician-queue-recipient", 400, "synthetic-cardiology");
   await request(path + "/transitions", 400, { cookie: physician, body: { action: "cancel" } });
   for (const profile of ["same-clinician-other-chart", "other-clinician", "observer"]) {
     const cookie = await launch(profile);
@@ -78,12 +80,12 @@ try {
     await request(path + "/transitions", 404, { cookie, body: { action: "cancel", expectedVersion: 1, idempotencyKey: "foreign-cancel" } });
     await request(path, 404, { method: "PATCH", cookie, body: { expectedVersion: 1, idempotencyKey: "foreign-edit", summary: "Synthetic", assessment: "Synthetic", plan: [] } });
     await request(path + "/approval", profile === "observer" ? 403 : 404, { cookie,
-      body: { draftId: draft.id, decision: "approve", recipientId: "synthetic-consult-team", expectedVersion: 1, idempotencyKey: "foreign-approval" } });
+      body: { draftId: draft.id, decision: "approve", recipientId: "synthetic-cardiology", expectedVersion: 1, idempotencyKey: "foreign-approval" } });
   }
   const approve = async (decision: string, version: number, key: string, expected = 200) =>
     (await request(path + "/approval", expected, { cookie: physician,
       body: { draftId: draft.id, decision, expectedVersion: version, idempotencyKey: key,
-        ...(decision === "approve" ? { recipientId: "synthetic-consult-team" } : {}) } })).json();
+        ...(decision === "approve" ? { recipientId: "synthetic-cardiology" } : {}) } })).json();
   assert.equal((await approve("request_changes", 1, "human-request-changes")).status, "draft");
   const revisions = ["first-edit", "second-edit"].map((key) => ({ expectedVersion: 2, idempotencyKey: key,
     summary: "Synthetic revised summary " + key, assessment: "Synthetic revised assessment", plan: ["Physician review required"] }));
@@ -102,10 +104,10 @@ try {
   await request(path, 409, { cookie: physician, method: "PATCH", body: { ...revision, summary: "Different synthetic command" } });
   await approve("approve", 3, "unsubmitted-approval", 409);
   await request(path + "/delivery", 409, { cookie: physician, body: {
-    recipientId: "synthetic-consult-team", expectedVersion: 3, idempotencyKey: "unapproved-edited-dispatch",
+    providerId: "synthetic-cardiology", expectedVersion: 3, idempotencyKey: "unapproved-edited-dispatch",
   } });
   await transition("submit", 3, "submit-edited");
-  const decisionBodies = ["human-approve-a", "human-approve-b"].map((key) => ({ draftId: draft.id, decision: "approve", recipientId: "synthetic-consult-team", expectedVersion: 4, idempotencyKey: key }));
+  const decisionBodies = ["human-approve-a", "human-approve-b"].map((key) => ({ draftId: draft.id, decision: "approve", recipientId: "synthetic-cardiology", expectedVersion: 4, idempotencyKey: key }));
   const decisions = await Promise.all(decisionBodies.map(async (body) => {
     const response = await fetch(base + path + "/approval", { method: "POST", headers: { cookie: physician, "content-type": "application/json" }, body: JSON.stringify(body) });
     return { status: response.status, body: await response.json() };
@@ -115,30 +117,21 @@ try {
   const approved = decisions[decisionIndex].body;
   assert.equal(approved.status, "approved");
   assert.equal(approved.version, 5);
-  await transition("queue", 5, "disallowed-recipient", 403, "other-team");
-  await transition("queue", 5, "queue-first", 200, "synthetic-consult-team");
-  await transition("failed", 6, "failed-first");
-  await transition("queue", 7, "queue-retry", 200, "synthetic-consult-team");
-  await transition("sent", 8, "mock-sent");
-  await transition("accepted", 9, "mock-accepted");
-  const responded = await transition("responded", 10, "mock-responded");
-  assert.equal(responded.version, 11);
-  await transition("cancel", 11, "cancel-responded", 409);
-  await request(path + "/delivery", 409, { cookie: physician, body: {
-    recipientId: "synthetic-consult-team", expectedVersion: 11, idempotencyKey: "duplicate-dispatch",
-  } });
+  // No specialty or question was requested for this draft, so it cannot be routed.
+  await request(path + "/delivery", 409, { cookie: physician, body: { providerId: "synthetic-cardiology", expectedVersion: 5, idempotencyKey: "route-incomplete" } });
+  await request(path + "/delivery", 400, { cookie: physician, body: { recipientId: "synthetic-cardiology" } });
+  const responded = approved;
   const history = await (await request(path + "/history", 200, { cookie: physician })).json();
-  assert.equal(history.revisions.length, 11);
-  assert.equal(history.events.length, 11);
-  assert.equal(history.attempts.length, 2);
-  assert.deepEqual(history.attempts.map((a: { status: string }) => a.status), ["responded", "failed"]);
+  assert.equal(history.revisions.length, 5);
+  assert.equal(history.events.length, 5);
+  assert.equal(history.attempts.length, 0);
   assert.equal(history.nextBeforeVersion, null);
   const pending = await (await request(root, 201, { cookie: physician, body: { ...create, idempotencyKey: "surviving-pending" } })).json();
   const rejected = await (await request(root, 201, { cookie: physician, body: { ...create, idempotencyKey: "rejected-draft" } })).json();
   await request(root + "/" + rejected.id + "/approval", 200, { cookie: physician,
     body: { draftId: rejected.id, decision: "reject", expectedVersion: 1, idempotencyKey: "reject-human" } });
   await request(root + "/" + rejected.id + "/delivery", 409, { cookie: physician, body: {
-    recipientId: "synthetic-consult-team", expectedVersion: 2, idempotencyKey: "rejected-dispatch",
+    providerId: "synthetic-cardiology", expectedVersion: 2, idempotencyKey: "rejected-dispatch",
   } });
   // A genuinely fresh process restores sessions, pending drafts, grounding,
   // statuses, immutable history, attempts and exact retry responses from Postgres.
@@ -150,8 +143,7 @@ try {
   assert.deepEqual(await (await request(path + "/history", 200, { cookie: physician })).json(), history);
   assert.deepEqual(await (await request(root, 201, { cookie: physician, body: create })).json(), draft);
   assert.deepEqual(await (await request(path + "/approval", 200, { cookie: physician, body: decisionBodies[decisionIndex] })).json(), approved);
-  assert.deepEqual(await transition("responded", 10, "mock-responded"), responded);
   await request(root + "/" + pending.id + "/transitions", 200, { cookie: physician,
     body: { action: "cancel", expectedVersion: 1, idempotencyKey: "cancel-pending" } });
-  console.log("Passed M3 HTTP concurrency, versioning, idempotency, metadata restoration, isolation, mock attempts and fresh-process persistence.");
+  console.log("Passed M3 HTTP concurrency, versioning, idempotency, metadata restoration, isolation, and fresh-process persistence.");
 } finally { await stop(); }

@@ -15,12 +15,15 @@ export interface ApprovalControlsProps {
   status: ConsultationStatus;
   submitting: boolean;
   error?: string;
-  recipientIds?: readonly string[];
+  /** Tenant-allowed destinations offering the requested specialty. */
+  destinations?: readonly { id: string; displayName: string; synthetic?: boolean }[];
+  /** True until the allowed destinations have been read from the server. */
+  destinationsLoading?: boolean;
   onDecide: (decision: ApprovalDecision, recipientId?: string) => void;
 }
 
 /** Explicit, two-step clinician decision. */
-export function ApprovalControls({ status, submitting, error, recipientIds = [], onDecide }: ApprovalControlsProps) {
+export function ApprovalControls({ status, submitting, error, destinations = [], destinationsLoading = false, onDecide }: ApprovalControlsProps) {
   const [pending, setPending] = useState<ApprovalDecision>();
   const [recipient, setRecipient] = useState("");
   const id = useId();
@@ -31,12 +34,12 @@ export function ApprovalControls({ status, submitting, error, recipientIds = [],
     setRecipient("");
   }, [status]);
   const final = isFinalStatus(status);
-  const canConfirm = !submitting && (pending !== "approve" || recipientIds.includes(recipient));
+  const canConfirm = !submitting && (pending !== "approve" || destinations.some((d) => d.id === recipient));
 
   if (final) {
     return (
       <p className="text-sm text-slate-700" role="status">
-        A decision has been recorded. No further action is available.
+        {status === "rejected" ? "This draft was rejected. No further action is available." : "The physician's decision has been recorded."}
       </p>
     );
   }
@@ -47,10 +50,13 @@ export function ApprovalControls({ status, submitting, error, recipientIds = [],
         Clinician decision
       </h3>
 
+      {!pending && !destinationsLoading && destinations.length === 0 && (
+        <p className="text-sm text-amber-900">No allowed provider offers the requested specialty, so this consultation cannot be approved for sending.</p>
+      )}
       {!pending ? (
         <div className="flex flex-wrap gap-2">
           {(Object.keys(ACTION_LABEL) as ApprovalDecision[]).map((d) => (
-            <button key={d} type="button" className={styles[d]} disabled={submitting || (d === "approve" && recipientIds.length === 0)} onClick={() => setPending(d)}>
+            <button key={d} type="button" className={styles[d]} disabled={submitting || (d === "approve" && destinations.length === 0)} onClick={() => setPending(d)}>
               {ACTION_LABEL[d]}
             </button>
           ))}
@@ -72,8 +78,12 @@ export function ApprovalControls({ status, submitting, error, recipientIds = [],
               Destination
               <select className={styles.input} value={recipient} required onChange={(e) => setRecipient(e.target.value)}>
                 <option value="">Choose a destination</option>
-                {recipientIds.map((id) => <option key={id} value={id}>{id}</option>)}
+                {destinations.map((d) => <option key={d.id} value={d.id}>{d.displayName}{d.synthetic ? " (simulated)" : ""}</option>)}
               </select>
+              {destinations.find((d) => d.id === recipient)?.synthetic && (
+                <span className="mt-1 block text-xs text-amber-900">Simulated provider. No real specialist or organisation receives this consultation.</span>
+              )}
+              <span className="mt-1 block text-xs text-slate-700">The approved consultation can only be sent to this provider.</span>
             </label>
           )}
           <div className="flex flex-wrap gap-2">
