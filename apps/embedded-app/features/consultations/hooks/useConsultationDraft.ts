@@ -29,6 +29,12 @@ export function useConsultationDraft(draftId?: string, options: { client?: Steth
     if (currentId) void loadDraft(client, dispatch, currentId);
   }, [client, currentId]);
 
+  /** Re-reads the draft without replacing the screen with a loading state. */
+  const refresh = useCallback(() => {
+    if (!currentId) return;
+    void client.getConsultationDraft(currentId).then((draft) => dispatch({ type: "loaded", draft })).catch(() => undefined);
+  }, [client, currentId]);
+
   const generate = useCallback(
     async (request: CreateConsultationDraftRequest) => {
       const draft = await createDraft(client, dispatch, request);
@@ -50,5 +56,5 @@ export function useConsultationDraft(draftId?: string, options: { client?: Steth
     [client, state],
   );
 
-  return { state, reload, generate, decide };
+  return { state, reload, refresh, generate, decide };
 }

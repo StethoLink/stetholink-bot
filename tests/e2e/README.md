@@ -62,3 +62,7 @@ session expiry, privileges, destination changes between queue and send,
 append-only audit records, and one send across replays. The production-build
 HTTP tests exercise forged request fields, cross-origin requests, cross-tenant
 sessions, approval and editing, and concurrent replay of synthetic delivery.
+
+## M5/M6 routing and specialist response
+
+`tests/e2e/m5-m6-flow.mts` runs the whole synthetic consultation over HTTP against a disposable loopback PostgreSQL: grounded Ahmed draft, approval gate, provider eligibility and allowlist, one durable request under concurrent sends, provider failure and retry, signed callback identity and correlation, duplicate/late/out-of-order callbacks, clinician readback, cross-clinician isolation and two app restarts. `supabase/tests/provider_routing.sql` covers the same rules at the database boundary. Both run in `tests/e2e/run-ci.sh`. Use the `cardiology-demo` staging launch profile for the Ahmed chart.

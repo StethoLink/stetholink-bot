@@ -78,16 +78,12 @@ export interface RevisionRequest {
   plan: string[];
 }
 
-/** No approval command: decisions remain on the authenticated physician approval path. */
+/**
+ * Clinician lifecycle commands only. Approval stays on the physician approval path;
+ * delivery and provider outcomes come from the router and verified provider callbacks.
+ */
 export interface TransitionRequest {
   expectedVersion: number;
   idempotencyKey: string;
-  action: "submit" | "cancel" | "queue" | "sent" | "accepted" | "responded" | "failed";
-  recipientId?: string;
-}
-
-export interface DispatchRequest {
-  recipientId: string;
-  expectedVersion: number;
-  idempotencyKey: string;
+  action: "submit" | "cancel";
 }

@@ -9,6 +9,10 @@ export default async function EmbedPage() {
     throw error;
   });
 
+  const physician = !!session?.context.roles.includes("physician");
+  const canReview = physician && !!session?.context.scopes.includes("consultation:approve");
+  const canRoute = physician && !!session?.context.scopes.includes("consultation:route");
+
   return (
     <main className="mx-auto flex w-full max-w-xl min-w-0 flex-col gap-3 p-2 sm:p-3">
       <h1 className="sr-only">StethoLink assistant</h1>
@@ -17,7 +21,7 @@ export default async function EmbedPage() {
           <PatientContextCard patientId={session.context.patientId} compact />
           {session.context.encounterId && <EncounterSummary encounterId={session.context.encounterId} />}
           {session.source === "synthetic" && <>
-            <ConsultationComposer patientId={session.context.patientId} encounterId={session.context.encounterId} />
+            <ConsultationComposer patientId={session.context.patientId} encounterId={session.context.encounterId} canReview={canReview} canRoute={canRoute} />
             <ChatPanel patientId={session.context.patientId} encounterId={session.context.encounterId} />
           </>}
         </>

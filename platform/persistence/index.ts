@@ -3,6 +3,8 @@ import { z } from "zod";
 import type { TransactionSql } from "postgres";
 import { consultationDraftSchema, consultationHistorySchema } from "@/shared/schemas";
 import type { DurableConsultationRepository } from "@/core/consultation/repository";
+import type { DeliveryRepository, ProviderResponseSink } from "@/core/routing/ports";
+import { consultationEnvelopeSchema, consultationListSchema, providerCallbackSchema } from "@/shared/schemas";
 import type { ClinicianContext } from "@/core/auth/clinician";
 import { RouteError } from "@/core/errors";
 import { database } from "./database";
@@ -35,7 +37,9 @@ export function consultationFromRow(value: unknown) {
   });
 }
 
-export function createConsultationRepository(context: ClinicianContext, recipients: ReadonlySet<string> = new Set()): DurableConsultationRepository {
+export function createConsultationRepository(context: ClinicianContext, recipients: ReadonlySet<string> = new Set()): DurableConsultationRepository & DeliveryRepository & {
+  list(): Promise<import("zod").infer<typeof consultationListSchema>>;
+} {
   function scoped<T>(work: (tx: TransactionSql) => Promise<T>) {
     return database().begin(async (tx) => {
       await tx`select set_config('statement_timeout', '10000', true), set_config('lock_timeout', '5000', true),
@@ -67,12 +71,6 @@ export function createConsultationRepository(context: ClinicianContext, recipien
         return consultationFromRow(row);
       });
     },
-    async dispatch(id, { recipientId, expectedVersion, idempotencyKey }) {
-      return scoped(async (tx) => {
-        const [row] = await tx`select * from public.dispatch_ehr_consultation(${id}, ${recipientId}, ${expectedVersion}, ${idempotencyKey})`;
-        return consultationFromRow(row);
-      });
-    },
     async revise(id, input) {
       return scoped(async (tx) => {
         const { expectedVersion, idempotencyKey, ...payload } = input;
@@ -82,7 +80,8 @@ export function createConsultationRepository(context: ClinicianContext, recipien
     },
     async transition(id, input) {
       return scoped(async (tx) => {
-        const { action, expectedVersion, idempotencyKey, ...payload } = input;
+        const { action, expectedVersion, idempotencyKey } = input;
+        const payload = {};
         const [row] = await tx`select * from public.change_ehr_consultation(${id}, ${action}, ${expectedVersion}, ${idempotencyKey}, ${tx.json(payload)})`;
         return consultationFromRow(row);
       });
@@ -105,6 +104,67 @@ export function createConsultationRepository(context: ClinicianContext, recipien
             createdAt: a.created_at.toISOString(), updatedAt: a.updated_at.toISOString(), transport: a.transport })),
           nextBeforeVersion: rows.length>20 ? lower : null,
         });
+      });
+    },
+    async list() {
+      return scoped(async (tx) => {
+        const rows = await tx`select id,status,updated_at,clinical_metadata->'grounding'->>'specialty' as specialty
+          from public.consultation_drafts order by updated_at desc limit 20`;
+        return consultationListSchema.parse(rows.map((r) => ({ id: r.id, specialty: r.specialty ?? null, updatedAt: r.updated_at.toISOString(),
+          status: r.status === "pending_approval" ? "pending_review" : r.status })));
+      });
+    },
+    async dispatch(id, input) {
+      return scoped(async (tx) => {
+        const [row] = await tx`select * from public.dispatch_ehr_consultation(${id}, ${input.expectedVersion}, ${input.idempotencyKey},
+          ${input.providerId}, ${tx.json(input.envelope as never)})`;
+        return consultationFromRow(row);
+      });
+    },
+    async recordDispatchResult(requestId, result) {
+      return scoped(async (tx) => {
+        const [row] = await tx`select * from public.record_ehr_dispatch_result(${requestId}, ${result.outcome},
+          ${result.outcome === "sent" ? result.providerReference : null}, ${result.outcome === "failed" ? result.failureCode : null})`;
+        return consultationFromRow(row);
+      });
+    },
+    async deliveries(id) {
+      return scoped(async (tx) => {
+        const rows = await tx`select * from public.consultation_delivery_attempts where draft_id=${id} order by attempt_number desc limit 20`;
+        return rows.map((a) => {
+          const envelope = consultationEnvelopeSchema.safeParse(a.envelope);
+          return { requestId: a.id, number: a.attempt_number, providerId: a.recipient_id, status: a.status,
+            failureCode: a.failure_code ?? undefined, createdAt: a.created_at.toISOString(), updatedAt: a.updated_at.toISOString(),
+            envelope: envelope.success ? envelope.data : null };
+        });
+      });
+    },
+    async responses(id) {
+      return scoped(async (tx) => {
+        const rows = await tx`select * from public.consultation_provider_responses where draft_id=${id} order by received_at asc limit 50`;
+        return rows.map((r) => {
+          const callback = providerCallbackSchema.parse(r.payload);
+          return { requestId: r.request_id, responseId: r.response_id, providerId: r.provider_id, kind: callback.kind,
+            receivedAt: r.received_at.toISOString(), reason: callback.reason, report: callback.report };
+        });
+      });
+    },
+  };
+}
+
+/**
+ * Stores a provider callback that the platform has already authenticated. No clinician
+ * session exists here; the database binds the callback to this tenant, the original
+ * request and the provider it was sent to.
+ */
+export function createProviderResponseSink(tenantId: string): ProviderResponseSink {
+  return {
+    async record(callback) {
+      return database().begin(async (tx) => {
+        await tx`select set_config('statement_timeout', '10000', true), set_config('lock_timeout', '5000', true)`;
+        const [row] = await tx`select public.record_provider_callback(${tenantId}, ${callback.requestId}, ${callback.providerId},
+          ${callback.responseId}, ${callback.kind}, ${tx.json(callback as never)}) as result`;
+        return z.object({ disposition: z.enum(["applied", "ignored", "duplicate"]) }).parse(row.result).disposition;
       });
     },
   };

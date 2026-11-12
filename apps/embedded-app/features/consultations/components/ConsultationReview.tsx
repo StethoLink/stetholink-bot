@@ -1,57 +1,68 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import type { StethoLinkApiClient } from "@/shared/api-client";
 import { useConsultationDraft } from "../hooks/useConsultationDraft";
+import { deliveryApi, type EligibleProvider } from "../hooks/deliveryState";
 import { ConsultationDelivery } from "./ConsultationDelivery";
 import { ApprovalControls } from "./ApprovalControls";
-import { ConsultationEditor } from "./ConsultationEditor";
 import { ConsultationDraftView } from "./ConsultationDraftView";
+import { ConsultationEditor } from "./ConsultationEditor";
+
+const ROUTABLE = ["approved", "queued", "sent", "accepted", "responded", "failed", "cancelled"];
 
 /** Loads a draft and lets the clinician review and decide on it. */
-export function ConsultationReview({ draftId, client, recipientIds, canReview = true, canRoute = false }: {
+export function ConsultationReview({ draftId, client, canReview = false, canRoute = false }: {
   draftId: string;
   client?: StethoLinkApiClient;
-  recipientIds?: readonly string[];
   canReview?: boolean;
   canRoute?: boolean;
 }) {
-  const { state, reload, decide } = useConsultationDraft(draftId, { client });
+  const { state, reload, refresh, decide } = useConsultationDraft(draftId, { client });
+  const [destinations, setDestinations] = useState<EligibleProvider[]>([]);
+  const pending = state.status === "ready" && ["pending_approval", "pending_review"].includes(state.draft.status);
+
+  useEffect(() => {
+    if (!canReview || !pending) return;
+    let active = true;
+    void deliveryApi.providers(draftId).then((list) => active && setDestinations(list)).catch(() => active && setDestinations([]));
+    return () => { active = false; };
+  }, [canReview, pending, draftId]);
 
   return (
     <section aria-label="Consultation review" className="rounded-lg border border-slate-200 bg-white p-4">
       {(state.status === "idle" || state.status === "loading") && (
-        <div aria-busy="true" className="space-y-2">
-          <span className="sr-only">Loading consultation draft…</span>
-          <div className="h-5 w-1/3 animate-pulse rounded bg-slate-200 motion-reduce:animate-none" />
-          <div className="h-16 animate-pulse rounded bg-slate-100 motion-reduce:animate-none" />
+        <div role="status" aria-busy="true" aria-label="Loading consultation draft" className="space-y-3">
+          <div className="h-5 w-1/3 animate-pulse rounded bg-slate-200" />
+          <div className="h-16 animate-pulse rounded bg-slate-200" />
+          <div className="h-16 animate-pulse rounded bg-slate-200" />
         </div>
       )}
       {state.status === "error" && (
-        <div role="alert" className="space-y-2 text-sm text-red-800">
-          <p>{state.error}</p>
-          <button type="button" onClick={reload} className="rounded border border-current px-3 py-1 font-medium">
+        <div role="alert" className="space-y-2">
+          <p className="text-sm text-red-800">{state.error}</p>
+          <button type="button" onClick={reload} className="rounded border border-slate-700 px-2 py-1 text-sm">
             Retry
           </button>
         </div>
       )}
       {state.status === "ready" && (
         <div className="space-y-4">
-          {canReview && state.draft.status === "draft" && state.draft.version ? (
-            <ConsultationEditor key={state.draft.version} draft={state.draft} version={state.draft.version} onSaved={reload} />
-          ) : <ConsultationDraftView draft={state.draft} />}
-          {state.draft.approvedRecipientId && state.draft.version && (
-            <ConsultationDelivery key={state.draft.id} draftId={state.draft.id}
-              recipientId={state.draft.approvedRecipientId} version={state.draft.version}
-              canSend={canRoute && state.draft.status === "approved"} />
+          <ConsultationDraftView draft={state.draft} />
+          {state.draft.status === "draft" && state.draft.version !== undefined && (
+            <ConsultationEditor key={state.draft.version} draft={state.draft} onSaved={refresh} />
           )}
-          {canReview && state.draft.status !== "draft" && (
+          {ROUTABLE.includes(state.draft.status) && <ConsultationDelivery draftId={state.draft.id} canRoute={canRoute} onChanged={refresh} />}
+          {canReview ? (
             <ApprovalControls
               status={state.draft.status}
               submitting={state.submitting}
               error={state.submitError}
-              recipientIds={recipientIds}
+              destinations={destinations}
               onDecide={(decision, recipientId) => void decide(decision, recipientId)}
             />
+          ) : pending && (
+            <p role="status" className="text-sm text-slate-700">A physician must review this draft before it can be sent.</p>
           )}
         </div>
       )}

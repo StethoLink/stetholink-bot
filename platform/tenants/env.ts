@@ -3,7 +3,10 @@ import { z } from "zod";
 
 const envSchema = z.object({
   TENANT_ID: z.string().min(1).max(128).default("local-synthetic"),
-  MOCK_RECIPIENT_IDS: z.string().default("synthetic-consult-team"),
+  MOCK_RECIPIENT_IDS: z.string().default("synthetic-cardiology,synthetic-cardiology-declines,synthetic-cardiology-offline,synthetic-radiology"),
+  MOCK_PROVIDER_SECRET: z.string().min(32).optional(),
+  PROVIDER_TIMEOUT_MS: z.coerce.number().int().min(100).max(30_000).default(10_000),
+  LOCAL_SYNTHETIC_CHART: z.enum(["alpha", "ahmed"]).default("alpha"),
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
   VERCEL_ENV: z.string().optional(),
   VERCEL_TARGET_ENV: z.string().optional(),

@@ -8,10 +8,18 @@ import { createConsultationRepository } from "@/platform/persistence";
 import { mockConsultationRepository } from "@/integrations/mock/repository";
 import { createConsultationService } from "@/core/consultation/service";
 import type { VerifiedLaunch } from "@/platform/auth/identity";
-import { getEnv, syntheticStagingEnabled } from "@/platform/tenants/env";
+import { getEnv } from "@/platform/tenants/env";
 import { localSyntheticEnabled } from "@/platform/auth/session";
 import { RouteError } from "@/core/errors";
 import { getTenant } from "@/platform/tenants";
+import { createProviderRouter } from "@/core/routing/router";
+import { eligibleProviders } from "@/core/routing/registry";
+import { auditConsultation } from "@/platform/audit";
+import { getProviderRegistry, getProviderTransport, providerCallbackSecret, syntheticRoutingEnabled } from "@/platform/providers";
+import { CALLBACK_HEADERS, signProviderCallback } from "@/platform/providers/callback-auth";
+import { mockSpecialistCallback, mockSpecialistNextStep } from "@/integrations/mock/specialist";
+import type { DispatchRequest } from "@/shared/contracts";
+import { receiveProviderCallback } from "./provider-callbacks";
 
 export function getClinicalServices(session: VerifiedLaunch) {
   const adapter = getClinicalDataAdapter(session);
@@ -40,7 +48,6 @@ export function getConsultations(session: VerifiedLaunch) {
   }
   const local = localSyntheticEnabled();
   const env = getEnv();
-  const mockRouting = syntheticStagingEnabled(env);
   const durable = !local || !!env.STETHOLINK_DATABASE_URL;
   const lifecycle = createConsultationRepository(actor, tenant.recipients);
   const repository = !durable
@@ -50,19 +57,28 @@ export function getConsultations(session: VerifiedLaunch) {
   const service = createConsultationService({
     repository, provider: getModelProvider(), safety: syntheticSafetyGuard, adapter,
   });
+  // Routing needs durable storage and is limited to synthetic sessions with synthetic providers.
+  const routing = durable && session.source === "synthetic" && syntheticRoutingEnabled();
+  const router = createProviderRouter({
+    repository: lifecycle, registry: getProviderRegistry(), transport: getProviderTransport, tenantId: tenant.id,
+    timeoutMs: env.PROVIDER_TIMEOUT_MS, simulator: routing, audit: auditConsultation,
+  });
+  function requireRouting() {
+    if (!durable) throw new RouteError("provider_unavailable", "Configure durable consultation storage");
+    if (!routing) throw new RouteError("not_implemented", "Hospital consultation delivery is not configured");
+  }
   return {
     get: service.get,
+    list: async () => durable ? lifecycle.list() : [],
     async revise(id: string, input: Parameters<typeof lifecycle.revise>[1]) {
       if (!durable) throw new RouteError("provider_unavailable", "Configure durable consultation storage");
       const safety = await syntheticSafetyGuard.assess([input.summary, input.assessment, ...input.plan].join("\n"));
       if (safety.level === "blocked") throw new RouteError("safety_blocked", "Revision withheld by safety check");
       return lifecycle.revise(id, input);
     },
+    /** Clinician bookkeeping only (submit, cancel). Delivery states are never set from here. */
     async transition(id: string, input: Parameters<typeof lifecycle.transition>[1]) {
       if (!durable) throw new RouteError("provider_unavailable", "Configure durable consultation storage");
-      if (!["submit", "cancel"].includes(input.action) && !mockRouting) {
-        throw new RouteError("not_implemented", "Only synthetic mock lifecycle delivery is supported");
-      }
       return lifecycle.transition(id, input);
     },
     async history(id: string, beforeVersion?: number) {
@@ -72,21 +88,53 @@ export function getConsultations(session: VerifiedLaunch) {
     create: (input: Parameters<typeof service.create>[0]) => service.create(input, actor),
     async approve(input: Parameters<typeof service.approve>[0]) {
       if (local) throw new RouteError("forbidden", "A verified physician session is required");
+      if (!actor.roles.includes("physician") || !actor.scopes.includes("consultation:approve")) throw new RouteError("forbidden", "Physician approval is required");
+      // When the consultation names a specialty, the destination must be an active, allowlisted provider
+      // offering it. The database enforces the allowlist again and binds the approval to this destination.
+      if (input.decision === "approve" && routing) {
+        const draft = await repository.get(input.draftId);
+        if (draft?.grounding?.specialty && !eligibleProviders(await getProviderRegistry().list(), draft.grounding.specialty).some((provider) => provider.id === input.recipientId)) {
+          throw new RouteError("forbidden", "Choose a provider that is allowed for this consultation");
+        }
+      }
       return service.approve(input, actor);
     },
-    async route(draftId: string, input: Parameters<typeof lifecycle.dispatch>[1]) {
-      if (!mockRouting) throw new RouteError("not_implemented", "Only synthetic mock lifecycle delivery is supported");
-      const draft = await lifecycle.dispatch(draftId, input);
-      return { draftId: draft.id, recipientId: input.recipientId, status: "submitted" as const };
+    async route(draftId: string, input: DispatchRequest) {
+      requireRouting();
+      return router.route(draftId, input, actor);
+    },
+    /** Destinations the physician may approve this consultation for. */
+    async providers(draftId: string) {
+      if (!routing) {
+        if (!(await repository.get(draftId))) throw new RouteError("not_found", "Draft not found");
+        return [];
+      }
+      return (await router.eligible(draftId)).map(({ id, displayName, specialties, transport, synthetic }) => ({ id, displayName, specialties, transport, synthetic }));
     },
     async delivery(draftId: string) {
+      if (durable) return router.view(draftId);
       if (!(await repository.get(draftId))) throw new RouteError("not_found", "Draft not found");
-      if (durable) {
-        const attempt = (await lifecycle.history(draftId)).attempts[0];
-        if (!attempt || !["sent", "accepted", "responded"].includes(attempt.status)) return null;
-        return { draftId, recipientId: attempt.recipientId, status: attempt.status === "responded" ? "responded" as const : "submitted" as const };
-      }
       return null;
+    },
+    /**
+     * Demo aid: plays the synthetic specialist's next message. It is signed and sent through
+     * the same verification and correlation path as a real provider callback.
+     */
+    async simulateSpecialist(draftId: string) {
+      requireRouting();
+      if (!(await lifecycle.get(draftId))) throw new RouteError("not_found", "Draft not found");
+      const [latest] = await lifecycle.deliveries(draftId);
+      const secret = latest && providerCallbackSecret(latest.providerId);
+      if (!latest?.envelope || !secret || !["sent", "accepted"].includes(latest.status)) {
+        throw new RouteError("conflict", "There is no delivered synthetic request awaiting a specialist reply");
+      }
+      const body = JSON.stringify(mockSpecialistCallback(latest.envelope, mockSpecialistNextStep(latest.providerId, latest.status)));
+      const timestamp = String(Date.now());
+      await receiveProviderCallback(new Headers({
+        [CALLBACK_HEADERS.provider]: latest.providerId, [CALLBACK_HEADERS.timestamp]: timestamp,
+        [CALLBACK_HEADERS.signature]: signProviderCallback(secret, timestamp, body),
+      }), body);
+      return router.view(draftId);
     },
   };
 }
