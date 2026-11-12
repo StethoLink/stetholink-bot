@@ -62,6 +62,65 @@ export const ahmedConsultationRequest: ConsultationRequest = {
   clinicalQuestion: "Review the documented hypertension and diabetes and identify information required for cardiology assessment; investigation results are not provided.",
 };
 
+// Fictional emergency chest-pain presentation for the consultation assistant demonstration.
+// Every value is invented test data. Nothing here is a reference range or clinical guidance.
+const omarSource = { type: "synthetic", reference: "synthetic-case-omar-v1" } as const;
+const omarTimestamp = "2026-02-03T08:40:00.000Z";
+const omarKnown = (id: string, category: ClinicalFact["category"], label: string, value: string | number | boolean, unit?: string): ClinicalFact =>
+  ({ id: `omar-${id}`, category, label, status: "known", value, ...(unit ? { unit } : {}), source: omarSource, timestamp: omarTimestamp });
+const omarUnknown = (id: string, category: MissingInformation["category"], label: string, reason: MissingInformation["reason"]): MissingInformation =>
+  ({ id: `omar-${id}`, category, label, status: "unknown", reason, source: omarSource, timestamp: omarTimestamp });
+
+export const omarMissingInformation: MissingInformation[] = [
+  omarUnknown("troponin-repeat", "investigation", "Repeat high-sensitivity troponin I", "pending"),
+  omarUnknown("echo", "investigation", "Echocardiogram", "not_performed"),
+  omarUnknown("lipids", "investigation", "Lipid profile", "not_provided"),
+  omarUnknown("renal", "investigation", "Renal function", "pending"),
+  omarUnknown("family-history", "history", "Family history of premature coronary disease", "not_recorded"),
+];
+
+export const omarClinicalFacts: ClinicalFact[] = [
+  omarKnown("chest-pain", "symptom", "Chest pain", "Central chest pressure for 2 hours, radiating to the left arm"),
+  omarKnown("diaphoresis", "symptom", "Sweating", "Sweating with the chest pain"),
+  omarKnown("dyspnea", "symptom", "Shortness of breath", "Shortness of breath on walking since this morning"),
+  omarKnown("htn", "problem", "Essential hypertension", true),
+  omarKnown("t2dm", "problem", "Type 2 diabetes mellitus", true),
+  omarKnown("smoking", "history", "Tobacco use", "Current smoker, 20 pack-years"),
+  omarKnown("bp", "vital_sign", "Blood pressure", "148/92", "mmHg"),
+  omarKnown("hr", "vital_sign", "Heart rate", 96, "beats/min"),
+  omarKnown("spo2", "vital_sign", "Oxygen saturation on room air", 97, "%"),
+  omarKnown("ecg", "investigation", "12-lead ECG", "Sinus rhythm, rate 94; ST depression of 1 mm in leads V4 to V6; no ST elevation recorded"),
+  omarKnown("troponin", "investigation", "High-sensitivity troponin I at presentation", 34, "ng/L"),
+  omarKnown("aspirin", "medication", "Aspirin", "Aspirin 81 mg once daily"),
+  omarKnown("atorvastatin", "medication", "Atorvastatin", "Atorvastatin 20 mg at night"),
+  omarKnown("metformin", "medication", "Metformin", "Metformin 500 mg twice daily"),
+  omarKnown("amlodipine", "medication", "Amlodipine", "Amlodipine 5 mg once daily"),
+  omarKnown("allergy", "allergy", "Drug allergies", "No known drug allergies recorded"),
+  ...omarMissingInformation,
+];
+
+export const omarPatient: PatientContext = {
+  patientId: "syn-pt-omar",
+  displayName: "Omar (fictional chest-pain case)",
+  birthDate: "1964-07-21",
+  sex: "male",
+  allergies: [],
+  activeProblems: ["Essential hypertension", "Type 2 diabetes mellitus"],
+  medications: ["Aspirin 81 mg once daily", "Atorvastatin 20 mg at night", "Metformin 500 mg twice daily", "Amlodipine 5 mg once daily"],
+  source: "synthetic",
+  clinicalFacts: omarClinicalFacts,
+};
+
+export const omarEncounter: EncounterContext = {
+  encounterId: "syn-enc-omar",
+  patientId: omarPatient.patientId,
+  type: "emergency",
+  status: "in_progress",
+  startedAt: omarTimestamp,
+  location: "Synthetic Emergency Department",
+  reasonForVisit: "Chest pain",
+};
+
 export const syntheticPatients: PatientContext[] = [
   {
     patientId: "syn-pt-001",
@@ -84,6 +143,7 @@ export const syntheticPatients: PatientContext[] = [
     source: "synthetic",
   },
   ahmedPatient,
+  omarPatient,
 ];
 
 export const syntheticEncounters: EncounterContext[] = [
@@ -97,6 +157,7 @@ export const syntheticEncounters: EncounterContext[] = [
     reasonForVisit: "Follow-up of glycemic control",
   },
   ahmedEncounter,
+  omarEncounter,
 ];
 
 export const syntheticDrafts: ConsultationDraft[] = [

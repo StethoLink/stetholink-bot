@@ -14,7 +14,7 @@ const FAILURE_TEXT: Record<DeliveryFailureCode, string> = {
 const STATE_TEXT: Partial<Record<ConsultationDeliveryView["status"], string>> = {
   approved: "Approved. Not sent yet.",
   queued: "Queued for delivery.",
-  sent: "Delivered. Waiting for the provider to accept.",
+  sent: "Delivered to the provider. Waiting for it to accept.",
   accepted: "Accepted by the provider. Waiting for the specialist's response.",
   responded: "The specialist has responded.",
   failed: "Not delivered.",
@@ -62,6 +62,11 @@ export const deliveryApi = {
   list: () => call(consultationListSchema, "/api/consultations/drafts"),
   revise: (draftId: string, body: { expectedVersion: number; idempotencyKey: string; summary: string; assessment: string; plan: string[] }) =>
     call(consultationDraftSchema, draftUrl(draftId), body, "PATCH"),
+  /** Asks the model to reword the draft. The server validates the result and returns it to physician review. */
+  reviseWithModel: (draftId: string, body: { instruction: string; expectedVersion: number; idempotencyKey: string }) =>
+    call(consultationDraftSchema, `${draftUrl(draftId)}/ai-revision`, body),
+  create: (body: { patientId: string; encounterId?: string; request: string; idempotencyKey: string }) =>
+    call(consultationDraftSchema, "/api/consultations/drafts", body),
   submit: (draftId: string, body: { expectedVersion: number; idempotencyKey: string }) =>
     call(consultationDraftSchema, `${draftUrl(draftId)}/transitions`, { ...body, action: "submit" }),
 };

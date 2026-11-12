@@ -15,3 +15,7 @@ export type { DraftAction, DraftState } from "./hooks/draftState";
 
 export { ConsultationComposer } from "./components/ConsultationComposer";
 export { awaitingProvider, describeDelivery } from "./hooks/deliveryState";
+export { ConsultationDelivery } from "./components/ConsultationDelivery";
+export { StatusTracker } from "./components/StatusTracker";
+export { consultationTracker } from "./hooks/statusTracker";
+export type { AssistantInfo } from "./components/ConsultationComposer";

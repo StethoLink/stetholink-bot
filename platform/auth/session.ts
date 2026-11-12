@@ -76,13 +76,13 @@ export async function requireClinician(options: { navigation?: boolean } = {}): 
     return verified.data;
   }
   if (localSyntheticEnabled()) {
-    const ahmed = env.LOCAL_SYNTHETIC_CHART === "ahmed";
+    const chart = { alpha: ["syn-pt-001", "syn-enc-001"], ahmed: ["syn-pt-ahmed", "syn-enc-ahmed"], omar: ["syn-pt-omar", "syn-enc-omar"] }[env.LOCAL_SYNTHETIC_CHART];
     return {
       source: "synthetic",
       context: {
         clinicianId: "11111111-1111-4111-8111-111111111111", tenantId: env.TENANT_ID,
         roles: ["clinician"], scopes: ["chart:read", "consultation:draft"],
-        patientId: ahmed ? "syn-pt-ahmed" : "syn-pt-001", encounterId: ahmed ? "syn-enc-ahmed" : "syn-enc-001",
+        patientId: chart[0], encounterId: chart[1],
         expiresAt: Date.now() + 60_000, authorization: "active",
       },
     };

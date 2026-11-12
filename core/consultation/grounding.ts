@@ -1,4 +1,4 @@
-import type { ClinicalFact, EncounterContext, MissingInformation, PatientContext } from "@/shared/contracts";
+import type { ClinicalFact, EncounterContext, KnownClinicalFact, MissingInformation, PatientContext } from "@/shared/contracts";
 import { RouteError } from "@/core/errors";
 import { z } from "zod";
 
@@ -45,7 +45,7 @@ export function groundContext(patient: PatientContext, encounter: EncounterConte
   }
   const conflicts = [...groups.values()].filter((group) => new Set(group.map(assertion)).size > 1).map((group) => group.map((fact) => fact.id));
   const conflictingIds = new Set(conflicts.flat());
-  const eligibleFacts = facts.filter((fact) => fact.status === "known" && !conflictingIds.has(fact.id));
+  const eligibleFacts = facts.filter((fact): fact is KnownClinicalFact => fact.status === "known" && !conflictingIds.has(fact.id));
   const missing = facts.filter((fact): fact is MissingInformation => fact.status === "unknown");
   const context = { version: CONTEXT_VERSION, facts, eligibleEvidenceIds: eligibleFacts.map((fact) => fact.id), conflicts };
   if (new TextEncoder().encode(JSON.stringify(context)).length > MAX_CONTEXT_BYTES) {

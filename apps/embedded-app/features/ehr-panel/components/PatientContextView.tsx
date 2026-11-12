@@ -1,4 +1,5 @@
 import type { PatientContext } from "@/shared/contracts";
+import { ChartFacts } from "./ChartFacts";
 import { SyntheticBadge } from "./StateViews";
 
 function age(birthDate?: string): string | undefined {
@@ -75,6 +76,7 @@ export function PatientContextView({ patient, compact = false }: { patient: Pati
           <List items={p.medications} empty="None recorded" />
         </section>
       </div>
+      {p.clinicalFacts && <ChartFacts facts={p.clinicalFacts} />}
     </section>
   );
 }

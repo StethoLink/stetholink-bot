@@ -97,6 +97,17 @@ export const consultationGroundingSchema = z.object({
     promptVersion: z.string().min(1).max(128), contextVersion: z.string().min(1).max(128),
     syntheticOnly: z.literal(true), encounterReference: id.nullable(),
   }).strict(),
+  authoring: z.object({
+    mode: z.literal("model_authored"),
+    physicianRequest: z.string().min(1).max(2000),
+    rejectedStatements: z.number().int().nonnegative().max(1000),
+    liveInference: z.boolean(),
+    usage: z.object({
+      inputTokens: z.number().int().nonnegative(), outputTokens: z.number().int().nonnegative(),
+      estimatedCostUsd: z.number().nonnegative().nullable(), latencyMs: z.number().int().nonnegative(),
+      attempts: z.number().int().positive(),
+    }).strict().nullable(),
+  }).strict().optional(),
 }).strict() satisfies z.ZodType<import("@/shared/contracts/consultation").ConsultationGrounding>;
 
 export const consultationDraftSchema = z.object({
@@ -151,7 +162,9 @@ export const createConsultationDraftRequestSchema = z.strictObject({
   idempotencyKey: id.optional(),
   specialty: z.string().trim().min(1).max(200).optional(),
   clinicalQuestion: z.string().trim().min(1).max(4000).optional(),
-}).refine((v) => (v.specialty === undefined) === (v.clinicalQuestion === undefined), "Provide the specialty and clinical question together") satisfies z.ZodType<import("@/shared/contracts").CreateConsultationDraftRequest>;
+  request: z.string().trim().min(8).max(2000).optional(),
+}).refine((v) => (v.specialty === undefined) === (v.clinicalQuestion === undefined), "Provide the specialty and clinical question together")
+  .refine((v) => v.request === undefined || v.specialty === undefined, "Send either a natural-language request or a structured intent") satisfies z.ZodType<import("@/shared/contracts").CreateConsultationDraftRequest>;
 
 
 export const revisionRequestSchema = z.object({
@@ -159,6 +172,13 @@ export const revisionRequestSchema = z.object({
   summary: z.string().min(1).max(16000), assessment: z.string().max(16000),
   plan: z.array(z.string().max(5000)).max(80),
 }).strict() satisfies z.ZodType<import("@/shared/contracts/consultation").RevisionRequest>;
+
+export const modelRevisionRequestSchema = z.object({
+  instruction: z.string().trim().min(3).max(1000),
+  expectedVersion: z.number().int().positive().max(2147483647),
+  // Three lifecycle commands derive their keys from this one.
+  idempotencyKey: z.string().min(1).max(100),
+}).strict() satisfies z.ZodType<import("@/shared/contracts/consultation").ModelRevisionRequest>;
 
 export const transitionRequestSchema = z.object({
   expectedVersion: z.number().int().positive().max(2147483647), idempotencyKey: id,

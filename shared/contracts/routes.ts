@@ -15,6 +15,10 @@ export const apiRoutes = {
     method: "GET",
     path: (draftId: string) => `/api/consultations/drafts/${encodeURIComponent(draftId)}`,
   },
+  reviseConsultationDraft: {
+    method: "POST",
+    path: (draftId: string) => `/api/consultations/drafts/${encodeURIComponent(draftId)}/ai-revision`,
+  },
   submitApproval: {
     method: "POST",
     path: (draftId: string) => `/api/consultations/drafts/${encodeURIComponent(draftId)}/approval`,
@@ -27,7 +31,12 @@ export interface CreateConsultationDraftRequest {
   conversationId?: string;
   /** Reuse the same key after a timeout; changing its request returns 409. */
   idempotencyKey?: string;
-  /** Physician-entered consultation intent. Supply both or neither; never sent to the model. */
+  /** Structured consultation intent. Supply both or neither; never sent to the model. */
   specialty?: string;
   clinicalQuestion?: string;
+  /**
+   * Natural-language request, e.g. "Prepare a cardiology consultation regarding possible ACS".
+   * The model reads it with the synthetic chart. Cannot be combined with specialty/clinicalQuestion.
+   */
+  request?: string;
 }

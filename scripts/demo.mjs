@@ -1,10 +1,15 @@
 #!/usr/bin/env node
-// Local synthetic demonstration: disposable PostgreSQL + the embedded app on the fictional
-// Ahmed cardiology chart. Synthetic data only; nothing here touches a cloud database.
+// Local synthetic demonstration: disposable PostgreSQL + the embedded app in synthetic staging
+// mode, opened on a fictional chart with a verified physician session. Synthetic data only;
+// nothing here touches a cloud database.
 //   npm run demo                      (needs Docker)
 //   DEMO_DATABASE_OWNER_URL=postgres://postgres@127.0.0.1:5432/postgres npm run demo
 //                                     (uses an EMPTY local PostgreSQL 15+ instead of Docker)
+// Real model: set AI_PROVIDER=openai, OPENAI_API_KEY, OPENAI_MODEL and the two
+// OPENAI_*_USD_PER_MILLION cost bounds before running. Without them the demo uses the
+// deterministic fallback, which the interface labels as not being AI.
 import { execFileSync, spawn } from "node:child_process";
+import { randomBytes } from "node:crypto";
 import { readFile, readdir } from "node:fs/promises";
 import postgres from "postgres";
 
@@ -48,13 +53,22 @@ try {
   await sql.end();
 
   url.username = "stetholink_runtime";
+  const live = process.env.AI_PROVIDER === "openai";
+  // The launch secret exists only for this run and never leaves this machine.
+  const secret = process.env.STAGING_LAUNCH_SECRET ?? randomBytes(32).toString("hex");
   const app = spawn(process.execPath, ["node_modules/next/dist/bin/next", "dev", "apps/embedded-app", "--hostname", "127.0.0.1", "--port", port], {
     stdio: "inherit",
-    env: { ...process.env, AUTH_MODE: "dev", CLINICAL_DATA_SOURCE: "synthetic", AI_PROVIDER: "mock", NEXT_PUBLIC_API_MODE: "http",
-      TENANT_ID: "local-synthetic", LOCAL_SYNTHETIC_CHART: "ahmed", STETHOLINK_DATABASE_URL: url.toString(),
-      VERCEL_ENV: "", VERCEL_TARGET_ENV: "" },
+    env: { ...process.env, AUTH_MODE: "staging", VERCEL_ENV: "preview", VERCEL_TARGET_ENV: "preview", CLINICAL_DATA_SOURCE: "synthetic",
+      AI_PROVIDER: live ? "openai" : "mock", STAGING_LIVE_MODEL: live ? "enabled" : "disabled", NEXT_PUBLIC_API_MODE: "http",
+      TENANT_ID: process.env.TENANT_ID ?? "local-synthetic", STAGING_LAUNCH_SECRET: secret, STAGING_SESSION_SECONDS: "900",
+      STETHOLINK_DATABASE_URL: url.toString() },
   });
-  console.log(`\nStethoLink synthetic demo: http://127.0.0.1:${port}/embed   (Ctrl+C to stop)\n`);
+  console.log(`
+StethoLink synthetic demo (${live ? `live model: ${process.env.OPENAI_MODEL ?? "default"}` : "deterministic fallback, no AI inference"})
+  Open:  http://127.0.0.1:${port}/staging#secret=${secret}
+  Choose a synthetic chart, then "Open synthetic chart". Sessions last 15 minutes; reopen the link to start another.
+  Ctrl+C to stop.
+`);
   for (const signal of ["SIGINT", "SIGTERM"]) process.on(signal, () => app.kill(signal));
   await new Promise((resolve) => app.on("exit", resolve));
 } finally {

@@ -17,7 +17,7 @@ import { eligibleProviders } from "@/core/routing/registry";
 import { auditConsultation } from "@/platform/audit";
 import { getProviderRegistry, getProviderTransport, providerCallbackSecret, syntheticRoutingEnabled } from "@/platform/providers";
 import { CALLBACK_HEADERS, signProviderCallback } from "@/platform/providers/callback-auth";
-import { mockSpecialistCallback, mockSpecialistNextStep } from "@/integrations/mock/specialist";
+import { mockSpecialistCallback, mockSpecialistNextStep, syntheticProviderDirectory } from "@/integrations/mock/specialist";
 import type { DispatchRequest } from "@/shared/contracts";
 import { receiveProviderCallback } from "./provider-callbacks";
 
@@ -56,6 +56,8 @@ export function getConsultations(session: VerifiedLaunch) {
   const { adapter } = getClinicalServices(session);
   const service = createConsultationService({
     repository, provider: getModelProvider(), safety: syntheticSafetyGuard, adapter,
+    // The model is asked to use the spelling of specialties this tenant can actually route to.
+    specialties: [...new Set(syntheticProviderDirectory.filter((provider) => provider.active && tenant.recipients.has(provider.id)).flatMap((provider) => provider.specialties))],
   });
   // Routing needs durable storage and is limited to synthetic sessions with synthetic providers.
   const routing = durable && session.source === "synthetic" && syntheticRoutingEnabled();
@@ -86,6 +88,13 @@ export function getConsultations(session: VerifiedLaunch) {
       return lifecycle.history(id, beforeVersion);
     },
     create: (input: Parameters<typeof service.create>[0]) => service.create(input, actor),
+    /** Natural-language revision by the model. The result always returns to physician review. */
+    async reviseWithModel(id: string, input: Parameters<typeof service.reviseWithModel>[1]) {
+      if (!durable) throw new RouteError("provider_unavailable", "Configure durable consultation storage");
+      const result = await service.reviseWithModel(id, input, actor, lifecycle);
+      auditConsultation({ action: "consultation.model_revised", tenantId: tenant.id, clinicianId: actor.clinicianId, draftId: id });
+      return result.draft;
+    },
     async approve(input: Parameters<typeof service.approve>[0]) {
       if (local) throw new RouteError("forbidden", "A verified physician session is required");
       if (!actor.roles.includes("physician") || !actor.scopes.includes("consultation:approve")) throw new RouteError("forbidden", "Physician approval is required");
