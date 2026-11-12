@@ -26,6 +26,26 @@ export interface ProviderTransport {
   send(envelope: ConsultationEnvelope): Promise<{ requestId: string; providerReference: string }>;
 }
 
+/**
+ * Everything provider-specific lives behind this interface, outside the Core:
+ * how to authenticate, what the provider's wire format is, and how its answers arrive.
+ * The Core only ever sees the versioned envelope going out and normalized callbacks coming in.
+ */
+export interface ProviderAdapter extends ProviderTransport {
+  /** Request formats this adapter can produce, e.g. "stetholink.envelope.v1". */
+  readonly formats: readonly string[];
+  /**
+   * For providers that cannot call back: fetch what has happened to one request.
+   * Returns normalized callbacks; the response service deduplicates and correlates them.
+   */
+  poll?(request: { requestId: string; providerReference: string }): Promise<ProviderCallback[]>;
+  /**
+   * For providers that push in their own format: convert one authenticated inbound message.
+   * Must throw on anything it cannot map exactly; it never fills in missing content.
+   */
+  normalize?(raw: unknown): ProviderCallback;
+}
+
 export interface DeliveryRecord extends DeliveryAttemptView {
   envelope: ConsultationEnvelope | null;
 }

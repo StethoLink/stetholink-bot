@@ -13,12 +13,12 @@ npm run dev
 ```
 
 1. Open [the synthetic patient chart](http://localhost:3000/embed).
-2. Choose a specialty, enter a clinical question, choose **Prepare consultation for review**, and approve the draft.
+2. Type a request such as *Prepare a cardiology consultation about blood pressure control* and choose **Prepare consultation**.
 3. For API verification, open [the health endpoint](http://localhost:3000/api/health).
 
-This quick start keeps drafts in memory. Development auth can generate synthetic drafts only: physician decisions, sending, specialist responses and history need the verified synthetic staging session and PostgreSQL, which the full demonstration below starts for you. Set the permitted destinations with `MOCK_RECIPIENT_IDS`.
+This quick start keeps drafts in memory and uses the deterministic fallback, which the interface labels as not being AI. Development auth can prepare drafts only: physician decisions, sending, specialist responses and history need the verified synthetic staging session and PostgreSQL, which the full demonstration starts for you.
 
-## Full synthetic demonstration (draft, approval, mock specialist, response)
+## Full demonstration (assistant, review, approval, provider, response, history)
 
 Requires Node.js 22 and Docker Desktop. From the repository root:
 
@@ -27,16 +27,26 @@ npm ci
 npm run demo
 ```
 
-Then open <http://127.0.0.1:3000/embed>. The chart is the fictional Ahmed cardiology case.
+Open the link the command prints (`http://127.0.0.1:3000/staging#secret=…`), keep **Omar (fictional chest-pain case)** selected and choose **Open synthetic chart**.
 
-1. Enter a clinical question and choose **Prepare consultation for review**. The draft cites its source facts and lists what is missing (ECG, troponin and so on).
-2. Optional: **Request changes**, edit the text, and **Save edits and return to review**.
-3. **Approve**, choose **Synthetic Cardiology Consult Service** as the destination, then **Confirm approve**. Nothing can be sent before this step, and it can only be sent to the approved destination.
-4. **Send approved consultation**.
-5. Choose **Simulate specialist reply** twice: the provider accepts, then the specialist's response appears.
-6. Reload the page, or stop and restart `npm run demo` against a kept database: the consultation is under **Consultations for this chart** with its response.
+1. Type *Prepare a cardiology consultation for this patient regarding possible acute coronary syndrome.* and choose **Prepare consultation**. The draft shows the clinical question, documented findings with their chart sources, missing information and AI suggestions.
+2. Select a **Source:** link to see the chart fact behind a statement.
+3. Under **Ask the assistant to revise this draft**, type *Make it shorter and focus on the ECG findings.* The revised draft returns for your review.
+4. **Approve**, choose **Synthetic Cardiology Consult Service (simulated)**, then **Confirm approve**. Nothing can be sent before this step, and it can only be sent to the approved provider.
+5. **Send approved consultation**, then **Simulate the provider's next reply** twice: the provider accepts, then its response appears, labelled as simulated.
+6. Reload the page: the consultation is under **Consultations for this chart** with its response.
 
-The other synthetic providers show failure handling: *unreachable* fails and can be retried; *declines requests* refuses the consultation. `npm run demo` starts a throwaway local PostgreSQL container and removes it on exit; set `DEMO_DATABASE_OWNER_URL` to an empty local PostgreSQL to keep data between runs. No real patient data, provider or network destination is involved.
+To use a real model, set these before `npm run demo` (see [the assistant guide](docs/ai/consultation-assistant.md)):
+
+```powershell
+$env:AI_PROVIDER = "openai"
+$env:OPENAI_API_KEY = "<server-side key>"
+$env:OPENAI_MODEL = "<model id>"
+$env:OPENAI_INPUT_USD_PER_MILLION = "<upper bound you accept>"
+$env:OPENAI_OUTPUT_USD_PER_MILLION = "<upper bound you accept>"
+```
+
+Only fictional charts are sent to the model. The specialist is always the built-in simulated provider: no real provider is integrated. The other synthetic providers show failure handling (*unreachable* fails and can be retried; *declines requests* refuses). `npm run demo` starts a throwaway local PostgreSQL container and removes it on exit; set `DEMO_DATABASE_OWNER_URL` to an empty local PostgreSQL to keep data between runs.
 
 With Docker Desktop:
 

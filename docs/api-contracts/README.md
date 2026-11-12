@@ -214,3 +214,15 @@ Provider contract 1.0 (`shared/contracts/provider.ts`). The envelope a provider 
 Callback authentication: headers `x-stetholink-provider`, `x-stetholink-timestamp` (ms, within 5 minutes) and `x-stetholink-signature` = hex HMAC-SHA256 of `<timestamp>.<raw body>` with that provider's secret. Unauthenticated 401; body provider differs from the authenticated one 403; unknown request, other tenant or other provider's request 404; closed, superseded, already answered or reused response id with different content 409. Resending the same `responseId` returns `duplicate` and changes nothing.
 
 Known limits: one tenant per deployment with an environment allowlist (no provider administration); after a provider declines, the consultation must be cancelled and prepared again; no rate limiting on the callback route; synthetic providers only.
+
+
+## Consultation assistant
+
+| Method/path | Body | Result |
+| --- | --- | --- |
+| POST `/api/consultations/drafts` | `{patientId, encounterId?, request, idempotencyKey?}`. `request` is 8 to 2000 characters and cannot be combined with `specialty`/`clinicalQuestion` | Model-authored draft (201). `grounding.authoring` holds the request, whether inference was live, statements removed and token use |
+| POST `/api/consultations/drafts/:draftId/ai-revision` | `{instruction, expectedVersion, idempotencyKey}` | The draft after reopen, revise and resubmit (version + 3 from review, + 2 from draft), awaiting review |
+
+Errors: 400 no specialty named or invalid input; 403 chart mismatch, or a non-physician reopening a draft in review; 409 stale version, not awaiting review, or not drafted by the assistant; 422 the model's output failed grounding or safety checks; 503 the model was unavailable, timed out, or a cost or spending limit was reached. A failed request stores nothing and never falls back to another generator.
+
+`summary` holds the consultation request as text: header lines, then sections whose statements end with `[fact-id]` citations (`shared/utils/referral-text.ts`). `assessment` holds missing information from the chart. `plan` holds AI suggestions, each prefixed `AI suggestion, not from the chart:`.

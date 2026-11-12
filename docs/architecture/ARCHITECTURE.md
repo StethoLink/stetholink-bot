@@ -8,7 +8,7 @@ core/tools/              Clinical connector interface and the (empty) model tool
 core/consultation/       Draft generation, grounding and approval
 core/routing/            Provider registry, router, transport port and callback ingestion
 core/patient-context/    Patient-context service
-integrations/            FHIR, OpenEMR and synthetic connectors; mock specialist transport
+integrations/            FHIR, OpenEMR and synthetic connectors; provider adapters; mock specialist transport
 platform/auth/           Identity adapters and opaque server-side sessions
 platform/persistence/    PostgreSQL session and consultation storage
 platform/tenants/        Server-side tenant configuration
@@ -52,10 +52,16 @@ clinician readback -> delivery view (RLS: same tenant, clinician, patient, encou
 
 Routing currently runs only for synthetic sessions (local development or preview staging) with the synthetic provider directory. Elsewhere the routes answer 501 or 404.
 
+## Consultation assistant
+
+`core/consultation/authoring.ts` turns a physician's natural-language request and the normalized chart facts into a consultation draft. The model returns one structured JSON object and has no tools. Every statement must cite documented facts and is checked against them; unsupported statements are removed and counted, missing information is written from the chart, and suggestions are kept apart. Revision reuses the same checks and the recorded lifecycle, so a revised draft is again awaiting physician review. The OpenAI adapter enforces a per-call cost bound, a per-instance daily limit, a deadline and bounded retries, and reports tokens, estimated cost and latency. The deterministic mock remains for tests and as a fallback the interface labels as not being AI. [Assistant guide](../ai/consultation-assistant.md)
+
+Provider-specific logic sits behind `ProviderAdapter` in `integrations/providers/`. No real provider is connected. [Provider integration](../providers/integration.md)
+
 ## Synthetic staging and clinical safety
 
 A preview-only route verifies a server-configured secret and resolves fixed synthetic launch profiles. It exercises the same durable session and database boundaries as SMART. Local development opens a fixed synthetic chart for the mock workflow. Vercel production denies both synthetic authentication modes. [Staging checks](../../tests/e2e/README.md)
 
-Staging uses the deterministic mock model. Synthetic output checks reject invalid draft structures, unsafe formatting and selected unauthorized claims or treatment instructions. Generated drafts remain pending until physician review. SMART chart access is read-only.
+Staging uses the deterministic mock model unless a live model is explicitly enabled; only synthetic charts are sent either way. Synthetic output checks reject invalid draft structures, unsafe formatting and selected unauthorized claims or treatment instructions. Generated drafts remain pending until physician review. SMART chart access is read-only.
 
 Before enabling a hospital integration, register the SMART client, provision the clinician mapping and restricted database login, verify actual launch and supported FHIR scopes, and test the embedding and cookie model with the hospital. Review provider and database data residency, schedule expiration cleanup, and configure infrastructure logs to omit OAuth query strings and clinical payloads. Delivery to real providers and validation of model behavior with hospital data require separate integration work. [SMART setup](../openemr.md)
