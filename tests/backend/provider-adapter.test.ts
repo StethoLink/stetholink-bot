@@ -13,7 +13,7 @@ const envelope = (providerId: string): ConsultationEnvelope => ({
   contractVersion: "1.0", requestId: "3b241101-e2bb-4255-8caf-4136c566a962", attempt: 1, tenantId: "synthetic-tenant", providerId,
   specialty: "Cardiology", reason: "Chest pain", question: "Possible acute coronary syndrome?", summary: "Synthetic summary", assessment: "", plan: [],
   clinicalFacts: omarClinicalFacts, missingInformation: omarMissingInformation, attachments: [], safetyFlags: ["clinician_review_required"],
-  approval: { approvedBy: "11111111-1111-4111-8111-111111111111", approvedAt: "2026-02-03T09:00:00.000Z" }, syntheticOnly: true,
+  approval: { approvedBy: "11111111-1111-4111-8111-111111111111", approvedAt: "2026-02-03T09:00:00.000Z" }, dataClassification: "synthetic",
 });
 const partner = (request: typeof fetch, overrides = {}) => createHttpPartnerAdapter({ providerId: "partner-sandbox", endpoint: "https://provider.invalid/consultations", secret: SECRET, ...overrides }, request);
 const ack = (body: unknown, status = 200) => vi.fn<typeof fetch>(async () => new Response(JSON.stringify(body), { status }));

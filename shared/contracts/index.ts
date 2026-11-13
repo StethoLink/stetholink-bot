@@ -1,4 +1,5 @@
 /** Shared contracts, version 1.1.0. See docs/api-contracts/README.md. */
+export type * from "./classification";
 export type * from "./patient";
 export type * from "./encounter";
 export type * from "./chat";

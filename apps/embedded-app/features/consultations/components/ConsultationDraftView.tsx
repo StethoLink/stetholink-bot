@@ -168,7 +168,7 @@ export function ConsultationDraftView({ draft }: { draft: ConsultationDraft }) {
           ) : (
             <span className="rounded border border-sky-800 bg-sky-50 px-1.5 py-0.5 text-xs font-medium text-sky-900">AI-generated</span>
           )}
-          {draft.grounding?.provenance.syntheticOnly && (
+          {draft.grounding?.provenance.dataClassification === "synthetic" && (
             <span className="rounded border border-amber-800 bg-amber-50 px-1.5 py-0.5 text-xs font-medium text-amber-900">Synthetic patient data</span>
           )}
           <DraftStatusBadge status={draft.status} />

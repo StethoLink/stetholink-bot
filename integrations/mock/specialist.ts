@@ -33,7 +33,7 @@ export function createMockSpecialistTransport(): ProviderTransport {
  */
 export function mockSpecialistCallback(envelope: ConsultationEnvelope, step: "accepted" | "rejected" | "report", sentAt = new Date().toISOString()): ProviderCallback {
   const base = { contractVersion: "1.0", requestId: envelope.requestId, providerId: envelope.providerId,
-    responseId: `${envelope.requestId}:${step}`, sentAt, syntheticOnly: true } as const;
+    responseId: `${envelope.requestId}:${step}`, sentAt, dataClassification: envelope.dataClassification } as const;
   if (step === "accepted") return { ...base, kind: "accepted" };
   if (step === "rejected") return { ...base, kind: "rejected", reason: "Synthetic refusal: this simulated service is not accepting requests." };
   const known = envelope.clinicalFacts.filter((fact) => fact.status === "known").map((fact) => fact.label);

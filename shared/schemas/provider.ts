@@ -4,6 +4,7 @@ import type {
   ConsultationDeliveryView, ConsultationEnvelope, ConsultationEnvelopeContent, ConsultationListItem,
   DispatchRequest, ProviderCallback, ProviderDescriptor,
 } from "@/shared/contracts";
+import { dataClassificationSchema, readLegacyClassification } from "./classification";
 import { attachmentReferenceSchema, clinicalFactSchema, missingInformationSchema, providerIdSchema } from "./clinical-data";
 
 const id = z.string().min(1).max(128).regex(/\S/);
@@ -36,7 +37,7 @@ const envelopeContent = {
   attachments: z.array(attachmentReferenceSchema).max(32),
   safetyFlags: z.array(z.enum(["clinician_review_required", "conflicting_facts", "missing_investigations", "incomplete_referral", "insufficient_clinical_data"])).max(5),
   approval: z.object({ approvedBy: id, approvedAt: isoDateTime }).strict(),
-  syntheticOnly: z.literal(true),
+  dataClassification: dataClassificationSchema,
 };
 
 /** Strict: demographics, chart identifiers or credentials can never ride along. */
@@ -44,6 +45,8 @@ export const consultationEnvelopeContentSchema = z.object(envelopeContent).stric
 export const consultationEnvelopeSchema = z.object({
   ...envelopeContent, requestId: z.uuid(), attempt: z.number().int().positive(),
 }).strict() satisfies z.ZodType<ConsultationEnvelope>;
+/** For envelopes read back from storage: requests recorded before data classification read as synthetic. */
+export const storedConsultationEnvelopeSchema = z.preprocess(readLegacyClassification, consultationEnvelopeSchema) satisfies z.ZodType<ConsultationEnvelope>;
 
 export const providerReportSchema = z.object({
   summary: z.string().min(1).max(8000).regex(/\S/),
@@ -60,9 +63,11 @@ export const providerCallbackSchema = z.object({
   sentAt: isoDateTime,
   reason: z.string().min(1).max(2000).optional(),
   report: providerReportSchema.optional(),
-  syntheticOnly: z.literal(true),
+  dataClassification: dataClassificationSchema,
 }).strict().refine((v) => (v.kind === "report") === (v.report !== undefined) && (v.kind === "rejected" || v.reason === undefined),
   "A report is required only for report callbacks; a reason only for rejections") satisfies z.ZodType<ProviderCallback>;
+/** For callbacks read back from storage only. Inbound callbacks must use `providerCallbackSchema`. */
+export const storedProviderCallbackSchema = z.preprocess(readLegacyClassification, providerCallbackSchema) satisfies z.ZodType<ProviderCallback>;
 
 export const callbackResultSchema = z.object({
   requestId: z.uuid(), disposition: z.enum(["applied", "ignored", "duplicate"]),

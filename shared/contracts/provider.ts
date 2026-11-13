@@ -1,5 +1,6 @@
 import type { IsoDateTime } from "@/shared/types";
 import type { AttachmentReference } from "./attachment";
+import type { DataClassification } from "./classification";
 import type { ClinicalFact, MissingInformation } from "./clinical-data";
 import type { ProviderId } from "./clinician";
 import type { ConsultationGrounding, ConsultationStatus } from "./consultation";
@@ -37,7 +38,8 @@ export interface ConsultationEnvelopeContent {
   attachments: AttachmentReference[];
   safetyFlags: ConsultationGrounding["safetyFlags"];
   approval: { approvedBy: string; approvedAt: IsoDateTime };
-  syntheticOnly: true;
+  /** Same classification as the approved consultation, the session that sends it and the tenant. */
+  dataClassification: DataClassification;
 }
 
 /** What a provider receives. requestId is immutable and correlates every callback. */
@@ -63,7 +65,8 @@ export interface ProviderCallback {
   sentAt: IsoDateTime;
   reason?: string;
   report?: ProviderReport;
-  syntheticOnly: true;
+  /** Must equal the classification of the request this callback answers. */
+  dataClassification: DataClassification;
 }
 
 export type CallbackDisposition = "applied" | "ignored" | "duplicate";

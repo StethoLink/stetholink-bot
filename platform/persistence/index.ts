@@ -4,7 +4,8 @@ import type { TransactionSql } from "postgres";
 import { consultationDraftSchema, consultationHistorySchema } from "@/shared/schemas";
 import type { DurableConsultationRepository } from "@/core/consultation/repository";
 import type { DeliveryRepository, ProviderResponseSink } from "@/core/routing/ports";
-import { consultationEnvelopeSchema, consultationListSchema, providerCallbackSchema } from "@/shared/schemas";
+import { consultationListSchema, storedConsultationEnvelopeSchema, storedProviderCallbackSchema } from "@/shared/schemas";
+import type { DataClassification } from "@/shared/contracts";
 import type { ClinicianContext } from "@/core/auth/clinician";
 import { RouteError } from "@/core/errors";
 import { database } from "./database";
@@ -21,6 +22,16 @@ const rowSchema = z.object({
     attachments: consultationDraftSchema.shape.attachments,
   }),
 });
+
+/**
+ * TEMPORARY, removed with migration 20261113150000_data_classification.sql: the SQL commands
+ * on main still require `syntheticOnly: true`, so only synthetic records can be written.
+ */
+function legacyWire<T extends { dataClassification: DataClassification }>(value: T) {
+  const { dataClassification, ...rest } = value;
+  if (dataClassification !== "synthetic") throw new RouteError("not_implemented", "Storing live clinical data requires the data classification migration");
+  return { ...rest, syntheticOnly: true };
+}
 
 export function consultationFromRow(value: unknown) {
   const row = rowSchema.parse(value);
@@ -59,8 +70,9 @@ export function createConsultationRepository(context: ClinicianContext, recipien
       if (clinicianId !== context.clinicianId) throw new RouteError("forbidden", "Draft owner must match the session");
       return scoped(async (tx) => {
         const request = retry?.request ?? { patientId: draft.patientId, encounterId: draft.encounterId };
-        const payload = consultationDraftSchema.parse(draft);
-        const [row] = await tx`select * from public.create_ehr_consultation(${tx.json(payload)}, ${tx.json(request)}, ${retry?.key ?? null})`;
+        const parsed = consultationDraftSchema.parse(draft);
+        const payload = parsed.grounding ? { ...parsed, grounding: { ...parsed.grounding, provenance: legacyWire(parsed.grounding.provenance) } } : parsed;
+        const [row] = await tx`select * from public.create_ehr_consultation(${tx.json(payload as never)}, ${tx.json(request)}, ${retry?.key ?? null})`;
         return consultationFromRow(row);
       });
     },
@@ -117,7 +129,7 @@ export function createConsultationRepository(context: ClinicianContext, recipien
     async dispatch(id, input) {
       return scoped(async (tx) => {
         const [row] = await tx`select * from public.dispatch_ehr_consultation(${id}, ${input.expectedVersion}, ${input.idempotencyKey},
-          ${input.providerId}, ${tx.json(input.envelope as never)})`;
+          ${input.providerId}, ${tx.json(legacyWire(input.envelope) as never)})`;
         return consultationFromRow(row);
       });
     },
@@ -132,7 +144,7 @@ export function createConsultationRepository(context: ClinicianContext, recipien
       return scoped(async (tx) => {
         const rows = await tx`select * from public.consultation_delivery_attempts where draft_id=${id} order by attempt_number desc limit 20`;
         return rows.map((a) => {
-          const envelope = consultationEnvelopeSchema.safeParse(a.envelope);
+          const envelope = storedConsultationEnvelopeSchema.safeParse(a.envelope);
           return { requestId: a.id, number: a.attempt_number, providerId: a.recipient_id, status: a.status,
             failureCode: a.failure_code ?? undefined, createdAt: a.created_at.toISOString(), updatedAt: a.updated_at.toISOString(),
             envelope: envelope.success ? envelope.data : null };
@@ -143,7 +155,7 @@ export function createConsultationRepository(context: ClinicianContext, recipien
       return scoped(async (tx) => {
         const rows = await tx`select * from public.consultation_provider_responses where draft_id=${id} order by received_at asc limit 50`;
         return rows.map((r) => {
-          const callback = providerCallbackSchema.parse(r.payload);
+          const callback = storedProviderCallbackSchema.parse(r.payload);
           return { requestId: r.request_id, responseId: r.response_id, providerId: r.provider_id, kind: callback.kind,
             receivedAt: r.received_at.toISOString(), reason: callback.reason, report: callback.report };
         });
@@ -163,7 +175,7 @@ export function createProviderResponseSink(tenantId: string): ProviderResponseSi
       return database().begin(async (tx) => {
         await tx`select set_config('statement_timeout', '10000', true), set_config('lock_timeout', '5000', true)`;
         const [row] = await tx`select public.record_provider_callback(${tenantId}, ${callback.requestId}, ${callback.providerId},
-          ${callback.responseId}, ${callback.kind}, ${tx.json(callback as never)}) as result`;
+          ${callback.responseId}, ${callback.kind}, ${tx.json(legacyWire(callback) as never)}) as result`;
         return z.object({ disposition: z.enum(["applied", "ignored", "duplicate"]) }).parse(row.result).disposition;
       });
     },

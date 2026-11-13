@@ -38,7 +38,7 @@ describe("grounded synthetic consultation drafting", () => {
       question: ahmedConsultationRequest.clinicalQuestion, specialty: "Cardiology",
       reason: expect.stringContaining("investigations not provided"),
       evidenceIds: ["ahmed-hypertension", "ahmed-diabetes", "ahmed-metformin", "ahmed-amlodipine"],
-      provenance: { provider: "mock", model: "mock-1", promptVersion: PROMPT_VERSION, syntheticOnly: true, encounterReference: "syn-enc-ahmed" },
+      provenance: { provider: "mock", model: "mock-1", promptVersion: PROMPT_VERSION, dataClassification: "synthetic", encounterReference: "syn-enc-ahmed" },
     });
     expect(result.clinicalFacts).toEqual(ahmedClinicalFacts);
     expect(result.missingInformation?.filter((fact) => fact.category === "investigation")).toHaveLength(5);

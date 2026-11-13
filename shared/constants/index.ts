@@ -21,7 +21,9 @@ export const SAFETY_LEVELS = ["ok", "caution", "blocked"] as const;
 export const ENCOUNTER_TYPES = ["inpatient", "outpatient", "emergency", "virtual"] as const;
 export const ENCOUNTER_STATUSES = ["planned", "in_progress", "finished", "cancelled"] as const;
 export const ADMINISTRATIVE_SEXES = ["male", "female", "other", "unknown"] as const;
-export const DATA_SOURCES = ["synthetic", "fhir", "ehr"] as const;
+export const DATA_SOURCES = ["synthetic", "fhir", "openemr", "ehr"] as const;
+/** Who the clinical data is about: fictional test patients, or real patients of a live tenant. */
+export const DATA_CLASSIFICATIONS = ["synthetic", "live"] as const;
 export const API_ERROR_CODES = [
   "invalid_request",
   "unauthenticated",

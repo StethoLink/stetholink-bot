@@ -1,6 +1,7 @@
 import type { APPROVAL_DECISIONS, CONSULTATION_STATUSES } from "@/shared/constants";
 import type { IsoDateTime } from "@/shared/types";
 import type { AttachmentReference } from "./attachment";
+import type { DataClassification } from "./classification";
 import type { ClinicalFact, MissingInformation } from "./clinical-data";
 
 /** Normalized consultation intent; not a new HTTP endpoint or an approval command. */
@@ -15,7 +16,7 @@ export interface ConsultationRequest {
 export type ConsultationStatus = (typeof CONSULTATION_STATUSES)[number];
 export type ApprovalDecision = (typeof APPROVAL_DECISIONS)[number];
 
-/** Additive M2 output. Generated from validated synthetic sources, never approval authority. */
+/** Additive M2 output. Generated from validated chart sources, never approval authority. */
 export interface ConsultationGrounding {
   reason: string | null;
   question: string | null;
@@ -29,7 +30,8 @@ export interface ConsultationGrounding {
     model: string;
     promptVersion: string;
     contextVersion: string;
-    syntheticOnly: true;
+    /** Set by the server from the verified session. Rows stored before this field read as "synthetic". */
+    dataClassification: DataClassification;
     encounterReference: string | null;
   };
   /** Present when a language model wrote the draft from the physician's natural-language request. */

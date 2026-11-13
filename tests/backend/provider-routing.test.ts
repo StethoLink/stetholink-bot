@@ -202,7 +202,7 @@ describe("provider router", () => {
     const envelope = send.mock.calls[0][0];
     expect(consultationEnvelopeSchema.safeParse(envelope).success).toBe(true);
     expect(envelope).toMatchObject({ contractVersion: "1.0", tenantId: TENANT, providerId: "synthetic-cardiology", specialty: "Cardiology",
-      question: ahmedConsultationRequest.clinicalQuestion, syntheticOnly: true, approval: { approvedBy: physician.clinicianId } });
+      question: ahmedConsultationRequest.clinicalQuestion, dataClassification: "synthetic", approval: { approvedBy: physician.clinicianId } });
     expect(envelope.missingInformation.map((item) => item.label)).toContain("ECG");
     expect(envelope.missingInformation.every((item) => item.status === "unknown" && !("value" in item))).toBe(true);
     const text = JSON.stringify(envelope);
@@ -261,7 +261,7 @@ describe("mock specialist", () => {
 describe("provider callbacks", () => {
   const secretFor = (id: string) => id === "synthetic-cardiology" ? "s".repeat(64) : id === "synthetic-radiology" ? "r".repeat(64) : undefined;
   const callback: ProviderCallback = { contractVersion: "1.0", requestId: "8d5f6f0e-6f0e-4d7c-9b65-0f7a4f0f5a11", providerId: "synthetic-cardiology",
-    responseId: "r1", kind: "report", sentAt: "2026-01-15T10:10:00.000Z", syntheticOnly: true,
+    responseId: "r1", kind: "report", sentAt: "2026-01-15T10:10:00.000Z", dataClassification: "synthetic",
     report: { summary: "Synthetic", recommendations: [], responder: "Simulated" } };
   function signed(body: string, providerId = "synthetic-cardiology", secret = secretFor(providerId) ?? "none", timestamp = Date.now()) {
     return new Headers({ [CALLBACK_HEADERS.provider]: providerId, [CALLBACK_HEADERS.timestamp]: String(timestamp),
@@ -294,7 +294,9 @@ describe("provider callbacks", () => {
   it.each([
     ["a report without content", { report: undefined }],
     ["an acceptance carrying a report", { kind: "accepted" }],
-    ["a non-synthetic message", { syntheticOnly: false }],
+    ["an unclassified message", { dataClassification: undefined }],
+    ["an unknown classification", { dataClassification: "production" }],
+    ["the retired syntheticOnly flag", { dataClassification: undefined, syntheticOnly: true }],
     ["an unknown field", { draftId: "x" }],
     ["a malformed request id", { requestId: "1" }],
     ["markup in the report", { report: { summary: "<img src=x>", recommendations: [], responder: "s" } }],

@@ -61,7 +61,7 @@ function callback(providerId: string, message: object, options: { secret?: strin
   return { raw, headers: { "x-stetholink-provider": providerId, "x-stetholink-timestamp": timestamp, "x-stetholink-signature": signature } };
 }
 const message = (requestId: string, providerId: string, kind: string, responseId: string, extra: object = {}) => ({
-  contractVersion: "1.0", requestId, providerId, responseId, kind, sentAt: new Date().toISOString(), syntheticOnly: true, ...extra });
+  contractVersion: "1.0", requestId, providerId, responseId, kind, sentAt: new Date().toISOString(), dataClassification: "synthetic", ...extra });
 const report = { summary: "SYNTHETIC SPECIALIST RESPONSE. Test data, not clinical advice.", recommendations: ["Provide the missing ECG."], responder: "Simulated specialist" };
 
 const drafts = "/api/consultations/drafts";
@@ -179,7 +179,7 @@ try {
   await call(cb, 404, callback("synthetic-cardiology", message(crypto.randomUUID(), "synthetic-cardiology", "accepted", "unknown-request")));
   await call(cb, 400, callback("synthetic-cardiology", message(requestId, "synthetic-cardiology", "report", "no-report")));
   await call(cb, 400, callback("synthetic-cardiology", { ...message(requestId, "synthetic-cardiology", "report", "markup", { report: { ...report, summary: "<script>alert(1)</script>" } }) }));
-  await call(cb, 400, callback("synthetic-cardiology", { ...accepted, syntheticOnly: false }));
+  await call(cb, 400, callback("synthetic-cardiology", { ...accepted, dataClassification: "unclassified" }));
   assert.equal((await view(path)).status, "sent", "Refused callbacks change nothing");
   assert.equal((await view(path)).responses.length, 0);
 

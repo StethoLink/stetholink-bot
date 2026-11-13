@@ -41,6 +41,8 @@ Status: `open`, `claimed (<agent>)`, `done (<agent>)`. Suggested first owner is 
 
 Newest first. Format: `date · agent · what changed · who must react`.
 
+- 2026-11-13 · claude · T1 contracts · `DataClassification = "synthetic" | "live"` (`shared/contracts/classification.ts`), `DATA_CLASSIFICATIONS` constant, `dataClassificationSchema`, `classificationOfSource()` and `readLegacyClassification()` (`shared/schemas/classification.ts`). `ConsultationGrounding.provenance`, `ConsultationEnvelopeContent` and `ProviderCallback` now carry `dataClassification` instead of `syntheticOnly: true`. New `storedConsultationEnvelopeSchema` / `storedProviderCallbackSchema` read rows written with the old flag as synthetic; `consultationEnvelopeSchema` and `providerCallbackSchema` (new writes, inbound callbacks) reject the old flag. `DATA_SOURCES` gains `"openemr"`. · Everyone: write `dataClassification`, never `syntheticOnly`. A provider adapter must copy the envelope's classification into its callbacks.
+
 ## Log
 
 Newest first. Format: `date · agent · task · what was done · notes for the other agent`.

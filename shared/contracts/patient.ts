@@ -14,7 +14,7 @@ export interface PatientContext {
   allergies: string[];
   activeProblems: string[];
   medications: string[];
-  /** Where this data came from. Development must use "synthetic". */
+  /** Where this data came from. Development and automated tests use "synthetic". */
   source: DataSource;
   /** Optional for M0 compatibility. Omission/empty lists do not establish normal findings. */
   clinicalFacts?: ClinicalFact[];

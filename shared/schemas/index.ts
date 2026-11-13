@@ -25,8 +25,10 @@ import type {
   PatientContext,
   SafetyAssessment,
 } from "@/shared/contracts";
+import { dataClassificationSchema, readLegacyClassification } from "./classification";
 import { attachmentReferenceSchema, clinicalFactSchema, missingInformationSchema } from "./clinical-data";
 
+export * from "./classification";
 export * from "./clinical-data";
 export * from "./provider";
 
@@ -92,11 +94,12 @@ export const consultationGroundingSchema = z.object({
   gaps: z.array(z.string().max(5000)).max(80),
   conflicts: z.array(z.array(id).max(64)).max(64),
   safetyFlags: z.array(z.enum(["clinician_review_required", "conflicting_facts", "missing_investigations", "incomplete_referral", "insufficient_clinical_data"])).max(5),
-  provenance: z.object({
+  // Stored rows written before data classification read as synthetic.
+  provenance: z.preprocess(readLegacyClassification, z.object({
     provider: z.string().min(1).max(128), model: z.string().min(1).max(256),
     promptVersion: z.string().min(1).max(128), contextVersion: z.string().min(1).max(128),
-    syntheticOnly: z.literal(true), encounterReference: id.nullable(),
-  }).strict(),
+    dataClassification: dataClassificationSchema, encounterReference: id.nullable(),
+  }).strict()),
   authoring: z.object({
     mode: z.literal("model_authored"),
     physicianRequest: z.string().min(1).max(2000),

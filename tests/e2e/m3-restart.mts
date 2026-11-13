@@ -65,7 +65,7 @@ try {
   assert.equal(initial.version, 1);
   assert.equal(initial.lifecycleStatus, "pending_review");
   assert.equal(initial.status, "pending_approval", "Legacy HTTP alias must be preserved");
-  assert.ok(initial.grounding?.provenance.syntheticOnly);
+  assert.equal(initial.grounding?.provenance.dataClassification, "synthetic");
   assert.equal(initial.grounding.question, null, "Persisted grounding retains an explicit null question");
   assert.ok(initial.grounding.provenance.promptVersion && initial.grounding.provenance.provider && initial.grounding.provenance.model);
   const path = drafts + "/" + initial.id;

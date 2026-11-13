@@ -186,7 +186,7 @@ describe("model-authored consultation draft", () => {
     expect(draft.grounding).toMatchObject({
       specialty: "Cardiology", reason: "Chest pain",
       question: "Please assess for possible acute coronary syndrome and advise on further management.",
-      provenance: { provider: "fixture", model: "fixture-model", promptVersion: AUTHORING_PROMPT_VERSION, syntheticOnly: true },
+      provenance: { provider: "fixture", model: "fixture-model", promptVersion: AUTHORING_PROMPT_VERSION, dataClassification: "synthetic" },
       authoring: { mode: "model_authored", physicianRequest: REQUEST, rejectedStatements: 0, liveInference: true, usage: { inputTokens: 900, outputTokens: 300, estimatedCostUsd: 0.004 } },
     });
     const parsed = parseReferralText(draft.summary);

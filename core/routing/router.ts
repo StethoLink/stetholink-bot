@@ -23,7 +23,7 @@ export function buildEnvelope(draft: ConsultationDraft, provider: ProviderDescri
   const grounding = draft.grounding;
   if (lifecycle(draft) !== "approved" && lifecycle(draft) !== "failed") throw new RouteError("conflict", "Physician approval is required before routing");
   if (!draft.reviewedBy || !draft.reviewedAt) throw new RouteError("conflict", "Physician approval is required before routing");
-  if (!grounding?.provenance.syntheticOnly) throw new RouteError("forbidden", "Only synthetic consultations can be routed");
+  if (grounding?.provenance.dataClassification !== "synthetic") throw new RouteError("forbidden", "Only synthetic consultations can be routed");
   if (!grounding.specialty?.trim() || !grounding.question?.trim()) {
     throw new RouteError("conflict", "The consultation needs a specialty and clinical question before routing");
   }
@@ -33,7 +33,7 @@ export function buildEnvelope(draft: ConsultationDraft, provider: ProviderDescri
     summary: draft.summary, assessment: draft.assessment, plan: draft.plan,
     clinicalFacts: draft.clinicalFacts ?? [], missingInformation: draft.missingInformation ?? [],
     attachments: draft.attachments ?? [], safetyFlags: grounding.safetyFlags,
-    approval: { approvedBy: draft.reviewedBy, approvedAt: draft.reviewedAt }, syntheticOnly: true,
+    approval: { approvedBy: draft.reviewedBy, approvedAt: draft.reviewedAt }, dataClassification: "synthetic",
   });
   if (!parsed.success) throw new RouteError("conflict", "The approved consultation cannot be packaged for a provider");
   return parsed.data;

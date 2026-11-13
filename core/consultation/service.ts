@@ -122,7 +122,7 @@ export function createConsultationService(deps: ConsultationServiceDeps) {
     const grounding: ConsultationGrounding = {
       reason: reasonForVisit, question: referral.clinicalQuestion, specialty: referral.specialty,
       evidenceIds: referral.citedIds, gaps: [...grounded.missing.map(renderFact), ...notes], conflicts: grounded.conflicts, safetyFlags: flags,
-      provenance: { provider: result.provider, model: result.model, promptVersion: AUTHORING_PROMPT_VERSION, contextVersion: CONTEXT_VERSION, syntheticOnly: true, encounterReference: encounter?.encounterId ?? null },
+      provenance: { provider: result.provider, model: result.model, promptVersion: AUTHORING_PROMPT_VERSION, contextVersion: CONTEXT_VERSION, dataClassification: "synthetic", encounterReference: encounter?.encounterId ?? null },
       authoring: { mode: "model_authored", physicianRequest, rejectedStatements: referral.rejectedStatements, liveInference: result.provider !== "mock", usage },
     };
     const now = new Date().toISOString();
@@ -142,7 +142,7 @@ export function createConsultationService(deps: ConsultationServiceDeps) {
    */
   async function reviseText(draft: ConsultationDraft, instruction: string) {
     const authoring = draft.grounding?.authoring;
-    if (!draft.grounding?.provenance.syntheticOnly || !authoring || !draft.grounding.specialty || !draft.grounding.question) {
+    if (draft.grounding?.provenance.dataClassification !== "synthetic" || !authoring || !draft.grounding.specialty || !draft.grounding.question) {
       throw new RouteError("conflict", "Only a consultation drafted by the assistant can be revised by the assistant");
     }
     const facts = draft.clinicalFacts ?? [];
@@ -211,7 +211,7 @@ export function createConsultationService(deps: ConsultationServiceDeps) {
       question: normalizedIntent?.clinicalQuestion ?? null,
       specialty: normalizedIntent?.specialty ?? null,
       evidenceIds, gaps, conflicts: grounded.conflicts, safetyFlags,
-      provenance: { provider: result.provider, model: result.model, promptVersion: PROMPT_VERSION, contextVersion: CONTEXT_VERSION, syntheticOnly: true, encounterReference: encounter?.encounterId ?? null },
+      provenance: { provider: result.provider, model: result.model, promptVersion: PROMPT_VERSION, contextVersion: CONTEXT_VERSION, dataClassification: "synthetic", encounterReference: encounter?.encounterId ?? null },
     };
     const evidence = evidenceIds.map((id) => renderFact(grounded.eligibleFacts.find((fact) => fact.id === id)!));
     const now = new Date().toISOString();
