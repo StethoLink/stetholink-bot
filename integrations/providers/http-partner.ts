@@ -6,7 +6,7 @@ import { consultationEnvelopeSchema, providerCallbackSchema } from "@/shared/sch
 /**
  * Reference adapter for a provider that implements StethoLink provider contract 1.0 over HTTPS.
  * It is NOT connected to any provider: no real endpoint, credential or agreement exists in this
- * repository, and the envelope contract is still synthetic-only. A provider with its own API
+ * repository. The envelope carries the data classification of the session that sends it. A provider with its own API
  * gets its own adapter implementing the same interface.
  *
  * Request:  POST <endpoint>  body = the envelope JSON

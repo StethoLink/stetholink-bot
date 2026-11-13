@@ -23,7 +23,7 @@ Clinical routes require a verified clinician session. The health and authenticat
 ```ts
 type ConsultationStatus = "draft" | "pending_approval" | "approved" | "rejected" | "archived";
 
-interface PatientContext   { patientId; displayName; birthDate?; sex; allergies[]; activeProblems[]; medications[]; source: "synthetic"|"fhir"|"ehr"; clinicalFacts?: ClinicalFact[] }
+interface PatientContext   { patientId; displayName; birthDate?; sex; allergies[]; activeProblems[]; medications[]; source: "synthetic"|"fhir"|"openemr"|"ehr"; clinicalFacts?: ClinicalFact[] }
 interface EncounterContext { encounterId; patientId; type; status; startedAt; location?; reasonForVisit?; clinicalFacts?: ClinicalFact[] }
 interface ChatRequest      { message; conversationId?; patientId?; encounterId? }      // message: 1..8000 chars
 interface ChatResponse     { conversationId; message: ChatMessage; safety: SafetyAssessment; requiresClinicianReview }
@@ -38,7 +38,7 @@ These additions preserve M0 payloads and fixtures. They introduce no HTTP routes
 
 | Contract | Fields and meaning |
 |---|---|
-| `ClinicalSource` | `{ type: "synthetic"\|"fhir"\|"ehr", reference }`; reference is an opaque record/fixture identifier, without credentials or authenticated URLs. |
+| `ClinicalSource` | `{ type: "synthetic"\|"fhir"\|"openemr"\|"ehr", reference }`; reference is an opaque record/fixture identifier, without credentials or authenticated URLs. |
 | `ClinicalFact` | `{ id, category, label, source, timestamp }` plus either `{ status: "known", value: string\|number\|boolean, unit? }` or `MissingInformation`. Categories: problem, medication, allergy, symptom, vital_sign, investigation, history. |
 | `MissingInformation` | A fact with `{ status: "unknown", reason: "not_recorded"\|"not_provided"\|"not_performed"\|"pending" }`. Results and units are rejected, including `null` and zero results. |
 | `ConsultationRequest` | `{ patientId, encounterId?, specialty, clinicalQuestion, attachments? }`. Requires a nonblank specialty and question. Rejects identity, approval and delivery fields. |
@@ -98,7 +98,7 @@ The structured model output is `{ evidenceIds: string[] }`. It may order documen
   safetyFlags: ("clinician_review_required" | "conflicting_facts" |
     "missing_investigations" | "incomplete_referral" | "insufficient_clinical_data")[];
   provenance: { provider; model; promptVersion; contextVersion;
-    syntheticOnly: true; encounterReference: string | null };
+    dataClassification: "synthetic" | "live"; encounterReference: string | null };
 }
 ```
 
@@ -209,7 +209,7 @@ These supersede the M3 delivery transitions: `POST .../transitions` now accepts 
 
 Routing errors: 403 not a physician with the `consultation:route` scope, provider not allowed, suspended, wrong specialty or not the approved destination; 404 not this clinician's chart; 409 not approved, missing specialty/question, stale version, already routed elsewhere, or provider declined; 501 outside synthetic environments. A transport failure is not an HTTP error: the view returns `status: "failed"` with a `failureCode` and `canRetry`.
 
-Provider contract 1.0 (`shared/contracts/provider.ts`). The envelope a provider receives: `{contractVersion, requestId, attempt, tenantId, providerId, specialty, reason, question, summary, assessment, plan[], clinicalFacts[], missingInformation[], attachments[] (references only), safetyFlags[], approval{approvedBy, approvedAt}, syntheticOnly: true}`. A callback: `{contractVersion, requestId, providerId, responseId, kind: "accepted"|"rejected"|"report", sentAt, reason?, report?{summary, recommendations[], responder}, syntheticOnly: true}`.
+Provider contract 1.0 (`shared/contracts/provider.ts`). The envelope a provider receives: `{contractVersion, requestId, attempt, tenantId, providerId, specialty, reason, question, summary, assessment, plan[], clinicalFacts[], missingInformation[], attachments[] (references only), safetyFlags[], approval{approvedBy, approvedAt}, dataClassification}`. A callback: `{contractVersion, requestId, providerId, responseId, kind: "accepted"|"rejected"|"report", sentAt, reason?, report?{summary, recommendations[], responder}, dataClassification}`.
 
 Callback authentication: headers `x-stetholink-provider`, `x-stetholink-timestamp` (ms, within 5 minutes) and `x-stetholink-signature` = hex HMAC-SHA256 of `<timestamp>.<raw body>` with that provider's secret. Unauthenticated 401; body provider differs from the authenticated one 403; unknown request, other tenant or other provider's request 404; closed, superseded, already answered or reused response id with different content 409. Resending the same `responseId` returns `duplicate` and changes nothing.
 
@@ -226,3 +226,14 @@ Known limits: one tenant per deployment with an environment allowlist (no provid
 Errors: 400 no specialty named or invalid input; 403 chart mismatch, or a non-physician reopening a draft in review; 409 stale version, not awaiting review, or not drafted by the assistant; 422 the model's output failed grounding or safety checks; 503 the model was unavailable, timed out, or a cost or spending limit was reached. A failed request stores nothing and never falls back to another generator.
 
 `summary` holds the consultation request as text: header lines, then sections whose statements end with `[fact-id]` citations (`shared/utils/referral-text.ts`). `assessment` holds missing information from the chart. `plan` holds AI suggestions, each prefixed `AI suggestion, not from the chart:`.
+
+## Data classification
+
+`DataClassification = "synthetic" | "live"` (`shared/contracts/classification.ts`) replaces the former `syntheticOnly: true` literal. `synthetic` means fictional test patients; `live` means real patients of a tenant configured with `CLINICAL_DATA_MODE=live`.
+
+- The server derives it from the verified session and the tenant configuration. No request body carries it, and request schemas reject it as an unknown field. `GET /api/auth/session` returns it as `dataClassification`.
+- `ConsultationDraft.grounding.provenance.dataClassification`, `ConsultationEnvelope.dataClassification` and `ProviderCallback.dataClassification` must equal the classification of the session and tenant that handle them. Core and PostgreSQL both refuse a mismatch; synthetic and live records are never combined.
+- Clinical facts of a synthetic record have `source.type: "synthetic"`; facts of a live record have an EHR source (`fhir`, `openemr`, `ehr`) and keep their record reference.
+- Records stored before this field carry `syntheticOnly: true`. They are unchanged in storage and read as `dataClassification: "synthetic"`. New writes and inbound callbacks that carry `syntheticOnly` are refused (400).
+- Error mapping: a callback with a missing or unknown classification is 400; a valid classification that is not the tenant's is 403; a model that is not approved for live data is 503.
+

@@ -87,13 +87,17 @@ describe("synthetic launch", () => {
 });
 
 describe("SMART launch", () => {
-  it.each(["valid", "wrong-nonce", "wrong-audience", "unmapped", "wrong-patient"])(
+  it.each(["valid", "valid-live", "wrong-nonce", "wrong-audience", "unmapped", "wrong-patient"])(
     "validates a signed EHR identity and chart without an existing session (%s)", async (scenario) => {
       const issuer = "https://ehr.example.test/fhir";
       const oidc = "https://id.example.test";
       const callback = "https://app.example.test/api/smart/callback";
       const user = "Practitioner/syn-doctor";
+      const valid = scenario.startsWith("valid");
+      // The tenant mode alone decides the classification of a verified SMART session.
+      const mode = scenario === "valid-live" ? "live" : "synthetic";
       Object.assign(env, {
+        CLINICAL_DATA_MODE: mode,
         AUTH_MODE: "smart", CLINICAL_DATA_SOURCE: "fhir", FHIR_BASE_URL: issuer, SMART_OIDC_ISSUER: oidc,
         SMART_JWKS_URL: oidc + "/jwks", SMART_CLIENT_ID: "synthetic-client", SMART_REDIRECT_URI: callback,
         SMART_AUTHORIZATION_URL: oidc + "/authorize", SMART_TOKEN_URL: oidc + "/token",
@@ -136,15 +140,65 @@ describe("SMART launch", () => {
       nonce = params.get("nonce")!;
       expect(params.get("code_challenge_method")).toBe("S256");
       const finish = () => smartCallback(new Request(callback + "?" + new URLSearchParams({ code: "synthetic-code", state: params.get("state")! })));
-      expect((await finish()).status).toBe(scenario === "valid" ? 303 : 403);
+      expect((await finish()).status).toBe(valid ? 303 : 403);
       expect((await finish()).status).toBe(403);
       const current = await session();
-      expect(current.status).toBe(scenario === "valid" ? 200 : 401);
-      if (scenario === "valid") {
+      expect(current.status).toBe(valid ? 200 : 401);
+      if (valid) {
         const body = await current.json();
-        expect(body).toMatchObject({ patientId: "p1", encounterId: "e1", roles: ["physician"] });
+        expect(body).toMatchObject({ patientId: "p1", encounterId: "e1", roles: ["physician"], dataClassification: mode });
         expect(body).not.toHaveProperty("ehrAccessToken");
+        // The session is bound to the classification it was verified under: it does not survive a mode switch.
+        env.CLINICAL_DATA_MODE = mode === "live" ? "synthetic" : "live";
+        expect((await session()).status).toBe(401);
+        env.CLINICAL_DATA_MODE = mode;
+        expect((await session()).status).toBe(200);
       }
     },
   );
+});
+
+describe("session data classification", () => {
+  it("classifies a synthetic launch as synthetic and never from request input", async () => {
+    const forged = new Request("https://app.example.test/api/staging/launch", {
+      method: "POST", headers: { authorization: `Bearer ${env.STAGING_LAUNCH_SECRET}` }, body: JSON.stringify({ profile: "physician", dataClassification: "live" }),
+    });
+    expect((await stage(forged)).status).toBe(400);
+    expect((await stage(stageRequest())).status).toBe(200);
+    expect(await (await session()).json()).toMatchObject({ dataClassification: "synthetic" });
+  });
+
+  it("has no synthetic launch and accepts no synthetic session in live mode", async () => {
+    expect((await stage(stageRequest())).status).toBe(200);
+    expect((await session()).status).toBe(200);
+    env.CLINICAL_DATA_MODE = "live";
+    expect((await session()).status).toBe(401);
+    expect((await stage(stageRequest())).status).toBe(404);
+    // Even a tenant fully configured for live data cannot resume the synthetic session.
+    Object.assign(env, { AUTH_MODE: "smart", CLINICAL_DATA_SOURCE: "fhir" });
+    expect((await session()).status).toBe(401);
+  });
+
+  it("rejects a stored session whose classification is missing, unknown or not the tenant's", async () => {
+    const context = {
+      clinicianId: "11111111-1111-4111-8111-111111111111", tenantId: "synthetic-test", roles: ["physician"], scopes: ["chart:read"],
+      patientId: "p1", encounterId: "e1", expiresAt: Date.now() + 60_000, authorization: "active",
+    };
+    Object.assign(env, { AUTH_MODE: "smart", CLINICAL_DATA_SOURCE: "fhir", CLINICAL_DATA_MODE: "live" });
+    const store = (dataClassification?: string) => {
+      handles.set("stored", { kind: "session", expiresAt: Date.now() + 60_000,
+        payload: { source: "smart", ehrAccessToken: "fictional-ehr-token", context: { ...context, ...(dataClassification ? { dataClassification } : {}) } } });
+      jar.set("session", "stored");
+    };
+    store("live");
+    expect(await (await session()).json()).toMatchObject({ dataClassification: "live" });
+    for (const value of [undefined, "synthetic", "production"]) {
+      store(value);
+      expect((await session()).status).toBe(401);
+    }
+    // A live session is not accepted by a synthetic tenant.
+    store("live");
+    env.CLINICAL_DATA_MODE = "synthetic";
+    expect((await session()).status).toBe(401);
+  });
 });
