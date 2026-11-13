@@ -30,7 +30,8 @@ function registration() {
     issuer: env.FHIR_BASE_URL, authorizationEndpoint: env.SMART_AUTHORIZATION_URL, tokenEndpoint: env.SMART_TOKEN_URL,
     clientId: env.SMART_CLIENT_ID, redirectUri: env.SMART_REDIRECT_URI, scope: env.SMART_SCOPE,
     oidcIssuer: env.SMART_OIDC_ISSUER, jwksUrl: env.SMART_JWKS_URL,
-    tenantId: env.TENANT_ID, mapping: mappingSchema.parse(JSON.parse(env.SMART_CLINICIAN_MAP)),
+    // A verified SMART session is live only for a tenant configured for live clinical data.
+    tenantId: env.TENANT_ID, dataClassification: env.CLINICAL_DATA_MODE, mapping: mappingSchema.parse(JSON.parse(env.SMART_CLINICIAN_MAP)),
   };
   secureEndpoint(reg.oidcIssuer);
   secureEndpoint(reg.jwksUrl);
@@ -86,7 +87,7 @@ function smartIdentityAdapter(reg: Registration): IdentityAdapter<{ pending: z.i
         context: {
           clinicianId: mapped.clinicianId, tenantId: reg.tenantId, roles: [mapped.role],
           scopes: ["chart:read", ...scopes.map((scope) => "smart:" + scope)], patientId: patient.patientId, encounterId: encounter.encounterId,
-          expiresAt, authorization: "active", dataClassification: "synthetic",
+          expiresAt, authorization: "active", dataClassification: reg.dataClassification,
         },
       };
     },

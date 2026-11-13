@@ -7,9 +7,12 @@ import { createProviderRegistry } from "@/core/routing/registry";
 import type { ProviderDescriptor } from "@/shared/contracts";
 import { createMockSpecialistTransport, syntheticProviderDirectory } from "@/integrations/mock/specialist";
 
-/** Provider routing exists only for synthetic sessions in local development or preview staging. */
+/**
+ * The simulated specialists exist only for a synthetic tenant in local development or preview
+ * staging. They are never available to a tenant configured for live clinical data.
+ */
 export function syntheticRoutingEnabled() {
-  return localSyntheticEnabled() || syntheticStagingEnabled(getEnv());
+  return getTenant().dataClassification === "synthetic" && (localSyntheticEnabled() || syntheticStagingEnabled(getEnv()));
 }
 
 /** The tenant's allowed providers. The same allowlist is enforced again inside the database. */

@@ -9,7 +9,7 @@ const { jar, requestHeaders, env, handles } = vi.hoisted(() => ({
   jar: new Map<string, string>(), requestHeaders: new Headers({ host: "app.example.test" }),
   env: {
     NODE_ENV: "production", AUTH_MODE: "staging", VERCEL_ENV: "preview", TENANT_ID: "synthetic-test",
-    AI_PROVIDER: "mock", CLINICAL_DATA_SOURCE: "synthetic", STAGING_LAUNCH_SECRET: "synthetic-test-secret-for-unit-test",
+    AI_PROVIDER: "mock", CLINICAL_DATA_SOURCE: "synthetic", CLINICAL_DATA_MODE: "synthetic", STAGING_LAUNCH_SECRET: "synthetic-test-secret-for-unit-test",
     STAGING_SESSION_SECONDS: 60,
   } as Record<string, string | number>,
   handles: new Map<string, { kind: string; payload: unknown; expiresAt: number }>(),

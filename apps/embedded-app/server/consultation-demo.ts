@@ -26,7 +26,7 @@ export async function previewConsultationDemo(session: VerifiedLaunch) {
   if (localSyntheticEnabled() || session.context.authorization !== "active" || session.context.expiresAt <= Date.now() ||
       !session.context.roles.some((role) => role === "clinician" || role === "physician")) throw new RouteError("unauthenticated", "A verified clinician session is required for the demo");
   const { patientId, encounterId, scopes } = session.context;
-  if (session.source !== "synthetic" || getTenant().connector !== "synthetic" || !scopes.includes("consultation:draft") ||
+  if (session.source !== "synthetic" || session.context.dataClassification !== "synthetic" || getTenant().connector !== "synthetic" || !scopes.includes("consultation:draft") ||
       patientId !== ahmedConsultationRequest.patientId || encounterId !== ahmedConsultationRequest.encounterId) {
     throw new RouteError("forbidden", "Open the authorized synthetic demo chart");
   }

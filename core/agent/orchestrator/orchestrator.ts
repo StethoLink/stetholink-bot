@@ -3,6 +3,8 @@ import { createId, nowIso } from "@/shared/utils";
 import { SYSTEM_INSTRUCTIONS } from "@/core/agent/prompts/system";
 import type { ModelProvider } from "@/core/agent/providers/types";
 import type { SafetyGuard } from "@/core/agent/safety/guard";
+import { RouteError } from "@/core/errors";
+import { classificationOfSource } from "@/shared/schemas";
 
 export interface OrchestratorDeps {
   provider: ModelProvider;
@@ -17,6 +19,9 @@ export function createChatOrchestrator(deps: OrchestratorDeps) {
   return {
     async handle(request: ChatRequest): Promise<ChatResponse> {
       const patient = request.patientId ? await deps.loadPatientContext(request.patientId) : null;
+      if (patient && classificationOfSource(patient.source) !== deps.dataClassification) {
+        throw new RouteError("forbidden", "Clinical data does not belong to this session's data classification");
+      }
       const contextNote = patient ? `\n\nPatient context (JSON): ${JSON.stringify(patient)}` : "";
 
       const result = await deps.provider.generate({

@@ -8,10 +8,13 @@ import { createOpenEmrConnector } from "./openemr/connector";
 import { syntheticClinicalAdapter } from "./mock/connector";
 
 export function getClinicalDataAdapter(session: VerifiedLaunch) {
-  const { connector, id } = getTenant();
+  const { connector, id, dataClassification } = getTenant();
   const context = session.context;
-  if (context.tenantId !== id || !context.scopes.includes("chart:read")) throw new AuthError("forbidden", "Chart access denied");
-  if (session.source === "synthetic" && connector === "synthetic") {
+  if (context.tenantId !== id || context.dataClassification !== dataClassification || !context.scopes.includes("chart:read")) {
+    throw new AuthError("forbidden", "Chart access denied");
+  }
+  // Synthetic fixtures are served only to synthetic sessions of a synthetic tenant.
+  if (session.source === "synthetic" && connector === "synthetic" && dataClassification === "synthetic") {
     return {
       ...syntheticClinicalAdapter,
       async getPatient(id: string) {
@@ -26,6 +29,7 @@ export function getClinicalDataAdapter(session: VerifiedLaunch) {
   if (session.source !== "smart" || !baseUrl || !session.ehrAccessToken || connector === "synthetic") {
     throw new AuthError("forbidden", "Chart access denied");
   }
+  // EHR adapters stay pinned to the patient and encounter of the verified launch, in both modes.
   const grant = { baseUrl, accessToken: session.ehrAccessToken, patientId: context.patientId, encounterId: context.encounterId };
   return connector === "openemr" ? createOpenEmrConnector(grant) : createFhirConnector(grant);
 }

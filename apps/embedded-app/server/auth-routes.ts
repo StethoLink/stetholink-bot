@@ -1,11 +1,13 @@
 import "server-only";
 import { z } from "zod";
+import { dataClassificationSchema } from "@/shared/schemas";
 import { clearSession, requireClinician, requireSameOrigin } from "@/platform/auth/session";
 import { contractResponse, handleRouteError } from "./http/respond";
 
 const sessionSchema = z.object({
   clinicianId: z.uuid(), tenantId: z.string(), roles: z.array(z.enum(["clinician", "physician"])),
   patientId: z.string(), encounterId: z.string().optional(), expiresAt: z.number().int(),
+  dataClassification: dataClassificationSchema,
 });
 
 export async function logout() {

@@ -30,6 +30,7 @@ export function getModelProvider(): ModelProvider {
         maxInputTokens: env.OPENAI_MAX_INPUT_TOKENS, maxOutputTokens: env.OPENAI_MAX_OUTPUT_TOKENS,
         maxCostUsd: env.OPENAI_MAX_COST_USD, reasoningEffort: env.OPENAI_REASONING_EFFORT,
         inputUsdPerMillion: env.OPENAI_INPUT_USD_PER_MILLION, outputUsdPerMillion: env.OPENAI_OUTPUT_USD_PER_MILLION,
+        liveDataApproved: env.MODEL_LIVE_DATA_APPROVED === "true",
       }, fetch, { budget: budget(), observe });
     case "mock":
       return mockProvider;

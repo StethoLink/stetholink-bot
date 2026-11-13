@@ -7,7 +7,7 @@ import { AuthError } from "@/platform/auth/session";
 import type { VerifiedLaunch } from "@/platform/auth/identity";
 
 const { session, localSyntheticEnabled, env, tenant } = vi.hoisted(() => ({
-  session: vi.fn(), localSyntheticEnabled: vi.fn(() => false), env: { NODE_ENV: "production" }, tenant: { id: "synthetic", connector: "synthetic" },
+  session: vi.fn(), localSyntheticEnabled: vi.fn(() => false), env: { NODE_ENV: "production" }, tenant: { id: "synthetic", connector: "synthetic", dataClassification: "synthetic" },
 }));
 vi.mock("@/platform/auth/session", async (original) => ({ ...await original<typeof import("@/platform/auth/session")>(), localSyntheticEnabled }));
 vi.mock("@/platform/tenants/env", () => ({ getEnv: () => env }));

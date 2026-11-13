@@ -1,5 +1,6 @@
 import "server-only";
 import { z } from "zod";
+import { DATA_CLASSIFICATIONS } from "@/shared/constants";
 
 const envSchema = z.object({
   TENANT_ID: z.string().min(1).max(128).default("local-synthetic"),
@@ -10,9 +11,13 @@ const envSchema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
   VERCEL_ENV: z.string().optional(),
   VERCEL_TARGET_ENV: z.string().optional(),
+  // Tenant data classification. "live" means real patients; see liveModeProblems below.
+  CLINICAL_DATA_MODE: z.enum(DATA_CLASSIFICATIONS).default("synthetic"),
+  // Operator statement that the configured model deployment may process real patient data.
+  MODEL_LIVE_DATA_APPROVED: z.enum(["true", "false"]).default("false"),
   AI_PROVIDER: z.enum(["mock", "openai"]).default("mock"),
   // Preview staging stays on the deterministic mock unless a live model is explicitly allowed.
-  // Only synthetic charts are ever sent, whichever value is set.
+  // Staging exists only in synthetic mode, so only synthetic charts are sent either way.
   STAGING_LIVE_MODEL: z.enum(["disabled", "enabled"]).default("disabled"),
   // Cumulative model spend allowed per server instance per UTC day (in addition to the per-call limit).
   AI_DAILY_BUDGET_USD: z.coerce.number().positive().max(1000).default(2),
@@ -45,13 +50,45 @@ const envSchema = z.object({
 
 export type ServerEnv = z.infer<typeof envSchema>;
 
+/**
+ * Why this configuration may not run with real patient data. Empty when CLINICAL_DATA_MODE=live
+ * is fully configured. Live mode needs the verified EHR launch, an EHR data source, durable
+ * storage and a model deployment approved for live data, with every synthetic launch path off.
+ * Messages name settings only, never their values.
+ */
+export function liveModeProblems(env: ServerEnv): string[] {
+  const problems: string[] = [];
+  if (env.AUTH_MODE !== "smart") problems.push("AUTH_MODE must be smart (dev and staging launches are synthetic only)");
+  if (env.CLINICAL_DATA_SOURCE === "synthetic") problems.push("CLINICAL_DATA_SOURCE must be fhir or openemr");
+  if (!env.STETHOLINK_DATABASE_URL) problems.push("STETHOLINK_DATABASE_URL must be set");
+  if (env.STAGING_LAUNCH_SECRET) problems.push("STAGING_LAUNCH_SECRET must not be set");
+  if (env.AI_PROVIDER === "mock") problems.push("AI_PROVIDER must be a real model provider (the mock never drafts from live data)");
+  if (env.MODEL_LIVE_DATA_APPROVED !== "true") problems.push("MODEL_LIVE_DATA_APPROVED must be true");
+  if (env.AI_PROVIDER === "openai" && !(env.OPENAI_API_KEY && env.OPENAI_INPUT_USD_PER_MILLION && env.OPENAI_OUTPUT_USD_PER_MILLION)) {
+    problems.push("OPENAI_API_KEY, OPENAI_INPUT_USD_PER_MILLION and OPENAI_OUTPUT_USD_PER_MILLION must be set");
+  }
+  return problems;
+}
+
+export class ServerConfigurationError extends Error {}
+
+/** Parses and validates server configuration. Refuses an incomplete live-mode configuration. */
+export function parseEnv(source: Record<string, string | undefined>): ServerEnv {
+  const env = envSchema.parse(Object.fromEntries(Object.entries(source).filter(([, v]) => v !== "")));
+  if (env.CLINICAL_DATA_MODE === "live") {
+    const problems = liveModeProblems(env);
+    if (problems.length) throw new ServerConfigurationError(`CLINICAL_DATA_MODE=live is refused: ${problems.join("; ")}`);
+  }
+  return env;
+}
+
 export function syntheticStagingEnabled(env: ServerEnv) {
-  return env.AUTH_MODE === "staging" && env.VERCEL_ENV === "preview" &&
+  return env.CLINICAL_DATA_MODE === "synthetic" && env.AUTH_MODE === "staging" && env.VERCEL_ENV === "preview" &&
     (!env.VERCEL_TARGET_ENV || env.VERCEL_TARGET_ENV === "preview") &&
     env.CLINICAL_DATA_SOURCE === "synthetic" && (env.AI_PROVIDER === "mock" || env.STAGING_LIVE_MODEL === "enabled");
 }
 
 let cached: ServerEnv | undefined;
 export function getEnv(): ServerEnv {
-  return cached ??= envSchema.parse(Object.fromEntries(Object.entries(process.env).filter(([, v]) => v !== "")));
+  return cached ??= parseEnv(process.env);
 }

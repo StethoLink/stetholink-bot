@@ -18,7 +18,8 @@ import { auditConsultation } from "@/platform/audit";
 import { getProviderRegistry, getProviderTransport, providerCallbackSecret, syntheticRoutingEnabled } from "@/platform/providers";
 import { CALLBACK_HEADERS, signProviderCallback } from "@/platform/providers/callback-auth";
 import { mockSpecialistCallback, mockSpecialistNextStep, syntheticProviderDirectory } from "@/integrations/mock/specialist";
-import type { DispatchRequest } from "@/shared/contracts";
+import type { DataSource, DispatchRequest } from "@/shared/contracts";
+import { classificationOfSource } from "@/shared/schemas";
 import { receiveProviderCallback } from "./provider-callbacks";
 
 export function getClinicalServices(session: VerifiedLaunch) {
@@ -26,9 +27,25 @@ export function getClinicalServices(session: VerifiedLaunch) {
   return { adapter, patientContext: createPatientContextService(adapter) };
 }
 
+/**
+ * One gate for chat and drafting, in both modes. Chart data reaches a model only when its
+ * source matches the classification of the verified session: synthetic fixtures for a synthetic
+ * tenant, EHR data for a tenant configured for live clinical data. An EHR launch on a tenant
+ * that is not configured for live data stays read-only.
+ */
+function requireAssistantData(session: VerifiedLaunch, adapter: { source: DataSource }) {
+  const tenant = getTenant();
+  if (session.context.tenantId !== tenant.id || session.context.dataClassification !== tenant.dataClassification) {
+    throw new RouteError("forbidden", "The session does not belong to this tenant's data classification");
+  }
+  if (classificationOfSource(adapter.source) !== tenant.dataClassification) {
+    throw new RouteError("forbidden", "The assistant is not enabled for EHR chart data on this tenant (CLINICAL_DATA_MODE)");
+  }
+}
+
 export function getChat(session: VerifiedLaunch) {
-  if (session.source !== "synthetic") throw new RouteError("forbidden", "Chat is limited to synthetic data");
-  const { patientContext } = getClinicalServices(session);
+  const { adapter, patientContext } = getClinicalServices(session);
+  requireAssistantData(session, adapter);
   return createChatOrchestrator({
     provider: getModelProvider(), safety: clinicalSafetyGuard, dataClassification: session.context.dataClassification,
     loadPatientContext: (id) => patientContext.getContext(id),
@@ -40,7 +57,6 @@ export { contractResponse, errorResponse, handleRouteError, readJson } from "./h
 export * as authRoutes from "./auth-routes";
 
 export function getConsultations(session: VerifiedLaunch) {
-  if (session.source !== "synthetic") throw new RouteError("forbidden", "Consultation generation is limited to synthetic data");
   const actor = session.context;
   const tenant = getTenant();
   if (actor.tenantId !== tenant.id || !actor.encounterId || !actor.scopes.includes("chart:read")) {
@@ -54,13 +70,17 @@ export function getConsultations(session: VerifiedLaunch) {
     ? mockConsultationRepository(tenant.id, actor.clinicianId, actor.patientId, actor.encounterId)
     : lifecycle;
   const { adapter } = getClinicalServices(session);
+  requireAssistantData(session, adapter);
+  // The simulated specialists serve synthetic sessions only. A live tenant's provider directory is configured separately.
+  const directory = actor.dataClassification === "synthetic" ? syntheticProviderDirectory : [];
   const service = createConsultationService({
     repository, provider: getModelProvider(), safety: clinicalSafetyGuard, adapter, dataClassification: actor.dataClassification,
     // The model is asked to use the spelling of specialties this tenant can actually route to.
-    specialties: [...new Set(syntheticProviderDirectory.filter((provider) => provider.active && tenant.recipients.has(provider.id)).flatMap((provider) => provider.specialties))],
+    specialties: [...new Set(directory.filter((provider) => provider.active && tenant.recipients.has(provider.id)).flatMap((provider) => provider.specialties))],
   });
-  // Routing needs durable storage and is limited to synthetic sessions with synthetic providers.
-  const routing = durable && session.source === "synthetic" && syntheticRoutingEnabled();
+  // Routing needs durable storage and a configured provider directory. Today the only directory is
+  // the simulated one, which the classification check keeps to synthetic sessions.
+  const routing = durable && actor.dataClassification === "synthetic" && syntheticRoutingEnabled();
   const router = createProviderRouter({
     repository: lifecycle, registry: getProviderRegistry(), transport: getProviderTransport, tenantId: tenant.id, dataClassification: actor.dataClassification,
     timeoutMs: env.PROVIDER_TIMEOUT_MS, simulator: routing, audit: auditConsultation,

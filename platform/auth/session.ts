@@ -60,7 +60,7 @@ export async function requireSameOrigin() {
 
 export function localSyntheticEnabled() {
   const env = getEnv();
-  return env.NODE_ENV !== "production" && !env.VERCEL_ENV && !env.VERCEL_TARGET_ENV &&
+  return env.CLINICAL_DATA_MODE === "synthetic" && env.NODE_ENV !== "production" && !env.VERCEL_ENV && !env.VERCEL_TARGET_ENV &&
     env.AUTH_MODE === "dev" && env.CLINICAL_DATA_SOURCE === "synthetic";
 }
 
@@ -71,8 +71,11 @@ export async function requireClinician(options: { navigation?: boolean } = {}): 
   const active = syntheticStagingEnabled(env) || (env.AUTH_MODE === "smart" && env.CLINICAL_DATA_SOURCE !== "synthetic");
   const raw = active ? await readHandle(jar.get(sessionCookie)?.value, "session") : undefined;
   const verified = launchSchema.safeParse(raw);
+  // A session is valid only for the tenant's classification: no synthetic session in live
+  // mode (synthetic launches are disabled there) and no live session in synthetic mode.
   if (verified.success && verified.data.context.expiresAt > Date.now() &&
       verified.data.context.tenantId === env.TENANT_ID &&
+      verified.data.context.dataClassification === env.CLINICAL_DATA_MODE &&
       (verified.data.source === "synthetic" ? syntheticStagingEnabled(env) :
         env.AUTH_MODE === "smart" && env.CLINICAL_DATA_SOURCE !== "synthetic" && !!verified.data.ehrAccessToken)) {
     return verified.data;
