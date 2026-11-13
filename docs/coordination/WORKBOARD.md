@@ -26,10 +26,10 @@ Status: `open`, `claimed (<agent>)`, `done (<agent>)`. Suggested first owner is 
 
 | ID | Task | Depends on | Suggested | Status | Reserved migration |
 | --- | --- | --- | --- | --- | --- |
-| T1 | Data classification contract: `DataClassification` in `shared/contracts` and `shared/schemas`, provenance and envelope fields, replacing the `syntheticOnly: true` literals. Keep old synthetic rows readable. | none | Phase 0 | open | |
-| T2 | Tenant live-mode gate in `platform/tenants/env.ts` and `platform/auth/session.ts`: `CLINICAL_DATA_MODE`, startup validation, session classification. `.env.example` updated. | none | Phase 0 | open | |
-| T3 | Core consultation and grounding accept live FHIR/OpenEMR facts (`core/consultation/service.ts`, `grounding.ts`, `core/tools/connector.ts`), using the session classification. | T1 | Phase 0 | open | |
-| T4 | Database: new migration replacing the `syntheticOnly` checks in the draft, dispatch and callback commands with classification checks bound to the tenant; pgTAP-style SQL tests in `supabase/tests/`. | T1 | Phase 0 | open | |
+| T1 | Data classification contract: `DataClassification` in `shared/contracts` and `shared/schemas`, provenance and envelope fields, replacing the `syntheticOnly: true` literals. Keep old synthetic rows readable. | none | Phase 0 | claimed (claude) | |
+| T2 | Tenant live-mode gate in `platform/tenants/env.ts` and `platform/auth/session.ts`: `CLINICAL_DATA_MODE`, startup validation, session classification. `.env.example` updated. | none | Phase 0 | claimed (claude) | |
+| T3 | Core consultation and grounding accept live FHIR/OpenEMR facts (`core/consultation/service.ts`, `grounding.ts`, `core/tools/connector.ts`), using the session classification. | T1 | Phase 0 | claimed (claude) | |
+| T4 | Database: new migration replacing the `syntheticOnly` checks in the draft, dispatch and callback commands with classification checks bound to the tenant; pgTAP-style SQL tests in `supabase/tests/`. | T1 | Phase 0 | claimed (claude) | `20261113150000_data_classification.sql` |
 | T5 | Model provider for live data: lift the synthetic-only restriction in `core/agent/providers/openai-provider.ts` behind the live gate; durable spend ledger (`model_usage`, `reserve_model_spend`) replacing the in-memory daily limit; no mock fallback in live mode. | T1, T2 | Codex | open | |
 | T6 | Chat and drafting routes in `apps/embedded-app/server/index.ts` work for live sessions; rename `syntheticSafetyGuard` to a clinical guard used for both modes. | T2, T3 | Claude | open | |
 | T7 | Real provider routing: provider directory and secrets from server config, register `http-partner` adapter, router accepts live envelopes, callbacks enabled for live tenants, rate limit on the callback route, mock specialist synthetic-only. | T1, T4 | Codex | open | |
