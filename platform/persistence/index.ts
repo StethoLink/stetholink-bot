@@ -23,16 +23,6 @@ const rowSchema = z.object({
   }),
 });
 
-/**
- * TEMPORARY, removed with migration 20261113150000_data_classification.sql: the SQL commands
- * on main still require `syntheticOnly: true`, so only synthetic records can be written.
- */
-function legacyWire<T extends { dataClassification: DataClassification }>(value: T) {
-  const { dataClassification, ...rest } = value;
-  if (dataClassification !== "synthetic") throw new RouteError("not_implemented", "Storing live clinical data requires the data classification migration");
-  return { ...rest, syntheticOnly: true };
-}
-
 export function consultationFromRow(value: unknown) {
   const row = rowSchema.parse(value);
   const canonical = row.status === "pending_approval" ? "pending_review" : row.status;
@@ -53,6 +43,7 @@ export function createConsultationRepository(context: ClinicianContext, recipien
 } {
   function scoped<T>(work: (tx: TransactionSql) => Promise<T>) {
     return database().begin(async (tx) => {
+      // The verified context, including its data classification, is what every SQL command checks.
       await tx`select set_config('statement_timeout', '10000', true), set_config('lock_timeout', '5000', true),
         set_config('stetholink.context', ${JSON.stringify(context)}, true),
         set_config('stetholink.recipients', ${JSON.stringify([...recipients])}, true)`;
@@ -70,9 +61,8 @@ export function createConsultationRepository(context: ClinicianContext, recipien
       if (clinicianId !== context.clinicianId) throw new RouteError("forbidden", "Draft owner must match the session");
       return scoped(async (tx) => {
         const request = retry?.request ?? { patientId: draft.patientId, encounterId: draft.encounterId };
-        const parsed = consultationDraftSchema.parse(draft);
-        const payload = parsed.grounding ? { ...parsed, grounding: { ...parsed.grounding, provenance: legacyWire(parsed.grounding.provenance) } } : parsed;
-        const [row] = await tx`select * from public.create_ehr_consultation(${tx.json(payload as never)}, ${tx.json(request)}, ${retry?.key ?? null})`;
+        const payload = consultationDraftSchema.parse(draft);
+        const [row] = await tx`select * from public.create_ehr_consultation(${tx.json(payload)}, ${tx.json(request)}, ${retry?.key ?? null})`;
         return consultationFromRow(row);
       });
     },
@@ -129,7 +119,7 @@ export function createConsultationRepository(context: ClinicianContext, recipien
     async dispatch(id, input) {
       return scoped(async (tx) => {
         const [row] = await tx`select * from public.dispatch_ehr_consultation(${id}, ${input.expectedVersion}, ${input.idempotencyKey},
-          ${input.providerId}, ${tx.json(legacyWire(input.envelope) as never)})`;
+          ${input.providerId}, ${tx.json(input.envelope as never)})`;
         return consultationFromRow(row);
       });
     },
@@ -166,16 +156,17 @@ export function createConsultationRepository(context: ClinicianContext, recipien
 
 /**
  * Stores a provider callback that the platform has already authenticated. No clinician
- * session exists here; the database binds the callback to this tenant, the original
- * request and the provider it was sent to.
+ * session exists here; the database binds the callback to this tenant, its data
+ * classification, the original request and the provider it was sent to.
  */
-export function createProviderResponseSink(tenantId: string): ProviderResponseSink {
+export function createProviderResponseSink(tenantId: string, dataClassification: DataClassification): ProviderResponseSink {
   return {
     async record(callback) {
       return database().begin(async (tx) => {
-        await tx`select set_config('statement_timeout', '10000', true), set_config('lock_timeout', '5000', true)`;
+        await tx`select set_config('statement_timeout', '10000', true), set_config('lock_timeout', '5000', true),
+          set_config('stetholink.data_classification', ${dataClassification}, true)`;
         const [row] = await tx`select public.record_provider_callback(${tenantId}, ${callback.requestId}, ${callback.providerId},
-          ${callback.responseId}, ${callback.kind}, ${tx.json(legacyWire(callback) as never)}) as result`;
+          ${callback.responseId}, ${callback.kind}, ${tx.json(callback as never)}) as result`;
         return z.object({ disposition: z.enum(["applied", "ignored", "duplicate"]) }).parse(row.result).disposition;
       });
     },

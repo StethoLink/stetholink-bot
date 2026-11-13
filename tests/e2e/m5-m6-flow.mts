@@ -180,6 +180,9 @@ try {
   await call(cb, 400, callback("synthetic-cardiology", message(requestId, "synthetic-cardiology", "report", "no-report")));
   await call(cb, 400, callback("synthetic-cardiology", { ...message(requestId, "synthetic-cardiology", "report", "markup", { report: { ...report, summary: "<script>alert(1)</script>" } }) }));
   await call(cb, 400, callback("synthetic-cardiology", { ...accepted, dataClassification: "unclassified" }));
+  // The retired flag is no longer a classification, and a live callback never answers a synthetic tenant's request.
+  await call(cb, 400, callback("synthetic-cardiology", { ...accepted, dataClassification: undefined, syntheticOnly: true }));
+  await call(cb, 403, callback("synthetic-cardiology", { ...accepted, dataClassification: "live" }));
   assert.equal((await view(path)).status, "sent", "Refused callbacks change nothing");
   assert.equal((await view(path)).responses.length, 0);
 

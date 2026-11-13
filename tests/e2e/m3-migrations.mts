@@ -14,11 +14,14 @@ try {
     create function auth.jwt() returns jsonb language sql stable as $$ select null::jsonb $$;`);
   for (const name of (await readdir("supabase/migrations")).filter((f) => f.endsWith(".sql")).sort()) {
     if (name.includes("durable_consultation")) await sql.unsafe(await readFile("supabase/tests/m3_before.sql", "utf8"));
+    // Rows written by the pre-classification commands, to prove they survive the upgrade.
+    if (name.includes("data_classification")) await sql.unsafe(await readFile("supabase/tests/data_classification_before.sql", "utf8"));
     await sql.unsafe(await readFile("supabase/migrations/" + name, "utf8"));
     console.log("Applied", name);
     const suites = name.includes("durable_consultation") ? ["clinician_access.sql", "durable_lifecycle.sql"] :
       name.includes("clinician_approval_boundary") ? ["m4_approval_boundary.sql"] :
-      name.includes("provider_routing") ? ["provider_routing.sql"] : [];
+      name.includes("provider_routing") ? ["provider_routing.sql"] :
+      name.includes("data_classification") ? ["data_classification.sql"] : [];
     for (const suite of suites) {
       await sql.unsafe(await readFile("supabase/tests/" + suite, "utf8"));
       console.log("Passed", suite);
