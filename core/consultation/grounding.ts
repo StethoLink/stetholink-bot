@@ -1,4 +1,5 @@
-import type { ClinicalFact, EncounterContext, KnownClinicalFact, MissingInformation, PatientContext } from "@/shared/contracts";
+import type { ClinicalFact, DataClassification, EncounterContext, KnownClinicalFact, MissingInformation, PatientContext } from "@/shared/contracts";
+import { classificationOfSource } from "@/shared/schemas";
 import { RouteError } from "@/core/errors";
 import { z } from "zod";
 
@@ -24,12 +25,19 @@ function assertion(fact: ClinicalFact) {
   return fact.status === "known" ? JSON.stringify([fact.status, fact.value, fact.unit ?? null]) : JSON.stringify([fact.status, fact.reason]);
 }
 
-export function groundContext(patient: PatientContext, encounter: EncounterContext | null) {
+/**
+ * Builds the model context from normalized facts. Every fact keeps its own source reference
+ * (a synthetic fixture, or a FHIR/OpenEMR record) and must belong to the session's data
+ * classification: synthetic and live facts are never combined.
+ */
+export function groundContext(patient: PatientContext, encounter: EncounterContext | null, classification: DataClassification) {
   const supplied = [...patient.clinicalFacts ?? [], ...encounter?.clinicalFacts ?? []];
   if (supplied.length > MAX_FACTS * 2) throw new RouteError("invalid_request", "Clinical context exceeds the fact limit");
   const byId = new Map<string, ClinicalFact>();
   for (const fact of supplied) {
-    if (fact.source.type !== "synthetic") throw new RouteError("forbidden", "Only synthetic clinical sources are supported");
+    if (classificationOfSource(fact.source.type) !== classification) {
+      throw new RouteError("forbidden", "A clinical fact does not belong to this session's data classification");
+    }
     const previous = byId.get(fact.id);
     if (previous && JSON.stringify(previous) !== JSON.stringify(fact)) {
       throw new RouteError("safety_blocked", "Ambiguous clinical fact identifier");

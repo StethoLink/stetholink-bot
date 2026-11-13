@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { ClinicianContext } from "@/core/auth/clinician";
 import type { ModelProvider, ModelResult } from "@/core/agent/providers/types";
 import { mockProvider } from "@/core/agent/providers/mock-provider";
-import { syntheticSafetyGuard } from "@/core/agent/safety/guard";
+import { clinicalSafetyGuard } from "@/core/agent/safety/guard";
 import { AUTHORING_INSTRUCTIONS, AUTHORING_PROMPT_VERSION, buildAuthoringInput, checkStatement, referralFormat, validateReferral, type AuthoringContext } from "@/core/consultation/authoring";
 import { groundContext } from "@/core/consultation/grounding";
 import type { DurableConsultationRepository } from "@/core/consultation/repository";
@@ -21,9 +21,9 @@ const REQUEST = "Prepare a cardiology consultation for this patient regarding po
 const actor: ClinicianContext = {
   clinicianId: "11111111-1111-4111-8111-111111111111", tenantId: "synthetic", roles: ["physician"],
   scopes: ["chart:read", "consultation:draft", "consultation:approve", "consultation:route"], ...chart,
-  expiresAt: Date.now() + 600_000, authorization: "active",
+  expiresAt: Date.now() + 600_000, authorization: "active", dataClassification: "synthetic",
 };
-const grounded = groundContext(omarPatient, omarEncounter);
+const grounded = groundContext(omarPatient, omarEncounter, "synthetic");
 const context: AuthoringContext = {
   physicianRequest: REQUEST, reasonForVisit: "Chest pain", availableSpecialties: ["Cardiology", "Radiology"],
   facts: grounded.facts, eligibleFacts: grounded.eligibleFacts, missing: grounded.missing,
@@ -63,7 +63,7 @@ function modelReturning(...outputs: unknown[]): ModelProvider & { generate: Retu
 }
 function setup(provider: ModelProvider = mockProvider, adapter: ClinicalDataAdapter = syntheticClinicalAdapter) {
   const repository = { get: vi.fn(), approve: vi.fn(), create: vi.fn(async (draft: ConsultationDraft) => draft) };
-  return { repository, service: createConsultationService({ repository, provider, adapter, safety: syntheticSafetyGuard, specialties: ["Cardiology", "Radiology"] }) };
+  return { repository, service: createConsultationService({ repository, provider, adapter, safety: clinicalSafetyGuard, dataClassification: "synthetic", specialties: ["Cardiology", "Radiology"] }) };
 }
 const withFacts = (facts: ClinicalFact[]): ClinicalDataAdapter => ({
   source: "synthetic", getPatient: async () => ({ ...omarPatient, clinicalFacts: facts } satisfies PatientContext), getEncounter: async () => omarEncounter,

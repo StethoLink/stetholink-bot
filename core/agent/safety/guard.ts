@@ -4,8 +4,11 @@ export interface SafetyGuard {
   assess(text: string): Promise<SafetyAssessment>;
 }
 
-/** Structural checks and conservative rules for synthetic output. */
-export const syntheticSafetyGuard: SafetyGuard = {
+/**
+ * Structural checks and conservative rules applied to every generated or revised text,
+ * for synthetic and live sessions alike.
+ */
+export const clinicalSafetyGuard: SafetyGuard = {
   async assess(text) {
     const hasUnsafeCharacters = Array.from(text).some((char) => {
       const point = char.charCodeAt(0);

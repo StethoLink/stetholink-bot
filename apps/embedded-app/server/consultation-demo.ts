@@ -5,7 +5,7 @@ import { getTenant } from "@/platform/tenants";
 import { getEnv } from "@/platform/tenants/env";
 import { getModelProvider } from "@/platform/tenants/model-provider";
 import { createConsultationService } from "@/core/consultation/service";
-import { syntheticSafetyGuard } from "@/core/agent/safety/guard";
+import { clinicalSafetyGuard } from "@/core/agent/safety/guard";
 import { RouteError } from "@/core/errors";
 import { getClinicalDataAdapter } from "@/integrations";
 import { ahmedConsultationRequest } from "@/shared/mocks/synthetic-data";
@@ -32,7 +32,7 @@ export async function previewConsultationDemo(session: VerifiedLaunch) {
   }
   const service = createConsultationService({
     repository: noPersistence, adapter: getClinicalDataAdapter(session),
-    provider: getModelProvider(), safety: syntheticSafetyGuard,
+    provider: getModelProvider(), safety: clinicalSafetyGuard, dataClassification: session.context.dataClassification,
   });
   return service.preview({ patientId, encounterId }, ahmedConsultationRequest);
 }

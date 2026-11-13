@@ -2,6 +2,7 @@ import "server-only";
 import { cookies, headers } from "next/headers";
 import { z } from "zod";
 import { getEnv, syntheticStagingEnabled } from "@/platform/tenants/env";
+import { dataClassificationSchema } from "@/shared/schemas";
 import type { VerifiedLaunch } from "./identity";
 import { launchCookie, readHandle, sessionCookie, storeHandle } from "./session-store";
 
@@ -21,6 +22,7 @@ const launchSchema = z.object({
     encounterId: z.string().min(1),
     expiresAt: z.number().int(),
     authorization: z.literal("active"),
+    dataClassification: dataClassificationSchema,
   }),
   source: z.enum(["smart", "synthetic"]),
   ehrAccessToken: z.string().min(1).optional(),
@@ -83,7 +85,7 @@ export async function requireClinician(options: { navigation?: boolean } = {}): 
         clinicianId: "11111111-1111-4111-8111-111111111111", tenantId: env.TENANT_ID,
         roles: ["clinician"], scopes: ["chart:read", "consultation:draft"],
         patientId: chart[0], encounterId: chart[1],
-        expiresAt: Date.now() + 60_000, authorization: "active",
+        expiresAt: Date.now() + 60_000, authorization: "active", dataClassification: "synthetic",
       },
     };
   }

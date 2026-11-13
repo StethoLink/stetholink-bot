@@ -21,7 +21,7 @@ const verified: VerifiedLaunch = {
   context: {
     clinicianId: "verified-synthetic-clinician", tenantId: "synthetic", roles: ["physician"],
     scopes: ["chart:read", "consultation:draft"], patientId: "syn-pt-ahmed", encounterId: "syn-enc-ahmed",
-    expiresAt: Date.now() + 600_000, authorization: "active",
+    expiresAt: Date.now() + 600_000, authorization: "active", dataClassification: "synthetic",
   },
 };
 const request = () => new Request("https://staging.example/api/consultations/demo", { method: "POST" });

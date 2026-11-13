@@ -1,7 +1,7 @@
 import { expect, it } from "vitest";
 import { createOpenAIProvider } from "@/core/agent/providers/openai-provider";
 import { createConsultationService } from "@/core/consultation/service";
-import { syntheticSafetyGuard } from "@/core/agent/safety/guard";
+import { clinicalSafetyGuard } from "@/core/agent/safety/guard";
 import { syntheticClinicalAdapter } from "@/integrations/mock/connector";
 import { ahmedConsultationRequest } from "@/shared/mocks/synthetic-data";
 import { getEnv } from "@/platform/tenants/env";
@@ -20,7 +20,7 @@ it.skipIf(!enabled)("LIVE: typed grounded synthetic Ahmed consultation (requires
     inputUsdPerMillion: env.OPENAI_INPUT_USD_PER_MILLION, outputUsdPerMillion: env.OPENAI_OUTPUT_USD_PER_MILLION,
   });
   const service = createConsultationService({
-    adapter: syntheticClinicalAdapter, provider, safety: syntheticSafetyGuard,
+    adapter: syntheticClinicalAdapter, provider, safety: clinicalSafetyGuard, dataClassification: "synthetic",
     repository: {
       async get() { throw new Error("Live test cannot read drafts"); },
       async create() { throw new Error("Live test cannot persist drafts"); },

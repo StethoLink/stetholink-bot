@@ -1,3 +1,4 @@
+import { RouteError } from "@/core/errors";
 import type { ModelProvider } from "./types";
 
 interface AuthoringInput {
@@ -40,10 +41,14 @@ function mockReferral(input: AuthoringInput) {
   };
 }
 
-/** Deterministic provider for development and tests. Makes no network calls. */
+/**
+ * Deterministic provider for development, tests and demos. Makes no network calls.
+ * It is not a model and never stands in for one on live clinical data.
+ */
 export const mockProvider: ModelProvider = {
   name: "mock",
-  async generate({ messages, structuredOutput }) {
+  async generate({ messages, structuredOutput, dataClassification }) {
+    if (dataClassification === "live") throw new RouteError("provider_unavailable", "The deterministic mock cannot draft from live clinical data");
     const last = messages.findLast((m) => m.role === "user")?.content ?? "";
     if (structuredOutput?.name === "consultation_evidence_selection") {
       const context = JSON.parse(last) as { eligibleEvidenceIds: string[] };

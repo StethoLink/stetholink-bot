@@ -1,4 +1,4 @@
-import type { ChatRequest, ChatResponse, PatientContext } from "@/shared/contracts";
+import type { ChatRequest, ChatResponse, DataClassification, PatientContext } from "@/shared/contracts";
 import { createId, nowIso } from "@/shared/utils";
 import { SYSTEM_INSTRUCTIONS } from "@/core/agent/prompts/system";
 import type { ModelProvider } from "@/core/agent/providers/types";
@@ -7,6 +7,8 @@ import type { SafetyGuard } from "@/core/agent/safety/guard";
 export interface OrchestratorDeps {
   provider: ModelProvider;
   safety: SafetyGuard;
+  /** Classification of the verified session; passed to the provider with every request. */
+  dataClassification: DataClassification;
   loadPatientContext: (patientId: string) => Promise<PatientContext | null>;
 }
 
@@ -20,6 +22,7 @@ export function createChatOrchestrator(deps: OrchestratorDeps) {
       const result = await deps.provider.generate({
         instructions: SYSTEM_INSTRUCTIONS + contextNote,
         messages: [{ role: "user", content: request.message }],
+        dataClassification: deps.dataClassification,
       });
       const safety = await deps.safety.assess(result.text);
 

@@ -86,7 +86,7 @@ function smartIdentityAdapter(reg: Registration): IdentityAdapter<{ pending: z.i
         context: {
           clinicianId: mapped.clinicianId, tenantId: reg.tenantId, roles: [mapped.role],
           scopes: ["chart:read", ...scopes.map((scope) => "smart:" + scope)], patientId: patient.patientId, encounterId: encounter.encounterId,
-          expiresAt, authorization: "active",
+          expiresAt, authorization: "active", dataClassification: "synthetic",
         },
       };
     },

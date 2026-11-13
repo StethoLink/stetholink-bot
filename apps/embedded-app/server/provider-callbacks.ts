@@ -29,7 +29,7 @@ export async function receiveProviderCallback(headers: Headers, rawBody: string)
     throw new RouteError("invalid_request", "Invalid provider callback");
   }
   try {
-    const result = await createProviderResponseService({ sink: createProviderResponseSink(tenantId) }).ingest(providerId, body);
+    const result = await createProviderResponseService({ sink: createProviderResponseSink(tenantId), dataClassification: "synthetic" }).ingest(providerId, body);
     auditConsultation({ action: "provider.callback_recorded", tenantId, providerId, requestId: result.requestId, disposition: result.disposition });
     return result;
   } catch (error) {

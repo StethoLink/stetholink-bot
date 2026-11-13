@@ -6,7 +6,7 @@ import type { ModelProvider } from "@/core/agent/providers/types";
 import { createConsultationService } from "@/core/consultation/service";
 import { MAX_CONTEXT_BYTES, MAX_FACTS } from "@/core/consultation/grounding";
 import { mockProvider } from "@/core/agent/providers/mock-provider";
-import { syntheticSafetyGuard } from "@/core/agent/safety/guard";
+import { clinicalSafetyGuard } from "@/core/agent/safety/guard";
 import { syntheticClinicalAdapter } from "@/integrations/mock/connector";
 import { ahmedClinicalFacts, ahmedConsultationRequest, ahmedPatient } from "@/shared/mocks/synthetic-data";
 import { consultationDraftSchema } from "@/shared/schemas";
@@ -16,11 +16,11 @@ const input = { patientId: ahmedPatient.patientId, encounterId: "syn-enc-ahmed" 
 const actor: ClinicianContext = {
   clinicianId: "verified-clinician", tenantId: "synthetic", roles: ["physician"],
   scopes: ["consultation:draft", "consultation:approve"], ...input,
-  expiresAt: Date.now() + 600_000, authorization: "active",
+  expiresAt: Date.now() + 600_000, authorization: "active", dataClassification: "synthetic",
 };
 function setup(provider: ModelProvider = mockProvider, adapter: ClinicalDataAdapter = syntheticClinicalAdapter) {
   const repository = { get: vi.fn(), approve: vi.fn(), create: vi.fn(async (draft) => draft) };
-  const deps = { repository, provider, adapter, safety: syntheticSafetyGuard };
+  const deps = { repository, provider, adapter, safety: clinicalSafetyGuard, dataClassification: "synthetic" as const };
   return { deps, repository, service: createConsultationService(deps) };
 }
 function patientAdapter(patient: PatientContext): ClinicalDataAdapter {

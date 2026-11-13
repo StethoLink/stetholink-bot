@@ -3,7 +3,7 @@ import { createChatOrchestrator } from "@/core/agent/orchestrator/orchestrator";
 import { getModelProvider } from "@/platform/tenants/model-provider";
 import { createPatientContextService } from "@/core/patient-context/service";
 import { getClinicalDataAdapter } from "@/integrations";
-import { syntheticSafetyGuard } from "@/core/agent/safety/guard";
+import { clinicalSafetyGuard } from "@/core/agent/safety/guard";
 import { createConsultationRepository } from "@/platform/persistence";
 import { mockConsultationRepository } from "@/integrations/mock/repository";
 import { createConsultationService } from "@/core/consultation/service";
@@ -30,7 +30,7 @@ export function getChat(session: VerifiedLaunch) {
   if (session.source !== "synthetic") throw new RouteError("forbidden", "Chat is limited to synthetic data");
   const { patientContext } = getClinicalServices(session);
   return createChatOrchestrator({
-    provider: getModelProvider(), safety: syntheticSafetyGuard,
+    provider: getModelProvider(), safety: clinicalSafetyGuard, dataClassification: session.context.dataClassification,
     loadPatientContext: (id) => patientContext.getContext(id),
   });
 }
@@ -55,14 +55,14 @@ export function getConsultations(session: VerifiedLaunch) {
     : lifecycle;
   const { adapter } = getClinicalServices(session);
   const service = createConsultationService({
-    repository, provider: getModelProvider(), safety: syntheticSafetyGuard, adapter,
+    repository, provider: getModelProvider(), safety: clinicalSafetyGuard, adapter, dataClassification: actor.dataClassification,
     // The model is asked to use the spelling of specialties this tenant can actually route to.
     specialties: [...new Set(syntheticProviderDirectory.filter((provider) => provider.active && tenant.recipients.has(provider.id)).flatMap((provider) => provider.specialties))],
   });
   // Routing needs durable storage and is limited to synthetic sessions with synthetic providers.
   const routing = durable && session.source === "synthetic" && syntheticRoutingEnabled();
   const router = createProviderRouter({
-    repository: lifecycle, registry: getProviderRegistry(), transport: getProviderTransport, tenantId: tenant.id,
+    repository: lifecycle, registry: getProviderRegistry(), transport: getProviderTransport, tenantId: tenant.id, dataClassification: actor.dataClassification,
     timeoutMs: env.PROVIDER_TIMEOUT_MS, simulator: routing, audit: auditConsultation,
   });
   function requireRouting() {
@@ -74,7 +74,7 @@ export function getConsultations(session: VerifiedLaunch) {
     list: async () => durable ? lifecycle.list() : [],
     async revise(id: string, input: Parameters<typeof lifecycle.revise>[1]) {
       if (!durable) throw new RouteError("provider_unavailable", "Configure durable consultation storage");
-      const safety = await syntheticSafetyGuard.assess([input.summary, input.assessment, ...input.plan].join("\n"));
+      const safety = await clinicalSafetyGuard.assess([input.summary, input.assessment, ...input.plan].join("\n"));
       if (safety.level === "blocked") throw new RouteError("safety_blocked", "Revision withheld by safety check");
       return lifecycle.revise(id, input);
     },

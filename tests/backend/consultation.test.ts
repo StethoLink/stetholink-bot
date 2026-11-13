@@ -3,18 +3,18 @@ import { createConsultationService } from "@/core/consultation/service";
 import type { ClinicianContext } from "@/core/auth/clinician";
 import { syntheticClinicalAdapter } from "@/integrations/mock/connector";
 import { mockProvider } from "@/core/agent/providers/mock-provider";
-import { syntheticSafetyGuard } from "@/core/agent/safety/guard";
+import { clinicalSafetyGuard } from "@/core/agent/safety/guard";
 
 const actor: ClinicianContext = {
   clinicianId: "11111111-1111-4111-8111-111111111111", tenantId: "synthetic", roles: ["physician"],
   scopes: ["consultation:draft", "consultation:approve"], patientId: "syn-pt-001", encounterId: "syn-enc-001",
-  expiresAt: Date.now() + 600_000, authorization: "active",
+  expiresAt: Date.now() + 600_000, authorization: "active", dataClassification: "synthetic",
 };
 
 describe("consultation generation", () => {
   function setup() {
     const repository = { get: vi.fn(), approve: vi.fn(), create: vi.fn(async (draft) => draft) };
-    const deps = { repository, provider: mockProvider, safety: syntheticSafetyGuard, adapter: syntheticClinicalAdapter };
+    const deps = { repository, provider: mockProvider, safety: clinicalSafetyGuard, dataClassification: "synthetic" as const, adapter: syntheticClinicalAdapter };
     return { deps, repository };
   }
 
@@ -47,7 +47,7 @@ describe("consultation generation", () => {
 
   it.each(["", "<script>unsafe</script>", "Consultation was approved.", "You should increase taking medication.", "\u202eunsafe"])(
     "blocks unsafe synthetic output (%s)", async (value) => {
-      expect((await syntheticSafetyGuard.assess(value)).level).toBe("blocked");
+      expect((await clinicalSafetyGuard.assess(value)).level).toBe("blocked");
     },
   );
 });

@@ -26,6 +26,7 @@ const adapter: IdentityAdapter<Profile> = {
         encounterId: profile === "chest-pain-demo" ? "syn-enc-omar" : otherChart || profile === "cardiology-demo" ? "syn-enc-ahmed" : "syn-enc-001",
         expiresAt: Date.now() + env.STAGING_SESSION_SECONDS * 1000,
         authorization: "active",
+        dataClassification: "synthetic",
       },
     };
   },

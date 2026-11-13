@@ -21,6 +21,8 @@ export function createMockSpecialistTransport(): ProviderTransport {
     async send(envelope) {
       const received = consultationEnvelopeSchema.safeParse(envelope);
       if (!received.success) throw new ProviderTransportError("transport_error", "Mock specialist rejected a malformed envelope");
+      // The simulator never receives real patient data, whatever the caller is configured for.
+      if (received.data.dataClassification !== "synthetic") throw new ProviderTransportError("transport_error", "Mock specialist accepts synthetic requests only");
       if (received.data.providerId.endsWith("-offline")) throw new ProviderTransportError("transport_error", "Mock specialist is unreachable");
       return { requestId: received.data.requestId, providerReference: `mock-inbox-${received.data.requestId}` };
     },

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { createOpenAIProvider } from "@/core/agent/providers/openai-provider";
 import { createSpendingLimiter } from "@/core/agent/providers/spending";
-import { syntheticSafetyGuard } from "@/core/agent/safety/guard";
+import { clinicalSafetyGuard } from "@/core/agent/safety/guard";
 import { createConsultationService } from "@/core/consultation/service";
 import type { ClinicalDataAdapter } from "@/core/tools/connector";
 import { syntheticClinicalAdapter } from "@/integrations/mock/connector";
@@ -30,7 +30,7 @@ function liveService(adapter: ClinicalDataAdapter = syntheticClinicalAdapter) {
     reasoningEffort: env.OPENAI_REASONING_EFFORT, inputUsdPerMillion: env.OPENAI_INPUT_USD_PER_MILLION, outputUsdPerMillion: env.OPENAI_OUTPUT_USD_PER_MILLION,
   }, fetch, { budget: createSpendingLimiter(env.AI_DAILY_BUDGET_USD), observe: (event) => { calls.push(event); console.info("LIVE model.call", JSON.stringify(event)); } });
   const service = createConsultationService({
-    adapter, provider, safety: syntheticSafetyGuard, specialties: ["Cardiology", "Radiology"],
+    adapter, provider, safety: clinicalSafetyGuard, dataClassification: "synthetic", specialties: ["Cardiology", "Radiology"],
     repository: {
       async get() { throw new Error("Live test cannot read drafts"); },
       async create() { throw new Error("Live test cannot persist drafts"); },
@@ -75,7 +75,7 @@ describe.skipIf(!enabled)("LIVE: model-authored consultation from a synthetic ch
     const next = (change: Partial<ConsultationDraft>) => (stored = { ...stored, ...change, version: (stored.version ?? 1) + 1 });
     const { draft } = await service.reviseWithModel(original.id, { instruction: "Make the consultation shorter and focus on the ECG findings.", expectedVersion: 1, idempotencyKey: "live-revision" }, {
       clinicianId: "11111111-1111-4111-8111-111111111111", tenantId: "live-test", roles: ["physician"], scopes: ["chart:read", "consultation:draft", "consultation:approve"],
-      ...chart, expiresAt: Date.now() + 600_000, authorization: "active",
+      ...chart, expiresAt: Date.now() + 600_000, authorization: "active", dataClassification: "synthetic",
     }, {
       get: async () => stored, create: async () => stored,
       approve: async () => next({ status: "draft", lifecycleStatus: "draft" }),

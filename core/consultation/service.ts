@@ -1,6 +1,6 @@
 import type { ClinicianContext } from "@/core/auth/clinician";
-import type { ApprovalRequest, ConsultationDraft, KnownClinicalFact, ConsultationGrounding, ConsultationRequest, CreateConsultationDraftRequest, ModelRevisionRequest, ModelUsage } from "@/shared/contracts";
-import { consultationDraftSchema, consultationRequestSchema, createConsultationDraftRequestSchema, encounterContextSchema, patientContextSchema } from "@/shared/schemas";
+import type { ApprovalRequest, ConsultationDraft, DataClassification, KnownClinicalFact, ConsultationGrounding, ConsultationRequest, CreateConsultationDraftRequest, ModelRevisionRequest, ModelUsage } from "@/shared/contracts";
+import { classificationOfSource, consultationDraftSchema, consultationRequestSchema, createConsultationDraftRequestSchema, encounterContextSchema, patientContextSchema } from "@/shared/schemas";
 import type { ConsultationRepository, DurableConsultationRepository } from "@/core/consultation/repository";
 import type { ModelProvider } from "@/core/agent/providers/types";
 import type { SafetyGuard } from "@/core/agent/safety/guard";
@@ -19,6 +19,11 @@ export interface ConsultationServiceDeps {
   provider: ModelProvider;
   safety: SafetyGuard;
   adapter: ClinicalDataAdapter;
+  /**
+   * Classification of the verified session this service acts for. The adapter, the chart,
+   * every fact, the model request and the stored draft must all carry it.
+   */
+  dataClassification: DataClassification;
   /** Specialties the tenant can route to; the model is asked to use these spellings. */
   specialties?: readonly string[];
 }
@@ -34,15 +39,18 @@ function sumUsage(a: ModelUsage | null, b: ModelUsage | undefined): ModelUsage |
 }
 
 export function createConsultationService(deps: ConsultationServiceDeps) {
-  /** Reads and validates the synthetic chart for one request. Nothing outside the verified chart is loaded. */
+  const classification = deps.dataClassification;
+  const MISMATCH = "Clinical data does not belong to this session's data classification";
+
+  /** Reads and validates the chart for one request. Nothing outside the verified chart is loaded. */
   async function loadChart(input: { patientId: string; encounterId?: string }) {
-    if (deps.adapter.source !== "synthetic") throw new RouteError("forbidden", "Only synthetic patient data is supported");
+    if (classificationOfSource(deps.adapter.source) !== classification) throw new RouteError("forbidden", MISMATCH);
     const rawPatient = await deps.adapter.getPatient(input.patientId);
     if (!rawPatient) throw new RouteError("not_found", "Patient not found");
     const patientResult = patientContextSchema.safeParse(rawPatient);
     if (!patientResult.success) throw new RouteError("safety_blocked", "Invalid clinical patient context");
     const patient = patientResult.data;
-    if (patient.source !== "synthetic") throw new RouteError("forbidden", "Only synthetic patient data is supported");
+    if (classificationOfSource(patient.source) !== classification) throw new RouteError("forbidden", MISMATCH);
     if (patient.patientId !== input.patientId) throw new RouteError("safety_blocked", "Patient context mismatch");
     const rawEncounter = input.encounterId ? await deps.adapter.getEncounter(input.encounterId) : null;
     const encounterResult = rawEncounter ? encounterContextSchema.safeParse(rawEncounter) : null;
@@ -51,7 +59,7 @@ export function createConsultationService(deps: ConsultationServiceDeps) {
     if (input.encounterId && (!encounter || encounter.patientId !== patient.patientId || encounter.encounterId !== input.encounterId)) {
       throw new RouteError("invalid_request", "Encounter does not belong to this patient");
     }
-    return { patient, encounter, grounded: groundContext(patient, encounter) };
+    return { patient, encounter, grounded: groundContext(patient, encounter, classification) };
   }
 
   /**
@@ -66,7 +74,7 @@ export function createConsultationService(deps: ConsultationServiceDeps) {
         instructions: AUTHORING_INSTRUCTIONS,
         // Normalized facts, the physician's words and (for a revision) the current text. No demographics or identifiers.
         messages: [{ role: "user", content: buildAuthoringInput(context) }],
-        dataClassification: "synthetic",
+        dataClassification: classification,
         structuredOutput: referralFormat,
       });
       usage = sumUsage(usage, result.usage);
@@ -122,7 +130,7 @@ export function createConsultationService(deps: ConsultationServiceDeps) {
     const grounding: ConsultationGrounding = {
       reason: reasonForVisit, question: referral.clinicalQuestion, specialty: referral.specialty,
       evidenceIds: referral.citedIds, gaps: [...grounded.missing.map(renderFact), ...notes], conflicts: grounded.conflicts, safetyFlags: flags,
-      provenance: { provider: result.provider, model: result.model, promptVersion: AUTHORING_PROMPT_VERSION, contextVersion: CONTEXT_VERSION, dataClassification: "synthetic", encounterReference: encounter?.encounterId ?? null },
+      provenance: { provider: result.provider, model: result.model, promptVersion: AUTHORING_PROMPT_VERSION, contextVersion: CONTEXT_VERSION, dataClassification: classification, encounterReference: encounter?.encounterId ?? null },
       authoring: { mode: "model_authored", physicianRequest, rejectedStatements: referral.rejectedStatements, liveInference: result.provider !== "mock", usage },
     };
     const now = new Date().toISOString();
@@ -142,8 +150,13 @@ export function createConsultationService(deps: ConsultationServiceDeps) {
    */
   async function reviseText(draft: ConsultationDraft, instruction: string) {
     const authoring = draft.grounding?.authoring;
-    if (draft.grounding?.provenance.dataClassification !== "synthetic" || !authoring || !draft.grounding.specialty || !draft.grounding.question) {
+    if (!draft.grounding || !authoring || !draft.grounding.specialty || !draft.grounding.question) {
       throw new RouteError("conflict", "Only a consultation drafted by the assistant can be revised by the assistant");
+    }
+    // A stored draft is only ever sent to the model by a session of the same classification.
+    if (draft.grounding.provenance.dataClassification !== classification ||
+        (draft.clinicalFacts ?? []).some((fact) => classificationOfSource(fact.source.type) !== classification)) {
+      throw new RouteError("forbidden", MISMATCH);
     }
     const facts = draft.clinicalFacts ?? [];
     const conflicting = new Set(draft.grounding.conflicts.flat());
@@ -181,7 +194,7 @@ export function createConsultationService(deps: ConsultationServiceDeps) {
       // No demographics, raw legacy lists, identity, free text intent, chat or attachments.
       // The structured schema limits output to a permutation of eligible source IDs.
       messages: [{ role: "user", content: JSON.stringify(grounded.context) }],
-      dataClassification: "synthetic",
+      dataClassification: classification,
       structuredOutput: selectionFormat,
     });
     if (result.text.length > 16_000) throw new RouteError("provider_unavailable", "Model response exceeds the draft limit");
@@ -211,14 +224,14 @@ export function createConsultationService(deps: ConsultationServiceDeps) {
       question: normalizedIntent?.clinicalQuestion ?? null,
       specialty: normalizedIntent?.specialty ?? null,
       evidenceIds, gaps, conflicts: grounded.conflicts, safetyFlags,
-      provenance: { provider: result.provider, model: result.model, promptVersion: PROMPT_VERSION, contextVersion: CONTEXT_VERSION, dataClassification: "synthetic", encounterReference: encounter?.encounterId ?? null },
+      provenance: { provider: result.provider, model: result.model, promptVersion: PROMPT_VERSION, contextVersion: CONTEXT_VERSION, dataClassification: classification, encounterReference: encounter?.encounterId ?? null },
     };
     const evidence = evidenceIds.map((id) => renderFact(grounded.eligibleFacts.find((fact) => fact.id === id)!));
     const now = new Date().toISOString();
     const draft = consultationDraftSchema.safeParse({
       id: crypto.randomUUID(), patientId: input.patientId, encounterId: input.encounterId,
       status: "pending_approval", generatedBy: "ai", createdAt: now, updatedAt: now,
-      summary: ["Synthetic consultation draft; physician review required.", `Reason: ${grounding.reason ?? "unknown (not provided)"}`, `Question: ${grounding.question ?? "unknown (not provided)"}`, `Specialty: ${grounding.specialty ?? "unknown (not provided)"}`, ...evidence].join("\n"),
+      summary: [classification === "synthetic" ? "Synthetic consultation draft; physician review required." : "Consultation draft; physician review required.", `Reason: ${grounding.reason ?? "unknown (not provided)"}`, `Question: ${grounding.question ?? "unknown (not provided)"}`, `Specialty: ${grounding.specialty ?? "unknown (not provided)"}`, ...evidence].join("\n"),
       assessment: [`Safety flags: ${safetyFlags.join(", ")}`, ...grounded.conflicts.map((ids) => `Unresolved conflict: ${ids.join(", ")}`), `Provenance: ${result.provider}/${result.model}; ${PROMPT_VERSION}; ${CONTEXT_VERSION}`].join("\n"),
       plan: [...gaps, "Physician must verify the sources and decide whether to approve in the separate authenticated approval workflow."],
       clinicalFacts: grounded.facts, missingInformation: grounded.missing, grounding,
@@ -231,7 +244,7 @@ export function createConsultationService(deps: ConsultationServiceDeps) {
   return {
     get: deps.repository.get,
     async approve(input: ApprovalRequest, actor: ClinicianContext) {
-      if (actor.authorization !== "active" || actor.expiresAt <= Date.now() ||
+      if (actor.authorization !== "active" || actor.expiresAt <= Date.now() || actor.dataClassification !== classification ||
           !actor.roles.includes("physician") || !actor.scopes.includes("consultation:approve")) {
         throw new RouteError("forbidden", "Physician approval is required");
       }
@@ -245,7 +258,8 @@ export function createConsultationService(deps: ConsultationServiceDeps) {
      * and no earlier approval survives. Never approves or sends.
      */
     async reviseWithModel(draftId: string, input: ModelRevisionRequest, actor: ClinicianContext, lifecycle: DurableConsultationRepository) {
-      if (actor.authorization !== "active" || actor.expiresAt <= Date.now() || !actor.scopes.includes("consultation:draft")) {
+      if (actor.authorization !== "active" || actor.expiresAt <= Date.now() || actor.dataClassification !== classification ||
+          !actor.scopes.includes("consultation:draft")) {
         throw new RouteError("forbidden", "Draft access is required");
       }
       const draft = await lifecycle.get(draftId);
@@ -267,7 +281,8 @@ export function createConsultationService(deps: ConsultationServiceDeps) {
       return { draft: consultationDraftSchema.parse(saved), revision: { provider: revised.provider, model: revised.model, usage: revised.usage, rejectedStatements: revised.referral.rejectedStatements } };
     },
     async create(input: CreateConsultationDraftRequest, actor: ClinicianContext) {
-      if (actor.authorization !== "active" || actor.expiresAt <= Date.now() || !actor.scopes.includes("consultation:draft") ||
+      if (actor.authorization !== "active" || actor.expiresAt <= Date.now() || actor.dataClassification !== classification ||
+          !actor.scopes.includes("consultation:draft") ||
           input.patientId !== actor.patientId || (input.encounterId !== undefined && input.encounterId !== actor.encounterId)) {
         throw new RouteError("forbidden", "Draft context does not match the active chart");
       }

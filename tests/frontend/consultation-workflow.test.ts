@@ -4,7 +4,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 import { ApprovalControls, ConsultationDraftView, StatusTracker, consultationTracker } from "@/apps/embedded-app/features/consultations";
 import { mockProvider } from "@/core/agent/providers/mock-provider";
-import { syntheticSafetyGuard } from "@/core/agent/safety/guard";
+import { clinicalSafetyGuard } from "@/core/agent/safety/guard";
 import { createConsultationService } from "@/core/consultation/service";
 import { syntheticClinicalAdapter } from "@/integrations/mock/connector";
 import type { ConsultationDraft } from "@/shared/contracts";
@@ -17,7 +17,7 @@ const REQUEST = "Prepare a cardiology consultation for this patient regarding po
 async function authoredDraft(): Promise<ConsultationDraft> {
   const service = createConsultationService({
     repository: { get: vi.fn(), approve: vi.fn(), create: vi.fn(async (draft) => draft) },
-    provider: mockProvider, safety: syntheticSafetyGuard, adapter: syntheticClinicalAdapter, specialties: ["Cardiology"],
+    provider: mockProvider, safety: clinicalSafetyGuard, dataClassification: "synthetic", adapter: syntheticClinicalAdapter, specialties: ["Cardiology"],
   });
   return service.author({ patientId: "syn-pt-omar", encounterId: "syn-enc-omar" }, REQUEST);
 }

@@ -1,4 +1,4 @@
-import type { ModelUsage } from "@/shared/contracts";
+import type { DataClassification, ModelUsage } from "@/shared/contracts";
 
 /** Provider-neutral model interface. The orchestrator depends only on this. */
 export interface ModelMessage {
@@ -9,8 +9,12 @@ export interface ModelMessage {
 export interface ModelRequest {
   instructions: string;
   messages: ModelMessage[];
-  /** Set only after validating a synthetic adapter context; never from HTTP input. */
-  dataClassification?: "synthetic";
+  /**
+   * Classification of the clinical content in this request, taken from the verified session after
+   * the adapter context was validated; never from HTTP input. A provider refuses a request
+   * whose classification it is not configured for.
+   */
+  dataClassification?: DataClassification;
   structuredOutput?: {
     name: string;
     schema: Record<string, unknown>;

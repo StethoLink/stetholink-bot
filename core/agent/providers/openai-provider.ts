@@ -14,6 +14,9 @@ const configSchema = z.object({
   // Explicit operator-supplied upper-bound rates; no guessed model pricing.
   inputUsdPerMillion: z.number().positive().max(1000).optional(),
   outputUsdPerMillion: z.number().positive().max(1000).optional(),
+  // Operator statement (MODEL_LIVE_DATA_APPROVED) that this model deployment may process real
+  // patient data. Without it only synthetic requests are sent.
+  liveDataApproved: z.boolean().default(false),
 });
 export type OpenAIProviderConfig = z.input<typeof configSchema>;
 
@@ -80,8 +83,12 @@ export function createOpenAIProvider(config: OpenAIProviderConfig, request: type
       if (!parsed.success || !parsed.data.apiKey) throw new RouteError("provider_unavailable", "OpenAI is not configured");
       const settings = parsed.data;
       const task = input.structuredOutput?.name;
-      if (input.dataClassification !== "synthetic" || !task || !(OPENAI_STRUCTURED_TASKS as readonly string[]).includes(task)) {
-        throw new RouteError("forbidden", "OpenAI is restricted to structured synthetic consultation drafting");
+      if (!input.dataClassification || !task || !(OPENAI_STRUCTURED_TASKS as readonly string[]).includes(task)) {
+        throw new RouteError("forbidden", "OpenAI is restricted to classified, structured consultation drafting");
+      }
+      // Live data is sent only to a deployment the operator approved for it. No fallback.
+      if (input.dataClassification === "live" && !settings.liveDataApproved) {
+        throw new RouteError("provider_unavailable", "The model provider is not approved for live clinical data (MODEL_LIVE_DATA_APPROVED)");
       }
       if (!settings.inputUsdPerMillion || !settings.outputUsdPerMillion) {
         throw new RouteError("provider_unavailable", "OpenAI cost bounds are not configured");

@@ -8,7 +8,7 @@ import { buildEnvelope, createProviderRouter } from "@/core/routing/router";
 import { toolRegistry } from "@/core/tools/registry";
 import { createConsultationService } from "@/core/consultation/service";
 import { mockProvider } from "@/core/agent/providers/mock-provider";
-import { syntheticSafetyGuard } from "@/core/agent/safety/guard";
+import { clinicalSafetyGuard } from "@/core/agent/safety/guard";
 import { syntheticClinicalAdapter } from "@/integrations/mock/connector";
 import { createMockSpecialistTransport, mockSpecialistCallback, mockSpecialistNextStep, syntheticProviderDirectory } from "@/integrations/mock/specialist";
 import { signProviderCallback, verifyProviderCallback, CALLBACK_HEADERS } from "@/platform/providers/callback-auth";
@@ -20,7 +20,7 @@ const TENANT = "synthetic-tenant";
 const physician: ClinicianContext = {
   clinicianId: "11111111-1111-4111-8111-111111111111", tenantId: TENANT, roles: ["physician"],
   scopes: ["chart:read", "consultation:draft", "consultation:approve", "consultation:route"], patientId: "syn-pt-ahmed", encounterId: "syn-enc-ahmed",
-  expiresAt: Date.now() + 600_000, authorization: "active",
+  expiresAt: Date.now() + 600_000, authorization: "active", dataClassification: "synthetic",
 };
 const allowed = new Set(["synthetic-cardiology", "synthetic-cardiology-offline", "synthetic-radiology", "synthetic-cardiology-suspended"]);
 const registry = createProviderRegistry(syntheticProviderDirectory, allowed);
@@ -28,7 +28,7 @@ const registry = createProviderRegistry(syntheticProviderDirectory, allowed);
 async function approvedDraft(): Promise<ConsultationDraft> {
   const service = createConsultationService({
     repository: { get: vi.fn(), approve: vi.fn(), create: vi.fn(async (draft) => draft) },
-    provider: mockProvider, safety: syntheticSafetyGuard, adapter: syntheticClinicalAdapter,
+    provider: mockProvider, safety: clinicalSafetyGuard, dataClassification: "synthetic", adapter: syntheticClinicalAdapter,
   });
   const draft = await service.create({ patientId: "syn-pt-ahmed", specialty: ahmedConsultationRequest.specialty, clinicalQuestion: ahmedConsultationRequest.clinicalQuestion }, physician);
   return { ...draft, status: "approved", lifecycleStatus: "approved", version: 2, tenantId: TENANT,
@@ -72,7 +72,7 @@ function setup(draft: ConsultationDraft, transport: ProviderTransport = createMo
   const store = memoryRepository(draft);
   const send = vi.spyOn(transport, "send");
   const audit = vi.fn();
-  const router = createProviderRouter({ repository: store.repository, registry, transport: () => transport, tenantId: TENANT, timeoutMs, simulator: true, audit });
+  const router = createProviderRouter({ repository: store.repository, registry, transport: () => transport, tenantId: TENANT, dataClassification: "synthetic", timeoutMs, simulator: true, audit });
   const command = (providerId = "synthetic-cardiology", key = "key-1", version = 2) => ({ providerId, expectedVersion: version, idempotencyKey: key });
   return { ...store, router, send, audit, command };
 }
@@ -117,7 +117,7 @@ describe("provider router", () => {
   it("resumes a request that was recorded but not yet transmitted", async () => {
     const draft = await approvedDraft();
     const { router, repository, send, command, attempts } = setup(draft);
-    await repository.dispatch(draft.id, { ...command(), envelope: buildEnvelope(draft, (await registry.list())[0], TENANT) });
+    await repository.dispatch(draft.id, { ...command(), envelope: buildEnvelope(draft, (await registry.list())[0], TENANT, "synthetic") });
     expect(attempts[0].status).toBe("queued");
     expect((await router.route(draft.id, command(), physician)).status).toBe("sent");
     expect(send).toHaveBeenCalledTimes(1);
@@ -233,7 +233,7 @@ describe("clinician lifecycle commands", () => {
 
 describe("mock specialist", () => {
   const envelope = async (): Promise<ConsultationEnvelope> => ({
-    ...buildEnvelope(await approvedDraft(), syntheticProviderDirectory[0], TENANT), requestId: "8d5f6f0e-6f0e-4d7c-9b65-0f7a4f0f5a11", attempt: 1,
+    ...buildEnvelope(await approvedDraft(), syntheticProviderDirectory[0], TENANT, "synthetic"), requestId: "8d5f6f0e-6f0e-4d7c-9b65-0f7a4f0f5a11", attempt: 1,
   });
 
   it("acknowledges the same request identically every time", async () => {
@@ -285,7 +285,7 @@ describe("provider callbacks", () => {
 
   it("stores a valid callback only for the provider that was authenticated", async () => {
     const record = vi.fn(async () => "applied" as const);
-    const service = createProviderResponseService({ sink: { record } });
+    const service = createProviderResponseService({ sink: { record }, dataClassification: "synthetic" });
     expect(await service.ingest("synthetic-cardiology", callback)).toEqual({ requestId: callback.requestId, disposition: "applied" });
     await expect(service.ingest("synthetic-radiology", callback)).rejects.toMatchObject({ code: "forbidden" });
     expect(record).toHaveBeenCalledTimes(1);
@@ -304,7 +304,7 @@ describe("provider callbacks", () => {
     ["an oversized report", { report: { summary: "a".repeat(8001), recommendations: [], responder: "s" } }],
   ])("rejects %s without storing it", async (_name, change) => {
     const record = vi.fn();
-    await expect(createProviderResponseService({ sink: { record } }).ingest("synthetic-cardiology", { ...callback, ...change })).rejects.toMatchObject({ code: "invalid_request" });
+    await expect(createProviderResponseService({ sink: { record }, dataClassification: "synthetic" }).ingest("synthetic-cardiology", { ...callback, ...change })).rejects.toMatchObject({ code: "invalid_request" });
     expect(record).not.toHaveBeenCalled();
   });
 });
