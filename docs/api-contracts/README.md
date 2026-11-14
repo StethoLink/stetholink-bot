@@ -118,11 +118,11 @@ The existing server-only `AI_PROVIDER=openai`, `OPENAI_API_KEY` and `OPENAI_MODE
 
 | Optional server configuration | Default / behavior |
 |---|---|
-| `OPENAI_TIMEOUT_MS` | 30000; shared request/body/backoff deadline, maximum 60000 |
+| `OPENAI_TIMEOUT_MS` | 90000; shared request/body/backoff deadline, maximum 120000 |
 | `OPENAI_MAX_RETRIES` | 1; maximum 2; only HTTP 429/500/502/503/504, bounded exponential backoff |
 | `OPENAI_MAX_INPUT_TOKENS` | 16000; conservative serialized UTF-8 byte bound plus 512 tokens of overhead, maximum 32000 |
-| `OPENAI_MAX_OUTPUT_TOKENS` | 2048; maximum 4096 |
-| `OPENAI_MAX_COST_USD` | 0.1 per generation, maximum 1; reserves the worst-case charge before each attempt, including failed attempts |
+| `OPENAI_MAX_OUTPUT_TOKENS` | 8000; maximum 16000 (reasoning tokens count as output) |
+| `OPENAI_MAX_COST_USD` | 0.25 per generation, maximum 1; reserves the worst-case charge before each attempt, including failed attempts |
 | `OPENAI_INPUT_USD_PER_MILLION`, `OPENAI_OUTPUT_USD_PER_MILLION` | No default. Operator must supply verified upper-bound rates for the configured model; missing rates block live calls. Test rates are hypothetical. |
 
 The budget is an application estimate using operator-supplied rates, not an account-wide billing limit. No model price is guessed. Network ambiguity, timeouts, malformed responses, refusals, incomplete responses and permanent HTTP failures are not retried. Responses are bounded at 64,000 bytes; usage must fit reserved input and output limits. All provider failures are sanitized; credentials, patient/model payloads and provider error bodies are never logged. Provider deadline includes retries; token/cost reservations are per generation, not durable tenant quotas.

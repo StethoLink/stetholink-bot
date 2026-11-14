@@ -23,12 +23,15 @@ const envSchema = z.object({
   AI_DAILY_BUDGET_USD: z.coerce.number().positive().max(1000).default(2),
   OPENAI_API_KEY: z.string().optional(),
   OPENAI_MODEL: z.string().min(1).max(128).default("gpt-5"),
-  OPENAI_TIMEOUT_MS: z.coerce.number().int().min(1).max(60_000).default(30_000),
+  // A GPT-5 consultation takes 15-30 s and occasionally over 60 s; one deadline covers every attempt.
+  OPENAI_TIMEOUT_MS: z.coerce.number().int().min(1).max(120_000).default(90_000),
   OPENAI_MAX_RETRIES: z.coerce.number().int().min(0).max(2).default(1),
   OPENAI_MAX_INPUT_TOKENS: z.coerce.number().int().min(1).max(32_000).default(16_000),
-  OPENAI_MAX_OUTPUT_TOKENS: z.coerce.number().int().min(1).max(16_000).default(2048),
+  // Reasoning models count reasoning tokens as output: a consultation used 2,500-4,400 with GPT-5.
+  OPENAI_MAX_OUTPUT_TOKENS: z.coerce.number().int().min(1).max(16_000).default(8000),
   OPENAI_REASONING_EFFORT: z.enum(["minimal", "low", "medium", "high"]).optional(),
-  OPENAI_MAX_COST_USD: z.coerce.number().positive().max(1).default(0.1),
+  // Worst case for one call including its retry, at the configured upper-bound rates.
+  OPENAI_MAX_COST_USD: z.coerce.number().positive().max(1).default(0.25),
   OPENAI_INPUT_USD_PER_MILLION: z.coerce.number().positive().max(1000).optional(),
   OPENAI_OUTPUT_USD_PER_MILLION: z.coerce.number().positive().max(1000).optional(),
   AUTH_MODE: z.enum(["dev", "smart", "staging", "supabase"]).default("dev"),

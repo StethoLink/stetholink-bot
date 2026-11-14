@@ -4,13 +4,13 @@ import { RouteError } from "@/core/errors";
 
 const configSchema = z.object({
   apiKey: z.string().min(1).optional(), model: z.string().min(1).max(128),
-  timeoutMs: z.number().int().min(1).max(60_000).default(30_000),
+  timeoutMs: z.number().int().min(1).max(120_000).default(90_000),
   maxRetries: z.number().int().min(0).max(2).default(1),
   maxInputTokens: z.number().int().min(1).max(32_000).default(16_000),
-  maxOutputTokens: z.number().int().min(1).max(16_000).default(2048),
+  maxOutputTokens: z.number().int().min(1).max(16_000).default(8000),
   // Sent only when set; reasoning models spend output tokens on reasoning.
   reasoningEffort: z.enum(["minimal", "low", "medium", "high"]).optional(),
-  maxCostUsd: z.number().positive().max(1).default(0.1),
+  maxCostUsd: z.number().positive().max(1).default(0.25),
   // Explicit operator-supplied upper-bound rates; no guessed model pricing.
   inputUsdPerMillion: z.number().positive().max(1000).optional(),
   outputUsdPerMillion: z.number().positive().max(1000).optional(),

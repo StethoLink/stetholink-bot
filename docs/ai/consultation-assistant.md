@@ -63,11 +63,11 @@ Server-side environment variables. Nothing here is exposed to the browser.
 | `OPENAI_API_KEY` | Server-side key |
 | `OPENAI_MODEL` | Model id. Must support the Responses API with strict JSON schema output |
 | `OPENAI_INPUT_USD_PER_MILLION`, `OPENAI_OUTPUT_USD_PER_MILLION` | Required. Upper-bound rates you accept; no price is assumed. Calls are refused without them |
-| `OPENAI_MAX_COST_USD` | Worst-case cost allowed for one call including retries (default 0.10) |
+| `OPENAI_MAX_COST_USD` | Worst-case cost allowed for one call including retries (default 0.25) |
 | `AI_DAILY_BUDGET_USD` | Total allowed per server instance per UTC day (default 2) |
-| `OPENAI_MAX_INPUT_TOKENS`, `OPENAI_MAX_OUTPUT_TOKENS` | Token bounds (defaults 16000 and 2048). Reasoning models usually need a higher output bound |
+| `OPENAI_MAX_INPUT_TOKENS`, `OPENAI_MAX_OUTPUT_TOKENS` | Token bounds (defaults 16000 and 8000). Reasoning tokens count as output |
 | `OPENAI_REASONING_EFFORT` | Optional, for reasoning models |
-| `OPENAI_TIMEOUT_MS`, `OPENAI_MAX_RETRIES` | One deadline covers all attempts (defaults 30000 and 1) |
+| `OPENAI_TIMEOUT_MS`, `OPENAI_MAX_RETRIES` | One deadline covers all attempts (defaults 90000 and 1; maximum 120000). The drafting and revision routes allow 120 s |
 | `STAGING_LIVE_MODEL` | `enabled` lets preview staging use the live model. Default `disabled` |
 
 Each model call logs one `model.call` line: provider, model, task, outcome, reason code, HTTP status, attempts, latency, tokens and estimated cost. Prompts, chart content, model output and keys are never logged. The draft stores provider, model, prompt version, tokens, estimated cost and latency, and the interface shows them.
@@ -93,4 +93,4 @@ A skipped live test is unverified, not passed.
 
 On 2026-11-12 the live tests and the browser walk-through passed with `OPENAI_MODEL=gpt-5` (served as `gpt-5-2025-08-07`), `OPENAI_REASONING_EFFORT=low`, `OPENAI_MAX_OUTPUT_TOKENS=8000`, `OPENAI_TIMEOUT_MS=60000`, on the fictional Omar chart, from a development container against a disposable local PostgreSQL. A draft took about 21 s (2,095 input and 1,300 output tokens) and a revision about 30 s. The specialist was the simulated provider. This was not a cloud deployment, and the cost figures shown were computed from placeholder upper-bound rates, not verified prices.
 
-At this latency the default `OPENAI_TIMEOUT_MS=30000` is too tight for this model; use 60000.
+At this latency the former defaults were too tight for this model. On 2026-11-14, at default reasoning effort, a draft or revision took 15-30 s and a challenge about 14 s, with 2,500-4,400 output tokens (reasoning tokens count as output, so the former 2,048 cap would cut the response off). The defaults are therefore `OPENAI_TIMEOUT_MS=90000`, `OPENAI_MAX_OUTPUT_TOKENS=8000` and `OPENAI_MAX_COST_USD=0.25`. `OPENAI_REASONING_EFFORT=low` brings calls to 10-16 s, but in one run it left the presentation troponin out of an ACS consultation, so it is not the default. Note for development containers: an outbound proxy that ends requests at 30 s makes longer calls fail with 502 regardless of these settings.

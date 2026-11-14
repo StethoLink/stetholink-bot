@@ -1,6 +1,9 @@
 import { contractResponse, errorResponse, getConsultations, handleRouteError, readJson, requireClinician } from "@/apps/embedded-app/server";
 import { consultationDraftSchema, modelRevisionRequestSchema } from "@/shared/schemas";
 
+/** The model call may take up to OPENAI_TIMEOUT_MS (at most 120 s); the platform must not end the request first. */
+export const maxDuration = 120;
+
 /**
  * Asks the model to reword the draft from the physician's instruction. Documented facts and
  * their sources cannot change, and the result returns to physician review; it is never approved here.

@@ -156,7 +156,7 @@ export function ConsultationComposer({ patientId, encounterId, canReview = false
             onAnswer={(answers) => void prepare({ text: pending.request, clarifications: [...pending.clarification.clarifications, ...answers] })}
             onProceed={() => void prepare({ text: pending.request, clarifications: pending.clarification.clarifications, proceed: true })}
             onEdit={() => { setRequest(pending.request); setPending(undefined); setError(""); }} />
-          {busy && <p role="status" className="text-sm text-slate-700">Reading your answers and the chart. This can take up to a minute…</p>}
+          {busy && <p role="status" className="text-sm text-slate-700">Reading your answers and the chart. This can take up to two minutes…</p>}
           {error && <p role="alert" className="rounded border border-red-700 bg-red-50 p-2 text-sm text-red-800">{error}</p>}
         </>
       ) : (
@@ -176,7 +176,7 @@ export function ConsultationComposer({ patientId, encounterId, canReview = false
           {busy ? "Preparing…" : "Prepare consultation"}
         </button>
         <p className="text-xs text-slate-700">The assistant prepares a draft for your review, and asks you first when the request does not fit the chart or is unclear. It cannot approve, send, order or change the chart.</p>
-        {busy && <p role="status" className="text-sm text-slate-700">Reading the chart and drafting the consultation. This can take up to a minute…</p>}
+        {busy && <p role="status" className="text-sm text-slate-700">Reading the chart and drafting the consultation. This can take up to two minutes…</p>}
         {error && <p role="alert" className="rounded border border-red-700 bg-red-50 p-2 text-sm text-red-800">{error}</p>}
       </form>
       )}

@@ -196,7 +196,7 @@ describe("provider router", () => {
     expect((await thrown.router.route(draft.id, thrown.command(), physician)).attempts[0].failureCode).toBe("transport_timeout");
   });
 
-  it("packages only approved content, sources and gaps, with no demographics or chart identifiers", async () => {
+  it("packages only approved content, sources and gaps, with no name, birth date or chart identifiers", async () => {
     const draft = await approvedDraft();
     const { router, send, command } = setup(draft);
     await router.route(draft.id, command(), physician);
@@ -209,6 +209,27 @@ describe("provider router", () => {
     const text = JSON.stringify(envelope);
     for (const secret of [ahmedPatient.displayName, ahmedPatient.patientId, "syn-enc-ahmed", "displayName", draft.id]) expect(text).not.toContain(secret);
     expect(consultationEnvelopeSchema.safeParse({ ...envelope, patientName: "x" }).success).toBe(false);
+  });
+
+  it("sends only the chart facts the approved text cites, and the age and sex it states", async () => {
+    const draft = await approvedDraft();
+    const provider = syntheticProviderDirectory.find((entry) => entry.id === "synthetic-cardiology")!;
+    const full = buildEnvelope(draft, provider, TENANT, "synthetic");
+    expect(full.summary).toContain("\nAge: Not recorded\nSex: Male\n"); // this fixture records no birth date
+    expect(full.clinicalFacts.length).toBeGreaterThan(1);
+    const cited = new Set(full.clinicalFacts.map((fact) => fact.id));
+    // The physician deletes one cited line and one missing-information line before approving.
+    const [dropped] = full.clinicalFacts.filter((fact) => fact.status === "known");
+    const [missing] = full.missingInformation;
+    const strip = (text: string, id: string) => text.split("\n").filter((line) => !line.includes(`[${id}`)).join("\n");
+    const edited = { ...draft, summary: strip(draft.summary, dropped.id), assessment: strip(draft.assessment, missing.id), plan: draft.plan.map((line) => strip(line, missing.id)).filter(Boolean) };
+    const envelope = buildEnvelope(edited, provider, TENANT, "synthetic");
+    expect(envelope.clinicalFacts.map((fact) => fact.id)).not.toContain(dropped.id);
+    expect(envelope.missingInformation.map((fact) => fact.id)).not.toContain(missing.id);
+    expect(envelope.clinicalFacts.every((fact) => cited.has(fact.id))).toBe(true);
+    // A documented fact no line cites never leaves the chart.
+    const extra = { ...dropped, id: "ahmed-uncited", label: "Unrelated finding" };
+    expect(buildEnvelope({ ...draft, clinicalFacts: [...draft.clinicalFacts!, extra] }, provider, TENANT, "synthetic").clinicalFacts.map((fact) => fact.id)).not.toContain("ahmed-uncited");
   });
 
   it("gives the model no tool that can approve, route or answer a consultation", () => {

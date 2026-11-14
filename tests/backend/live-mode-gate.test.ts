@@ -16,6 +16,13 @@ describe("tenant live-mode gate", () => {
     expect(env.MODEL_LIVE_DATA_APPROVED).toBe("false");
   });
 
+  it("ships model limits a reasoning model can draft within", () => {
+    const env = parseEnv({});
+    expect(env).toMatchObject({ OPENAI_TIMEOUT_MS: 90_000, OPENAI_MAX_OUTPUT_TOKENS: 8000, OPENAI_MAX_COST_USD: 0.25 });
+    expect(parseEnv({ OPENAI_TIMEOUT_MS: "120000" }).OPENAI_TIMEOUT_MS).toBe(120_000);
+    expect(() => parseEnv({ OPENAI_TIMEOUT_MS: "120001" })).toThrow();
+  });
+
   it("accepts a complete live configuration, for FHIR and OpenEMR", () => {
     expect(parseEnv(live).CLINICAL_DATA_MODE).toBe("live");
     expect(parseEnv({ ...live, CLINICAL_DATA_SOURCE: "openemr" }).CLINICAL_DATA_MODE).toBe("live");

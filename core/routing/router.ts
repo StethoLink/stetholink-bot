@@ -4,6 +4,7 @@ import type { ConsultationDeliveryView, ConsultationDraft, ConsultationEnvelopeC
 import { consultationEnvelopeContentSchema, consultationEnvelopeSchema, dispatchRequestSchema } from "@/shared/schemas";
 import { ProviderTransportError, type DeliveryRecord, type DeliveryRepository, type ProviderRegistry, type ProviderTransport, type TransportFailure } from "./ports";
 import { eligibleProviders } from "./registry";
+import { citedEvidenceIds } from "@/shared/utils/referral-text";
 
 export interface RoutingEvent {
   action: "consultation.dispatched" | "consultation.dispatch_failed";
@@ -20,6 +21,8 @@ const IN_FLIGHT = ["queued", "sent", "accepted", "responded"];
 
 /**
  * The exact, minimal content a provider receives. Age and sex are stated in the summary; no name, birth date or chart identifiers.
+ * Only the chart facts the approved text cites travel as sources: a documented fact the physician
+ * did not include, and a missing item they removed, stay in the chart.
  * The envelope takes the classification of the routing session, and only a consultation
  * of that same classification can be packaged.
  */
@@ -33,11 +36,13 @@ export function buildEnvelope(draft: ConsultationDraft, provider: ProviderDescri
   if (!grounding.specialty?.trim() || !grounding.question?.trim()) {
     throw new RouteError("conflict", "The consultation needs a specialty and clinical question before routing");
   }
+  const cited = new Set(citedEvidenceIds([draft.summary, draft.assessment, ...draft.plan].join("\n")));
   const parsed = consultationEnvelopeContentSchema.safeParse({
     contractVersion: "1.0", tenantId, providerId: provider.id,
     specialty: grounding.specialty, reason: grounding.reason, question: grounding.question,
     summary: draft.summary, assessment: draft.assessment, plan: draft.plan,
-    clinicalFacts: draft.clinicalFacts ?? [], missingInformation: draft.missingInformation ?? [],
+    clinicalFacts: (draft.clinicalFacts ?? []).filter((fact) => cited.has(fact.id)),
+    missingInformation: (draft.missingInformation ?? []).filter((fact) => cited.has(fact.id)),
     attachments: draft.attachments ?? [], safetyFlags: grounding.safetyFlags,
     approval: { approvedBy: draft.reviewedBy, approvedAt: draft.reviewedAt }, dataClassification: classification,
   });

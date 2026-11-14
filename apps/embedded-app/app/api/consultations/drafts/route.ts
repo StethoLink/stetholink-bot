@@ -1,6 +1,9 @@
 import { contractResponse, errorResponse, getConsultations, handleRouteError, readJson, requireClinician } from "@/apps/embedded-app/server";
 import { consultationClarificationNeededSchema, consultationDraftSchema, consultationListSchema, createConsultationDraftRequestSchema } from "@/shared/schemas";
 
+/** The model call may take up to OPENAI_TIMEOUT_MS (at most 120 s); the platform must not end the request first. */
+export const maxDuration = 120;
+
 /**
  * Generate a recommendation and persist it under the verified clinician's ownership (201), or
  * return the assistant's questions about the request (200) when it needs clarifying first.
