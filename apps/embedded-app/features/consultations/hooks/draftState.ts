@@ -56,9 +56,13 @@ export async function createDraft(
 ): Promise<ConsultationDraft | undefined> {
   dispatch({ type: "load" });
   try {
-    const draft = await client.createConsultationDraft(request);
-    dispatch({ type: "loaded", draft });
-    return draft;
+    const result = await client.createConsultationDraft(request);
+    if ("outcome" in result) {
+      dispatch({ type: "loadFailed", error: `The assistant has questions before drafting: ${result.concerns.map((entry) => entry.question).join(" ")}` });
+      return undefined;
+    }
+    dispatch({ type: "loaded", draft: result });
+    return result;
   } catch (e) {
     dispatch({ type: "loadFailed", error: message(e, "Could not generate a consultation draft.") });
     return undefined;

@@ -86,6 +86,31 @@ export const chatResponseSchema = z.object({
   requiresClinicianReview: z.boolean(),
 }) satisfies z.ZodType<ChatResponse>;
 
+/** At most this many questions can be answered for one request; then the physician proceeds or rewrites it. */
+export const MAX_CLARIFICATIONS = 6;
+export const MAX_REQUEST_CONCERNS = 4;
+export const REQUEST_CONCERN_KINDS = ["missing_specialty", "specialty_fit", "unclear_question", "missing_information", "conflicts_with_chart", "urgency"] as const;
+
+export const requestConcernSchema = z.object({
+  kind: z.enum(REQUEST_CONCERN_KINDS),
+  concern: z.string().min(1).max(600),
+  question: z.string().min(1).max(400),
+  evidenceIds: z.array(id).max(8),
+}).strict() satisfies z.ZodType<import("@/shared/contracts/consultation").RequestConcern>;
+
+export const consultationClarificationSchema = z.object({
+  question: z.string().trim().min(1).max(400),
+  answer: z.string().trim().min(1).max(1000),
+}).strict() satisfies z.ZodType<import("@/shared/contracts/consultation").ConsultationClarification>;
+
+export const consultationClarificationNeededSchema = z.object({
+  outcome: z.literal("clarification_needed"),
+  specialty: z.string().min(1).max(200).nullable(),
+  concerns: z.array(requestConcernSchema).min(1).max(MAX_REQUEST_CONCERNS),
+  clarifications: z.array(consultationClarificationSchema).max(MAX_CLARIFICATIONS),
+  canAnswer: z.boolean(),
+}).strict() satisfies z.ZodType<import("@/shared/contracts/consultation").ConsultationClarificationNeeded>;
+
 export const consultationGroundingSchema = z.object({
   reason: z.string().min(1).max(4000).nullable(),
   question: z.string().min(1).max(4000).nullable(),
@@ -110,7 +135,10 @@ export const consultationGroundingSchema = z.object({
       estimatedCostUsd: z.number().nonnegative().nullable(), latencyMs: z.number().int().nonnegative(),
       attempts: z.number().int().positive(),
     }).strict().nullable(),
+    clarifications: z.array(consultationClarificationSchema).max(MAX_CLARIFICATIONS).optional(),
+    overriddenConcerns: z.array(requestConcernSchema).max(MAX_REQUEST_CONCERNS).optional(),
   }).strict().optional(),
+  patient: z.object({ age: z.string().min(1).max(40).nullable(), sex: z.enum(ADMINISTRATIVE_SEXES) }).strict().optional(),
 }).strict() satisfies z.ZodType<import("@/shared/contracts/consultation").ConsultationGrounding>;
 
 export const consultationDraftSchema = z.object({
@@ -166,7 +194,10 @@ export const createConsultationDraftRequestSchema = z.strictObject({
   specialty: z.string().trim().min(1).max(200).optional(),
   clinicalQuestion: z.string().trim().min(1).max(4000).optional(),
   request: z.string().trim().min(8).max(2000).optional(),
+  clarifications: z.array(consultationClarificationSchema).max(MAX_CLARIFICATIONS).optional(),
+  proceed: z.boolean().optional(),
 }).refine((v) => (v.specialty === undefined) === (v.clinicalQuestion === undefined), "Provide the specialty and clinical question together")
+  .refine((v) => v.request !== undefined || (v.clarifications === undefined && v.proceed === undefined), "Clarifications belong to a natural-language request")
   .refine((v) => v.request === undefined || v.specialty === undefined, "Send either a natural-language request or a structured intent") satisfies z.ZodType<import("@/shared/contracts").CreateConsultationDraftRequest>;
 
 
@@ -197,3 +228,6 @@ export const consultationHistorySchema = z.object({
     createdAt: isoDateTime, updatedAt: isoDateTime, transport: z.literal("mock") })),
   nextBeforeVersion: z.number().int().positive().nullable(),
 });
+
+/** POST /api/consultations/drafts: a stored draft (201), or the assistant's questions about the request (200, nothing stored). */
+export const createConsultationResultSchema = z.union([consultationClarificationNeededSchema, consultationDraftSchema]);

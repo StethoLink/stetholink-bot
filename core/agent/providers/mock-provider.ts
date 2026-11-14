@@ -3,6 +3,7 @@ import type { ModelProvider } from "./types";
 
 interface AuthoringInput {
   physicianRequest: string;
+  clarifications?: { question: string; answer: string }[];
   availableSpecialties: string[];
   chart: { facts: { id: string; category: string; label: string; status: string; value?: string | number | boolean; unit?: string | null }[]; citableFactIds: string[] };
   revision?: { instruction: string; specialty: string; clinicalQuestion: string };
@@ -12,6 +13,9 @@ const SECTION: Record<string, string> = {
   problem: "relevantHistory", history: "relevantHistory", symptom: "presentingSymptoms", vital_sign: "examinationFindings",
   investigation: "investigations", medication: "currentMedications", allergy: "clinicalContext",
 };
+
+// Words that only name the task; a request made of nothing else asks the specialist nothing.
+const BOILERPLATE = /\b(?:please|prepare|write|draft|make|create|send|a|an|the|this|that|for|to|of|my|our|patient|patients|consultation|consult|referral|refer|request|urgent|specialty|team|service)\b/giu;
 
 /**
  * Deterministic stand-in for the consultation model: it copies each citable fact into its
@@ -32,12 +36,21 @@ function mockReferral(input: AuthoringInput) {
     const value = typeof fact.value === "boolean" ? "" : `: ${String(fact.value)}${fact.unit ? ` ${fact.unit}` : ""}`;
     sections[SECTION[fact.category] ?? "clinicalContext"].push({ text: `${fact.label}${value}`, evidenceIds: [fact.id] });
   }
+  const answers = (input.clarifications ?? []).map((entry) => entry.answer.trim());
+  const remainder = input.physicianRequest.toLowerCase().replace(BOILERPLATE, " ").replace(specialty.toLowerCase(), " ")
+    .replace(/[^a-z]+/gu, " ").trim();
+  // The only challenge the mock can make without inference: the request names a specialty and nothing to ask it.
+  const unclear = !input.revision && !!specialty && !answers.length && remainder.split(" ").filter((word) => word.length > 2).length < 2;
   return {
     specialty,
-    clinicalQuestion: input.revision?.clinicalQuestion ?? input.physicianRequest.trim(),
+    clinicalQuestion: input.revision?.clinicalQuestion ?? [input.physicianRequest.trim(), ...answers].join(" "),
     sections,
     missingInformation: input.chart.facts.filter((fact) => fact.status === "unknown").map((fact) => ({ evidenceId: fact.id })),
     suggestedAdditionalInformation: [],
+    requestReview: unclear
+      ? { verdict: "clarify", concerns: [{ kind: "unclear_question", concern: `The request names ${specialty} but not what the specialist should answer.`,
+          question: `What do you want ${specialty} to answer about this patient?`, evidenceIds: [] }] }
+      : { verdict: "proceed", concerns: [] },
   };
 }
 

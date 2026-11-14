@@ -1,5 +1,6 @@
 import type { ClinicalFact, ConsultationDraft } from "@/shared/contracts";
 import { MISSING_INFORMATION_TITLE, SUGGESTION_PREFIX, citedEvidenceIds, parseReferralText, parseStatement } from "@/shared/utils/referral-text";
+import { CONCERN_LABELS } from "../concern-labels";
 import { DraftStatusBadge } from "./DraftStatusBadge";
 
 function formatDate(iso: string) {
@@ -72,7 +73,33 @@ function ReferralView({ draft }: { draft: ConsultationDraft }) {
       <section aria-label="Your request" className="rounded border border-slate-300 bg-slate-50 p-2">
         <h3 className="text-xs font-semibold tracking-wide text-slate-700 uppercase">Your request</h3>
         <p className="text-sm break-words">{authoring.physicianRequest}</p>
+        {!!authoring.clarifications?.length && (
+          <ul className="mt-1 space-y-1 text-sm">
+            {authoring.clarifications.map((entry, index) => (
+              <li key={index} className="break-words"><span className="font-medium">Assistant asked:</span> {entry.question} <span className="font-medium">You answered:</span> {entry.answer}</li>
+            ))}
+          </ul>
+        )}
       </section>
+
+      {!!authoring.overriddenConcerns?.length && (
+        <section aria-label="Concerns you chose to proceed past" className="rounded-lg border-2 border-amber-700 bg-amber-50 p-2">
+          <h3 className="text-sm font-semibold text-amber-950">The assistant questioned this request, and you chose to prepare it anyway</h3>
+          <ul className="mt-1 space-y-1 text-sm text-amber-950">
+            {authoring.overriddenConcerns.map((entry, index) => (
+              <li key={index} className="break-words"><span className="font-semibold">{CONCERN_LABELS[entry.kind]}:</span> {entry.concern}
+                {entry.evidenceIds.length > 0 && <> <span className="inline-flex flex-wrap gap-1 align-middle"><SourceLinks draftId={draft.id} ids={entry.evidenceIds} facts={facts} /></span></>}
+              </li>
+            ))}
+          </ul>
+          <p className="mt-1 text-xs text-amber-900">Shown to you only; not sent to the specialist.</p>
+        </section>
+      )}
+
+      {draft.grounding?.patient && (
+        <p className="text-sm"><span className="font-medium">Patient:</span> {draft.grounding.patient.age ?? "age not recorded"}, {draft.grounding.patient.sex === "unknown" ? "sex not recorded" : draft.grounding.patient.sex}
+          <span className="text-xs text-slate-700"> (included in the consultation; no name, birth date or identifiers)</span></p>
+      )}
 
       <section>
         <h3 className="text-sm font-semibold">Clinical question</h3>

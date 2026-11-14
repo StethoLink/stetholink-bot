@@ -1,13 +1,19 @@
 import { contractResponse, errorResponse, getConsultations, handleRouteError, readJson, requireClinician } from "@/apps/embedded-app/server";
-import { consultationDraftSchema, consultationListSchema, createConsultationDraftRequestSchema } from "@/shared/schemas";
+import { consultationClarificationNeededSchema, consultationDraftSchema, consultationListSchema, createConsultationDraftRequestSchema } from "@/shared/schemas";
 
-/** Generate a recommendation and persist it under the verified clinician's ownership. */
+/**
+ * Generate a recommendation and persist it under the verified clinician's ownership (201), or
+ * return the assistant's questions about the request (200) when it needs clarifying first.
+ */
 export async function POST(req: Request) {
   try {
     const session = await requireClinician();
     const input = createConsultationDraftRequestSchema.safeParse(await readJson(req));
     if (!input.success) return errorResponse("invalid_request", "Invalid draft request");
-    return contractResponse(consultationDraftSchema, await getConsultations(session).create(input.data), 201);
+    const result = await getConsultations(session).create(input.data);
+    return "outcome" in result
+      ? contractResponse(consultationClarificationNeededSchema, result, 200)
+      : contractResponse(consultationDraftSchema, result, 201);
   } catch (err) {
     return handleRouteError(err);
   }

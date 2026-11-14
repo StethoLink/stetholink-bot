@@ -19,7 +19,7 @@ const lifecycle = (draft: ConsultationDraft) => draft.lifecycleStatus ?? draft.s
 const IN_FLIGHT = ["queued", "sent", "accepted", "responded"];
 
 /**
- * The exact, minimal content a provider receives. No demographics or chart identifiers.
+ * The exact, minimal content a provider receives. Age and sex are stated in the summary; no name, birth date or chart identifiers.
  * The envelope takes the classification of the routing session, and only a consultation
  * of that same classification can be packaged.
  */

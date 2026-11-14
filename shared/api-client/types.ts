@@ -2,6 +2,7 @@ import type {
   ApprovalRequest,
   ChatRequest,
   ChatResponse,
+  ConsultationClarificationNeeded,
   ConsultationDraft,
   CreateConsultationDraftRequest,
   EncounterContext,
@@ -15,7 +16,8 @@ export interface StethoLinkApiClient {
   sendChatMessage(request: ChatRequest): Promise<ChatResponse>;
   getPatientContext(patientId: string): Promise<PatientContext>;
   getEncounterContext(encounterId: string): Promise<EncounterContext>;
-  createConsultationDraft(request: CreateConsultationDraftRequest): Promise<ConsultationDraft>;
+  /** A natural-language request may come back as the assistant's questions instead of a draft. */
+  createConsultationDraft(request: CreateConsultationDraftRequest): Promise<ConsultationDraft | ConsultationClarificationNeeded>;
   getConsultationDraft(draftId: string): Promise<ConsultationDraft>;
   submitApproval(request: ApprovalRequest): Promise<ConsultationDraft>;
 }

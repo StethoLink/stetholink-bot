@@ -1,5 +1,8 @@
 import type { ClinicianContext } from "@/core/auth/clinician";
-import type { ApprovalRequest, ConsultationDraft, DataClassification, KnownClinicalFact, ConsultationGrounding, ConsultationRequest, CreateConsultationDraftRequest, ModelRevisionRequest, ModelUsage } from "@/shared/contracts";
+import type {
+  ApprovalRequest, ConsultationClarification, ConsultationClarificationNeeded, ConsultationDraft, DataClassification, KnownClinicalFact, ConsultationGrounding,
+  ConsultationRequest, CreateConsultationDraftRequest, ModelRevisionRequest, ModelUsage,
+} from "@/shared/contracts";
 import { classificationOfSource, consultationDraftSchema, consultationRequestSchema, createConsultationDraftRequestSchema, encounterContextSchema, patientContextSchema } from "@/shared/schemas";
 import type { ConsultationRepository, DurableConsultationRepository } from "@/core/consultation/repository";
 import type { ModelProvider } from "@/core/agent/providers/types";
@@ -9,9 +12,10 @@ import { PROMPT_VERSION, SYSTEM_INSTRUCTIONS } from "@/core/agent/prompts/system
 import { RouteError } from "@/core/errors";
 import { CONTEXT_VERSION, groundContext, renderFact, selectionFormat, validateSelection } from "./grounding";
 import {
-  AUTHORING_INSTRUCTIONS, AUTHORING_PROMPT_VERSION, MAX_AUTHORING_ATTEMPTS, buildAuthoringInput, referralFormat, renderReferral, validateReferral,
+  AUTHORING_INSTRUCTIONS, AUTHORING_PROMPT_VERSION, MAX_AUTHORING_ATTEMPTS, buildAuthoringInput, clarificationsExhausted, referralFormat, renderReferral, validateReferral,
   type AuthoringContext, type ValidatedReferral,
 } from "./authoring";
+import { demographicLines, patientDemographics } from "./demographics";
 import { SUGGESTION_PREFIX } from "@/shared/utils/referral-text";
 
 export interface ConsultationServiceDeps {
@@ -59,7 +63,7 @@ export function createConsultationService(deps: ConsultationServiceDeps) {
     if (input.encounterId && (!encounter || encounter.patientId !== patient.patientId || encounter.encounterId !== input.encounterId)) {
       throw new RouteError("invalid_request", "Encounter does not belong to this patient");
     }
-    return { patient, encounter, grounded: groundContext(patient, encounter, classification) };
+    return { patient, encounter, demographics: patientDemographics(patient), grounded: groundContext(patient, encounter, classification) };
   }
 
   /**
@@ -72,7 +76,7 @@ export function createConsultationService(deps: ConsultationServiceDeps) {
     for (let attempt = 0; attempt < MAX_AUTHORING_ATTEMPTS; attempt++) {
       const result = await deps.provider.generate({
         instructions: AUTHORING_INSTRUCTIONS,
-        // Normalized facts, the physician's words and (for a revision) the current text. No demographics or identifiers.
+        // Normalized facts, age and sex, the physician's words and answers, and (for a revision) the current text. No name, birth date or identifiers.
         messages: [{ role: "user", content: buildAuthoringInput(context) }],
         dataClassification: classification,
         structuredOutput: referralFormat,
@@ -108,6 +112,11 @@ export function createConsultationService(deps: ConsultationServiceDeps) {
     return { flags, notes };
   }
 
+  /** A challenge is shown to the physician only; it passes the same output checks as any draft text. */
+  async function assertSafeConcerns(referral: ValidatedReferral) {
+    if (referral.concerns.length) await assertSafe(referral.concerns.flatMap((entry) => [entry.concern, entry.question]));
+  }
+
   async function assertSafe(parts: string[]) {
     const safety = await deps.safety.assess(parts.join("\n"));
     if (safety.level === "blocked") throw new RouteError("safety_blocked", "Draft withheld by safety check");
@@ -117,21 +126,33 @@ export function createConsultationService(deps: ConsultationServiceDeps) {
    * Model-authored draft from the physician's natural-language request. The model proposes;
    * only statements supported by their cited chart facts are kept. Cannot approve, persist or route.
    */
-  async function author(chart: { patientId: string; encounterId?: string }, physicianRequest: string): Promise<ConsultationDraft> {
-    const { encounter, grounded } = await loadChart(chart);
+  async function author(chart: { patientId: string; encounterId?: string }, physicianRequest: string,
+    options: { clarifications?: readonly ConsultationClarification[]; proceed?: boolean } = {}): Promise<ConsultationDraft | ConsultationClarificationNeeded> {
+    const { encounter, grounded, demographics } = await loadChart(chart);
     const reasonForVisit = encounter?.reasonForVisit?.trim() || null;
+    const clarifications = [...options.clarifications ?? []];
     const context: AuthoringContext = {
-      physicianRequest, reasonForVisit, availableSpecialties: deps.specialties ?? [],
+      physicianRequest, clarifications, proceed: options.proceed === true, demographics, reasonForVisit, availableSpecialties: deps.specialties ?? [],
       facts: grounded.facts, eligibleFacts: grounded.eligibleFacts, missing: grounded.missing,
     };
     const { referral, result, usage } = await askModel(context);
+    await assertSafeConcerns(referral);
+    if (referral.verdict === "clarify" && !context.proceed) {
+      // Nothing is drafted or stored: the physician answers, or chooses to proceed.
+      return { outcome: "clarification_needed", specialty: referral.specialty || null, concerns: referral.concerns, clarifications, canAnswer: !clarificationsExhausted(clarifications) };
+    }
     const { flags, notes } = safetyNotes(grounded);
     const rendered = renderReferral(referral, context, notes);
     const grounding: ConsultationGrounding = {
       reason: reasonForVisit, question: referral.clinicalQuestion, specialty: referral.specialty,
       evidenceIds: referral.citedIds, gaps: [...grounded.missing.map(renderFact), ...notes], conflicts: grounded.conflicts, safetyFlags: flags,
       provenance: { provider: result.provider, model: result.model, promptVersion: AUTHORING_PROMPT_VERSION, contextVersion: CONTEXT_VERSION, dataClassification: classification, encounterReference: encounter?.encounterId ?? null },
-      authoring: { mode: "model_authored", physicianRequest, rejectedStatements: referral.rejectedStatements, liveInference: result.provider !== "mock", usage },
+      authoring: {
+        mode: "model_authored", physicianRequest, rejectedStatements: referral.rejectedStatements, liveInference: result.provider !== "mock", usage,
+        ...(clarifications.length ? { clarifications } : {}),
+        ...(referral.concerns.length ? { overriddenConcerns: referral.concerns } : {}),
+      },
+      patient: demographics,
     };
     const now = new Date().toISOString();
     const draft = consultationDraftSchema.safeParse({
@@ -161,7 +182,8 @@ export function createConsultationService(deps: ConsultationServiceDeps) {
     const facts = draft.clinicalFacts ?? [];
     const conflicting = new Set(draft.grounding.conflicts.flat());
     const context: AuthoringContext = {
-      physicianRequest: authoring.physicianRequest, reasonForVisit: draft.grounding.reason, availableSpecialties: deps.specialties ?? [],
+      physicianRequest: authoring.physicianRequest, clarifications: authoring.clarifications ?? [], demographics: draft.grounding.patient,
+      reasonForVisit: draft.grounding.reason, availableSpecialties: deps.specialties ?? [],
       facts, missing: draft.missingInformation ?? [],
       eligibleFacts: facts.filter((fact): fact is KnownClinicalFact => fact.status === "known" && !conflicting.has(fact.id)),
       revision: {
@@ -188,7 +210,7 @@ export function createConsultationService(deps: ConsultationServiceDeps) {
     if (normalizedIntent && (normalizedIntent.patientId !== input.patientId || normalizedIntent.encounterId !== input.encounterId)) {
       throw new RouteError("invalid_request", "Consultation intent does not match the requested context");
     }
-    const { encounter, grounded } = await loadChart(input);
+    const { encounter, grounded, demographics } = await loadChart(input);
     const result = await deps.provider.generate({
       instructions: SYSTEM_INSTRUCTIONS,
       // No demographics, raw legacy lists, identity, free text intent, chat or attachments.
@@ -225,13 +247,14 @@ export function createConsultationService(deps: ConsultationServiceDeps) {
       specialty: normalizedIntent?.specialty ?? null,
       evidenceIds, gaps, conflicts: grounded.conflicts, safetyFlags,
       provenance: { provider: result.provider, model: result.model, promptVersion: PROMPT_VERSION, contextVersion: CONTEXT_VERSION, dataClassification: classification, encounterReference: encounter?.encounterId ?? null },
+      patient: demographics,
     };
     const evidence = evidenceIds.map((id) => renderFact(grounded.eligibleFacts.find((fact) => fact.id === id)!));
     const now = new Date().toISOString();
     const draft = consultationDraftSchema.safeParse({
       id: crypto.randomUUID(), patientId: input.patientId, encounterId: input.encounterId,
       status: "pending_approval", generatedBy: "ai", createdAt: now, updatedAt: now,
-      summary: [classification === "synthetic" ? "Synthetic consultation draft; physician review required." : "Consultation draft; physician review required.", `Reason: ${grounding.reason ?? "unknown (not provided)"}`, `Question: ${grounding.question ?? "unknown (not provided)"}`, `Specialty: ${grounding.specialty ?? "unknown (not provided)"}`, ...evidence].join("\n"),
+      summary: [classification === "synthetic" ? "Synthetic consultation draft; physician review required." : "Consultation draft; physician review required.", ...demographicLines(demographics), `Reason: ${grounding.reason ?? "unknown (not provided)"}`, `Question: ${grounding.question ?? "unknown (not provided)"}`, `Specialty: ${grounding.specialty ?? "unknown (not provided)"}`, ...evidence].join("\n"),
       assessment: [`Safety flags: ${safetyFlags.join(", ")}`, ...grounded.conflicts.map((ids) => `Unresolved conflict: ${ids.join(", ")}`), `Provenance: ${result.provider}/${result.model}; ${PROMPT_VERSION}; ${CONTEXT_VERSION}`].join("\n"),
       plan: [...gaps, "Physician must verify the sources and decide whether to approve in the separate authenticated approval workflow."],
       clinicalFacts: grounded.facts, missingInformation: grounded.missing, grounding,
@@ -280,7 +303,8 @@ export function createConsultationService(deps: ConsultationServiceDeps) {
       const saved = await lifecycle.transition(draftId, { action: "submit", expectedVersion: version, idempotencyKey: input.idempotencyKey + ":submit" });
       return { draft: consultationDraftSchema.parse(saved), revision: { provider: revised.provider, model: revised.model, usage: revised.usage, rejectedStatements: revised.referral.rejectedStatements } };
     },
-    async create(input: CreateConsultationDraftRequest, actor: ClinicianContext) {
+    /** A draft, or the assistant's questions about the request when it needs clarifying first (nothing is stored then). */
+    async create(input: CreateConsultationDraftRequest, actor: ClinicianContext): Promise<ConsultationDraft | ConsultationClarificationNeeded> {
       if (actor.authorization !== "active" || actor.expiresAt <= Date.now() || actor.dataClassification !== classification ||
           !actor.scopes.includes("consultation:draft") ||
           input.patientId !== actor.patientId || (input.encounterId !== undefined && input.encounterId !== actor.encounterId)) {
@@ -288,13 +312,16 @@ export function createConsultationService(deps: ConsultationServiceDeps) {
       }
       const chart = { patientId: actor.patientId, encounterId: actor.encounterId };
       if (input.request !== undefined) {
-        const parsed = createConsultationDraftRequestSchema.safeParse({ ...chart, request: input.request });
+        const parsed = createConsultationDraftRequestSchema.safeParse({ ...chart, request: input.request, clarifications: input.clarifications, proceed: input.proceed });
         if (!parsed.success || !parsed.data.request || input.conversationId) throw new RouteError("invalid_request", "Describe the consultation you want prepared");
-        // The physician's words go to the model with the verified chart's facts, and nothing else.
-        const authored = await author(chart, parsed.data.request);
+        const { clarifications = [], proceed = false } = parsed.data;
+        // The physician's words and answers go to the model with the verified chart's facts, and nothing else.
+        const authored = await author(chart, parsed.data.request, { clarifications, proceed });
+        if ("outcome" in authored) return authored;
         const fields = { provider: authored.grounding!.provenance.provider, model: authored.grounding!.provenance.model, promptVersion: authored.grounding!.provenance.promptVersion };
         const stored = input.idempotencyKey
-          ? await deps.repository.create(authored, actor.clinicianId, fields, { key: input.idempotencyKey, request: { ...chart, request: parsed.data.request } })
+          ? await deps.repository.create(authored, actor.clinicianId, fields, { key: input.idempotencyKey, request: { ...chart, request: parsed.data.request,
+            ...(clarifications.length ? { clarifications } : {}), ...(proceed ? { proceed } : {}) } })
           : await deps.repository.create(authored, actor.clinicianId, fields);
         return consultationDraftSchema.parse(stored);
       }

@@ -1,6 +1,7 @@
 import type { z } from "zod";
 import { apiRoutes } from "@/shared/contracts";
 import {
+  createConsultationResultSchema,
   apiErrorSchema,
   chatResponseSchema,
   consultationDraftSchema,
@@ -52,7 +53,7 @@ export function createHttpApiClient(options: { baseUrl?: string; fetch?: FetchLi
     getPatientContext: (id) => request("GET", apiRoutes.patientContext.path(id), patientContextSchema),
     getEncounterContext: (id) => request("GET", apiRoutes.encounterContext.path(id), encounterContextSchema),
     createConsultationDraft: (body) =>
-      request("POST", apiRoutes.createConsultationDraft.path(), consultationDraftSchema, body),
+      request("POST", apiRoutes.createConsultationDraft.path(), createConsultationResultSchema, body),
     getConsultationDraft: (id) => request("GET", apiRoutes.getConsultationDraft.path(id), consultationDraftSchema),
     submitApproval: ({ draftId, ...body }) =>
       request("POST", apiRoutes.submitApproval.path(draftId), consultationDraftSchema, { draftId, ...body }),

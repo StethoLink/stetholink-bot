@@ -12,7 +12,7 @@ Clinical routes require a verified clinician session. The health and authenticat
 | 2 | POST | `/api/chat` | `ChatRequest` | `ChatResponse` | ✅ mock provider |
 | 3 | GET | `/api/patients/:patientId/context` | — | `PatientContext` | Synthetic or read-only SMART sandbox |
 | 4 | GET | `/api/encounters/:encounterId` | — | `EncounterContext` | Synthetic or read-only SMART sandbox |
-| 5 | POST | `/api/consultations/drafts` | `CreateConsultationDraftRequest` | `ConsultationDraft` (201) | Synthetic context with Supabase or development persistence |
+| 5 | POST | `/api/consultations/drafts` | `CreateConsultationDraftRequest` | `ConsultationDraft` (201), or `ConsultationClarificationNeeded` (200, nothing stored) for a natural-language request the assistant questions | Synthetic context with Supabase or development persistence |
 | 6 | GET | `/api/consultations/drafts/:draftId` | — | `ConsultationDraft` | ✅ clinician-owned rows |
 | 7 | POST | `/api/consultations/drafts/:draftId/approval` | `ApprovalRequest` | `ConsultationDraft` | Atomic in Supabase |
 | 8 | POST | `/api/consultations/drafts/:draftId/delivery` | `DispatchRequest` | `ConsultationDeliveryView` | Synthetic providers; see M5/M6 below |

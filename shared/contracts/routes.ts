@@ -39,4 +39,8 @@ export interface CreateConsultationDraftRequest {
    * The model reads it with the synthetic chart. Cannot be combined with specialty/clinicalQuestion.
    */
   request?: string;
+  /** Answers to questions the assistant asked about this same request. Only with `request`. */
+  clarifications?: import("./consultation").ConsultationClarification[];
+  /** Draft even if the assistant still questions the request; its concerns are kept with the draft. Only with `request`. */
+  proceed?: boolean;
 }

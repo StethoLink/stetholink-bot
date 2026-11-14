@@ -1,4 +1,5 @@
 import * as React from "react";
+import { drafted } from "@/tests/helpers/drafted";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
@@ -19,7 +20,7 @@ async function authoredDraft(): Promise<ConsultationDraft> {
     repository: { get: vi.fn(), approve: vi.fn(), create: vi.fn(async (draft) => draft) },
     provider: mockProvider, safety: clinicalSafetyGuard, dataClassification: "synthetic", adapter: syntheticClinicalAdapter, specialties: ["Cardiology"],
   });
-  return service.author({ patientId: "syn-pt-omar", encounterId: "syn-enc-omar" }, REQUEST);
+  return drafted(service.author({ patientId: "syn-pt-omar", encounterId: "syn-enc-omar" }, REQUEST));
 }
 const html = (draft: ConsultationDraft) => renderToStaticMarkup(createElement(ConsultationDraftView, { draft }));
 const steps = (...args: Parameters<typeof consultationTracker>) => consultationTracker(...args).steps.map((step) => `${step.label}:${step.state}`).join(" ");

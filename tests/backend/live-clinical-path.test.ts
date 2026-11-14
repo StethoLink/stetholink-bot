@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { drafted } from "@/tests/helpers/drafted";
 import type { ClinicianContext } from "@/core/auth/clinician";
 import type { ClinicalFact, ConsultationDraft, EncounterContext, PatientContext } from "@/shared/contracts";
 import type { ClinicalDataAdapter } from "@/core/tools/connector";
@@ -80,7 +81,7 @@ const REQUEST = "Prepare a cardiology consultation about poorly controlled hyper
 describe("live consultation drafting through the verified path (fake FHIR adapter, fictional patient)", () => {
   it("drafts from FHIR and OpenEMR facts, keeps their source references and stores a live draft pending review", async () => {
     const { service, repository, model } = liveService();
-    const draft = consultationDraftSchema.parse(await service.create({ ...chart, request: REQUEST }, physician));
+    const draft = consultationDraftSchema.parse(await drafted(service.create({ ...chart, request: REQUEST }, physician)));
     expect(draft.status).toBe("pending_approval");
     expect(draft.reviewedBy).toBeUndefined();
     expect(draft.grounding?.provenance).toMatchObject({ dataClassification: "live", provider: "fake-live-model", encounterReference: chart.encounterId });
@@ -108,7 +109,7 @@ describe("live consultation drafting through the verified path (fake FHIR adapte
 
   it("drafts the structured (evidence selection) form with source citations and no synthetic label", async () => {
     const { service } = liveService();
-    const draft = await service.create({ ...chart, specialty: "Cardiology", clinicalQuestion: "Is further work-up needed?" }, physician);
+    const draft = await drafted(service.create({ ...chart, specialty: "Cardiology", clinicalQuestion: "Is further work-up needed?" }, physician));
     expect(draft.summary.split("\n")[0]).toBe("Consultation draft; physician review required.");
     expect(draft.summary).not.toMatch(/synthetic/i);
     expect(draft.summary).toContain("Condition/fic-htn");
@@ -152,7 +153,7 @@ describe("live consultation drafting through the verified path (fake FHIR adapte
 
   it("revises a live draft only in a live session, and never sends a synthetic draft to a live model", async () => {
     const { service, model } = liveService();
-    const draft = await service.create({ ...chart, request: REQUEST }, physician);
+    const draft = await drafted(service.create({ ...chart, request: REQUEST }, physician));
     const stored = { ...draft, version: 1, lifecycleStatus: "pending_review" as const };
     const lifecycle = {
       get: vi.fn(async () => stored), create: vi.fn(), history: vi.fn(),
@@ -242,7 +243,7 @@ describe("live routing through the physician path (fake provider)", () => {
   const registry = createProviderRegistry([provider, { ...provider, id: "fictional-unlisted" }], new Set([provider.id]));
 
   async function approvedLiveDraft(): Promise<ConsultationDraft> {
-    const draft = await liveService().service.create({ ...chart, request: REQUEST }, physician);
+    const draft = await drafted(liveService().service.create({ ...chart, request: REQUEST }, physician));
     return { ...draft, status: "approved", lifecycleStatus: "approved", version: 2, tenantId: TENANT,
       reviewedBy: physician.clinicianId, reviewedAt: "2026-03-02T10:00:00.000Z", approvedRecipientId: provider.id };
   }

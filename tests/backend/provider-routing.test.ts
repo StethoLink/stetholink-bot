@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { drafted } from "@/tests/helpers/drafted";
 import type { ClinicianContext } from "@/core/auth/clinician";
 import { RouteError } from "@/core/errors";
 import { ProviderTransportError, type DeliveryRecord, type DeliveryRepository, type ProviderTransport } from "@/core/routing/ports";
@@ -30,7 +31,7 @@ async function approvedDraft(): Promise<ConsultationDraft> {
     repository: { get: vi.fn(), approve: vi.fn(), create: vi.fn(async (draft) => draft) },
     provider: mockProvider, safety: clinicalSafetyGuard, dataClassification: "synthetic", adapter: syntheticClinicalAdapter,
   });
-  const draft = await service.create({ patientId: "syn-pt-ahmed", specialty: ahmedConsultationRequest.specialty, clinicalQuestion: ahmedConsultationRequest.clinicalQuestion }, physician);
+  const draft = await drafted(service.create({ patientId: "syn-pt-ahmed", specialty: ahmedConsultationRequest.specialty, clinicalQuestion: ahmedConsultationRequest.clinicalQuestion }, physician));
   return { ...draft, status: "approved", lifecycleStatus: "approved", version: 2, tenantId: TENANT,
     reviewedBy: physician.clinicianId, reviewedAt: "2026-01-15T10:05:00.000Z", approvedRecipientId: "synthetic-cardiology" };
 }

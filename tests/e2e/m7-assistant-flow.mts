@@ -63,7 +63,24 @@ try {
   await call(drafts, 400, { cookie: physician, body: { ...chart, request, specialty: "Cardiology", clinicalQuestion: "Both forms" } });
   await call(drafts, 400, { cookie: physician, body: { ...chart, request, status: "approved" } });
   await call(drafts, 403, { cookie: physician, body: { patientId: "syn-pt-001", request } });
-  await call(drafts, 400, { cookie: physician, body: { ...chart, request: "Please prepare a consultation for this patient." } });
+  // A request without a specialty is questioned, not refused, and nothing is stored.
+  const unnamed = (await call(drafts, 200, { cookie: physician, body: { ...chart, request: "Please prepare a consultation for this patient." } })).json;
+  assert.equal(unnamed.outcome, "clarification_needed");
+  assert.equal(unnamed.concerns[0].kind, "missing_specialty");
+  await call(drafts, 400, { cookie: physician, body: { ...chart, specialty: "Cardiology", clinicalQuestion: "Q?", proceed: true } });
+
+  // --- The assistant questions a request with nothing to ask, and drafts once answered ------
+  const bare = { ...chart, request: "Prepare a cardiology consultation", idempotencyKey: "m7-bare-" + run };
+  const questioned = (await call(drafts, 200, { cookie: physician, body: bare })).json;
+  assert.equal(questioned.outcome, "clarification_needed");
+  assert.equal(questioned.concerns[0].kind, "unclear_question");
+  assert.equal(questioned.canAnswer, true);
+  const clarifications = [{ question: questioned.concerns[0].question, answer: "Whether this chest pain is acute coronary syndrome." }];
+  const answered = (await call(drafts, 201, { cookie: physician, body: { ...bare, clarifications, idempotencyKey: "m7-answered-" + run } })).json;
+  assert.deepEqual(answered.grounding.authoring.clarifications, clarifications);
+  assert.match(answered.grounding.question, /acute coronary syndrome/);
+  assert.match(answered.summary, /^Consultation request: Cardiology\nAge: \d+ years\nSex: Male\n/);
+  assert.deepEqual(answered.grounding.patient, { age: answered.summary.match(/Age: (\d+ years)/)[1], sex: "male" });
 
   // --- Authored draft, stored once ----------------------------------------------------------
   const create = { ...chart, request, idempotencyKey: "m7-" + run };

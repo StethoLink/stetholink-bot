@@ -1,6 +1,6 @@
 import type { z } from "zod";
-import type { ConsultationDeliveryView, DeliveryFailureCode } from "@/shared/contracts";
-import { apiErrorSchema, consultationDeliveryViewSchema, consultationDraftSchema, consultationListSchema, eligibleProvidersSchema } from "@/shared/schemas";
+import type { ConsultationClarification, ConsultationDeliveryView, DeliveryFailureCode } from "@/shared/contracts";
+import { apiErrorSchema, consultationDeliveryViewSchema, consultationDraftSchema, consultationListSchema, createConsultationResultSchema, eligibleProvidersSchema } from "@/shared/schemas";
 
 export type EligibleProvider = z.infer<typeof eligibleProvidersSchema>[number];
 
@@ -65,8 +65,9 @@ export const deliveryApi = {
   /** Asks the model to reword the draft. The server validates the result and returns it to physician review. */
   reviseWithModel: (draftId: string, body: { instruction: string; expectedVersion: number; idempotencyKey: string }) =>
     call(consultationDraftSchema, `${draftUrl(draftId)}/ai-revision`, body),
-  create: (body: { patientId: string; encounterId?: string; request: string; idempotencyKey: string }) =>
-    call(consultationDraftSchema, "/api/consultations/drafts", body),
+  /** A draft, or the assistant's questions about the request; answer them or proceed by calling again. */
+  create: (body: { patientId: string; encounterId?: string; request: string; idempotencyKey: string; clarifications?: ConsultationClarification[]; proceed?: boolean }) =>
+    call(createConsultationResultSchema, "/api/consultations/drafts", body),
   submit: (draftId: string, body: { expectedVersion: number; idempotencyKey: string }) =>
     call(consultationDraftSchema, `${draftUrl(draftId)}/transitions`, { ...body, action: "submit" }),
 };

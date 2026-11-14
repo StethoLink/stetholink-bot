@@ -3,6 +3,7 @@ import type { IsoDateTime } from "@/shared/types";
 import type { AttachmentReference } from "./attachment";
 import type { DataClassification } from "./classification";
 import type { ClinicalFact, MissingInformation } from "./clinical-data";
+import type { AdministrativeSex } from "./patient";
 
 /** Normalized consultation intent; not a new HTTP endpoint or an approval command. */
 export interface ConsultationRequest {
@@ -36,6 +37,46 @@ export interface ConsultationGrounding {
   };
   /** Present when a language model wrote the draft from the physician's natural-language request. */
   authoring?: ConsultationAuthoring;
+  /**
+   * Derived by the server from the chart when the draft was written. Age is top-coded at
+   * "90 years or older"; the name, birth date and chart identifiers are never included.
+   * Absent on drafts stored before this field existed.
+   */
+  patient?: { age: string | null; sex: AdministrativeSex };
+}
+
+/** Why the assistant questions a consultation request before drafting it. */
+export type RequestConcernKind = "missing_specialty" | "specialty_fit" | "unclear_question" | "missing_information" | "conflicts_with_chart" | "urgency";
+
+/** One challenge to the request, grounded in the chart where it cites facts. */
+export interface RequestConcern {
+  kind: RequestConcernKind;
+  /** What is wrong with the request, stated directly. */
+  concern: string;
+  /** What the physician is asked to answer. */
+  question: string;
+  /** Chart facts the concern is based on; empty when it is about the request itself. */
+  evidenceIds: string[];
+}
+
+/** The physician's answer to one question the assistant asked. */
+export interface ConsultationClarification {
+  question: string;
+  answer: string;
+}
+
+/**
+ * Returned instead of a draft when the assistant questions the request. Nothing is stored.
+ * The physician answers (the answers are sent back with the same request) or chooses to proceed.
+ */
+export interface ConsultationClarificationNeeded {
+  outcome: "clarification_needed";
+  specialty: string | null;
+  concerns: RequestConcern[];
+  /** Answers already given, in order; send them back with the next attempt. */
+  clarifications: ConsultationClarification[];
+  /** False once the maximum number of questions has been answered; only "proceed" remains. */
+  canAnswer: boolean;
 }
 
 /** Token use for one model call. Cost is an estimate from operator-configured upper-bound rates. */
@@ -60,6 +101,10 @@ export interface ConsultationAuthoring {
   /** False for the deterministic demo fallback, which performs no model inference. */
   liveInference: boolean;
   usage: ModelUsage | null;
+  /** The physician's answers to the assistant's questions before this draft was written. */
+  clarifications?: ConsultationClarification[];
+  /** Concerns the assistant still raised when the physician chose to proceed. Shown with the draft, never sent to the provider. */
+  overriddenConcerns?: RequestConcern[];
 }
 
 /** AI-generated draft. Stays a draft until a clinician approves it. */
