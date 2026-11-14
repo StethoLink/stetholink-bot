@@ -7,6 +7,7 @@ import { beginSmartLaunch, exchangeSmartCode, secureEndpoint, type SmartRegistra
 import { createFhirConnector, isFhirId } from "@/integrations/fhir/connector";
 import { getEnv } from "@/platform/tenants/env";
 import { RouteError } from "@/core/errors";
+import { ChartUnavailableError } from "@/core/tools/connector";
 import { AuthError, cookieOptions, saveSession } from "./session";
 import { launchCookie, readHandle, sessionCookie, storeHandle } from "./session-store";
 import type { IdentityAdapter } from "./identity";
@@ -86,7 +87,10 @@ function smartIdentityAdapter(reg: Registration): IdentityAdapter<{ pending: z.i
         ehrAccessToken: result.grant.accessToken,
         context: {
           clinicianId: mapped.clinicianId, tenantId: reg.tenantId, roles: [mapped.role],
-          scopes: ["chart:read", ...scopes.map((scope) => "smart:" + scope)], patientId: patient.patientId, encounterId: encounter.encounterId,
+          // StethoLink permissions come from the tenant's clinician mapping, never from the EHR token:
+          // every mapped clinician may draft; only a mapped physician may approve and send.
+          scopes: ["chart:read", "consultation:draft", ...(mapped.role === "physician" ? ["consultation:approve", "consultation:route"] : []),
+            ...scopes.map((scope) => "smart:" + scope)], patientId: patient.patientId, encounterId: encounter.encounterId,
           expiresAt, authorization: "active", dataClassification: reg.dataClassification,
         },
       };
@@ -127,7 +131,9 @@ export async function finishSmartLaunch(callback: Callback) {
   const pending = pendingSchema.safeParse(await readHandle(jar.get(launchCookie)?.value, "launch", true));
   jar.set(launchCookie, "", cookieOptions(0));
   if (!pending.success) throw new AuthError("forbidden", "SMART launch session is missing or expired");
-  const verified = await smartIdentityAdapter(reg).verify({ pending: pending.data, callback }).catch(() => {
+  const verified = await smartIdentityAdapter(reg).verify({ pending: pending.data, callback }).catch((error: unknown) => {
+    // A visit StethoLink cannot use is reported with its reason; every other failure looks the same.
+    if (error instanceof ChartUnavailableError) throw error;
     throw new AuthError("forbidden", "SMART clinician or chart context could not be verified");
   });
   if (verified.context.expiresAt <= Date.now()) throw new AuthError("forbidden", "SMART grant expired");

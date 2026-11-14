@@ -4,6 +4,9 @@ import { POST as stage } from "@/apps/embedded-app/app/api/staging/launch/route"
 import { GET as smartLaunch } from "@/apps/embedded-app/app/api/smart/launch/route";
 import { GET as smartCallback } from "@/apps/embedded-app/app/api/smart/callback/route";
 import { exportJWK, generateKeyPair, SignJWT } from "jose";
+import { requireClinician } from "@/platform/auth/session";
+import { completeSmartLaunch, fakeEhr, smartEnv } from "../helpers/smart-launch";
+import { fictionalChart } from "../fixtures/fhir-chart";
 
 const { jar, requestHeaders, env, handles } = vi.hoisted(() => ({
   jar: new Map<string, string>(), requestHeaders: new Headers({ host: "app.example.test" }),
@@ -158,6 +161,39 @@ describe("SMART launch", () => {
   );
 });
 
+describe("SMART session permissions", () => {
+  const routes = { launch: smartLaunch, callback: smartCallback };
+  it.each([
+    ["physician", ["chart:read", "consultation:draft", "consultation:approve", "consultation:route"]],
+    ["clinician", ["chart:read", "consultation:draft"]],
+  ] as const)("come from the tenant's clinician mapping after the signed launch (%s)", async (role, expected) => {
+    Object.assign(env, smartEnv(role), { CLINICAL_DATA_MODE: "live" });
+    // A token that claims StethoLink permissions in its scope gains nothing by it.
+    const ehr = await fakeEhr({ scope: smartEnv(role).SMART_SCOPE + " consultation:approve consultation:route" });
+    vi.stubGlobal("fetch", ehr.request);
+    expect((await completeSmartLaunch(routes, ehr)).status).toBe(303);
+    const launched = await requireClinician();
+    expect(launched.context.roles).toEqual([role]);
+    expect(launched.context.scopes.filter((scope) => !scope.startsWith("smart:"))).toEqual(expected);
+    expect(launched.context.scopes).toContain("smart:consultation:approve");
+    expect(launched.context.dataClassification).toBe("live");
+  });
+  it("tells the clinician why a visit cannot be opened", async () => {
+    Object.assign(env, smartEnv("physician"), { CLINICAL_DATA_MODE: "live" });
+    const ehr = await fakeEhr({ fhirOverride: (path) => path.startsWith("/Encounter/") ? { ...fictionalChart().encounter, status: "entered-in-error" } : undefined });
+    vi.stubGlobal("fetch", ehr.request);
+    const refused = await completeSmartLaunch(routes, ehr);
+    expect(refused.status).toBe(422);
+    expect(await refused.json()).toMatchObject({ error: { code: "unsupported_encounter", message: expect.stringContaining("entered-in-error") } });
+    expect((await session()).status).toBe(401);
+  });
+  it("opens an emergency visit whose status is only arrived", async () => {
+    Object.assign(env, smartEnv("physician"), { CLINICAL_DATA_MODE: "live" });
+    const ehr = await fakeEhr({ fhirOverride: (path) => path.startsWith("/Encounter/") ? { ...fictionalChart().encounter, status: "arrived", class: { code: "EMER" } } : undefined });
+    vi.stubGlobal("fetch", ehr.request);
+    expect((await completeSmartLaunch(routes, ehr)).status).toBe(303);
+  });
+});
 describe("session data classification", () => {
   it("classifies a synthetic launch as synthetic and never from request input", async () => {
     const forged = new Request("https://app.example.test/api/staging/launch", {
