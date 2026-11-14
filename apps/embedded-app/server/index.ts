@@ -46,6 +46,8 @@ function requireAssistantData(session: VerifiedLaunch, adapter: { source: DataSo
 export function getChat(session: VerifiedLaunch) {
   const { adapter, patientContext } = getClinicalServices(session);
   requireAssistantData(session, adapter);
+  // Product decision: free-text chat would send the whole patient summary to the model, so it stays off for real patients.
+  if (session.context.dataClassification === "live") throw new RouteError("not_implemented", "Free-text chat is not available with real patient data. Use a consultation request instead.");
   return createChatOrchestrator({
     provider: getModelProvider(), safety: clinicalSafetyGuard, dataClassification: session.context.dataClassification,
     loadPatientContext: (id) => patientContext.getContext(id),

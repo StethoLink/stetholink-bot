@@ -4,6 +4,10 @@ import { RouteError } from "@/core/errors";
 
 const configSchema = z.object({
   apiKey: z.string().min(1).optional(), model: z.string().min(1).max(128),
+  // Where the Responses API is served, for a regional or self-hosted deployment. HTTPS only;
+  // plain HTTP is accepted for a loopback address when the platform allows it (never in production).
+  baseUrl: z.url().default("https://api.openai.com/v1"),
+  allowLoopbackHttp: z.boolean().default(false),
   timeoutMs: z.number().int().min(1).max(120_000).default(90_000),
   maxRetries: z.number().int().min(0).max(2).default(1),
   maxInputTokens: z.number().int().min(1).max(32_000).default(16_000),
@@ -52,6 +56,15 @@ const envelopeSchema = z.object({
   ])).min(1).max(8),
   usage: z.object({ input_tokens: z.number().int().nonnegative(), output_tokens: z.number().int().nonnegative() }),
 });
+/** The Responses endpoint under a trusted base URL, or undefined when the base may not be used. */
+export function responsesEndpoint(baseUrl: string, allowLoopbackHttp: boolean) {
+  let base: URL;
+  try { base = new URL(baseUrl); } catch { return undefined; }
+  const loopback = ["127.0.0.1", "localhost", "[::1]"].includes(base.hostname);
+  if (base.username || base.password || base.search || base.hash) return undefined;
+  if (base.protocol !== "https:" && !(base.protocol === "http:" && loopback && allowLoopbackHttp)) return undefined;
+  return base.href.replace(/\/$/, "") + "/responses";
+}
 const transient = new Set([429, 500, 502, 503, 504]);
 const RESPONSE_LIMIT = 256_000;
 
@@ -82,6 +95,8 @@ export function createOpenAIProvider(config: OpenAIProviderConfig, request: type
       const parsed = configSchema.safeParse(config);
       if (!parsed.success || !parsed.data.apiKey) throw new RouteError("provider_unavailable", "OpenAI is not configured");
       const settings = parsed.data;
+      const endpoint: string = responsesEndpoint(settings.baseUrl, settings.allowLoopbackHttp) ?? "";
+      if (!endpoint) throw new RouteError("provider_unavailable", "OpenAI is not configured");
       const task = input.structuredOutput?.name;
       if (!input.dataClassification || !task || !(OPENAI_STRUCTURED_TASKS as readonly string[]).includes(task)) {
         throw new RouteError("forbidden", "OpenAI is restricted to classified, structured consultation drafting");
@@ -125,7 +140,7 @@ export function createOpenAIProvider(config: OpenAIProviderConfig, request: type
           attempts = attempt + 1;
           let response: Response;
           try {
-            response = await request("https://api.openai.com/v1/responses", {
+            response = await request(endpoint, {
               method: "POST", redirect: "error", cache: "no-store",
               headers: { Authorization: `Bearer ${settings.apiKey}`, "Content-Type": "application/json" },
               body, signal: controller.signal,

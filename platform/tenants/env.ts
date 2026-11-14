@@ -1,6 +1,7 @@
 import "server-only";
 import { z } from "zod";
 import { DATA_CLASSIFICATIONS } from "@/shared/constants";
+import { responsesEndpoint } from "@/core/agent/providers/openai-provider";
 
 const envSchema = z.object({
   TENANT_ID: z.string().min(1).max(128).default("local-synthetic"),
@@ -23,6 +24,8 @@ const envSchema = z.object({
   AI_DAILY_BUDGET_USD: z.coerce.number().positive().max(1000).default(2),
   OPENAI_API_KEY: z.string().optional(),
   OPENAI_MODEL: z.string().min(1).max(128).default("gpt-5"),
+  // Base URL of the Responses API (regional or self-hosted deployment). HTTPS; loopback HTTP outside production.
+  OPENAI_BASE_URL: z.url().optional(),
   // A GPT-5 consultation takes 15-30 s and occasionally over 60 s; one deadline covers every attempt.
   OPENAI_TIMEOUT_MS: z.coerce.number().int().min(1).max(120_000).default(90_000),
   OPENAI_MAX_RETRIES: z.coerce.number().int().min(0).max(2).default(1),
@@ -78,6 +81,9 @@ export class ServerConfigurationError extends Error {}
 /** Parses and validates server configuration. Refuses an incomplete live-mode configuration. */
 export function parseEnv(source: Record<string, string | undefined>): ServerEnv {
   const env = envSchema.parse(Object.fromEntries(Object.entries(source).filter(([, v]) => v !== "")));
+  if (env.OPENAI_BASE_URL && !responsesEndpoint(env.OPENAI_BASE_URL, env.NODE_ENV !== "production")) {
+    throw new ServerConfigurationError("OPENAI_BASE_URL must be an HTTPS URL without credentials or parameters (HTTP is accepted only for a loopback address outside production)");
+  }
   if (env.CLINICAL_DATA_MODE === "live") {
     const problems = liveModeProblems(env);
     if (problems.length) throw new ServerConfigurationError(`CLINICAL_DATA_MODE=live is refused: ${problems.join("; ")}`);
