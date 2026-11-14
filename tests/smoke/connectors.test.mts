@@ -52,6 +52,7 @@ for (const factory of [createFhirConnector, createOpenEmrConnector]) {
     assert.deepEqual(paths, []);
     assert.equal((await connector.getPatient("a"))?.displayName, "Synthetic");
     assert.equal(await connector.getEncounter("e"), null);
-    assert.equal(paths.length, 5);
+    // One patient read, five patient-scoped searches (allergies, problems, medication orders, vital signs, laboratory) and one encounter read.
+    assert.equal(paths.length, 7);
   });
 }

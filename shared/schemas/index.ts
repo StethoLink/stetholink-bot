@@ -47,6 +47,7 @@ export const patientContextSchema = z.object({
   medications: z.array(z.string()),
   source: z.enum(DATA_SOURCES),
   clinicalFacts: z.array(clinicalFactSchema).optional(),
+  chartNotes: z.array(z.string().min(1).max(400)).max(24).optional(),
 }) satisfies z.ZodType<PatientContext>;
 
 export const encounterContextSchema = z.object({

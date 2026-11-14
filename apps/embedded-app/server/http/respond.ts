@@ -6,6 +6,7 @@ import { AuthError } from "@/platform/auth/session";
 import postgres from "postgres";
 
 import { RouteError } from "@/core/errors";
+import { ChartUnavailableError } from "@/core/tools/connector";
 export { RouteError } from "@/core/errors";
 
 const STATUS: Record<ApiErrorCode, number> = {
@@ -15,6 +16,7 @@ const STATUS: Record<ApiErrorCode, number> = {
   not_found: 404,
   conflict: 409,
   safety_blocked: 422,
+  unsupported_encounter: 422,
   not_implemented: 501,
   provider_unavailable: 503,
   internal_error: 500,
@@ -42,6 +44,7 @@ export async function readJson(request: Request): Promise<unknown> {
 export function handleRouteError(err: unknown) {
   if (err instanceof AuthError) return errorResponse(err.code, err.message);
   if (err instanceof RouteError) return errorResponse(err.code, err.message);
+  if (err instanceof ChartUnavailableError) return errorResponse(err.code, err.message);
   if (err instanceof postgres.PostgresError) {
     if (err.code === "P0002") return errorResponse("not_found", "Draft not found");
     if (err.code === "P0001") return errorResponse("conflict", "Consultation command conflicts with its state, version or idempotency key");

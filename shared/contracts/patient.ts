@@ -18,4 +18,9 @@ export interface PatientContext {
   source: DataSource;
   /** Optional for M0 compatibility. Omission/empty lists do not establish normal findings. */
   clinicalFacts?: ClinicalFact[];
+  /**
+   * What the connector could not load or left out for size, in plain sentences for the physician.
+   * Shown with the chart and carried into every draft, so nothing documented is dropped silently.
+   */
+  chartNotes?: string[];
 }

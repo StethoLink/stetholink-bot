@@ -36,3 +36,12 @@ export function SyntheticBadge() {
     </span>
   );
 }
+
+/** Shown on every chart of a tenant configured for real patients. */
+export function LiveBadge() {
+  return (
+    <span className="inline-flex items-center gap-1 rounded border border-sky-900 bg-sky-50 px-1.5 py-0.5 text-xs font-semibold text-sky-950">
+      Real patient data
+    </span>
+  );
+}

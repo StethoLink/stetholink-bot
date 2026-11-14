@@ -13,7 +13,10 @@ const TYPE: Record<EncounterContext["type"], string> = {
 };
 const STATUS: Record<EncounterContext["status"], string> = {
   planned: "Planned",
+  arrived: "Arrived",
+  triaged: "Triaged",
   in_progress: "In progress",
+  on_leave: "On leave",
   finished: "Finished",
   cancelled: "Cancelled",
 };

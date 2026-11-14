@@ -19,7 +19,7 @@ export const APPROVAL_DECISIONS = ["approve", "reject", "request_changes"] as co
 export const MESSAGE_ROLES = ["clinician", "assistant", "system"] as const;
 export const SAFETY_LEVELS = ["ok", "caution", "blocked"] as const;
 export const ENCOUNTER_TYPES = ["inpatient", "outpatient", "emergency", "virtual"] as const;
-export const ENCOUNTER_STATUSES = ["planned", "in_progress", "finished", "cancelled"] as const;
+export const ENCOUNTER_STATUSES = ["planned", "arrived", "triaged", "in_progress", "on_leave", "finished", "cancelled"] as const;
 export const ADMINISTRATIVE_SEXES = ["male", "female", "other", "unknown"] as const;
 export const DATA_SOURCES = ["synthetic", "fhir", "openemr", "ehr"] as const;
 /** Who the clinical data is about: fictional test patients, or real patients of a live tenant. */
@@ -31,6 +31,7 @@ export const API_ERROR_CODES = [
   "not_found",
   "conflict",
   "safety_blocked",
+  "unsupported_encounter",
   "provider_unavailable",
   "not_implemented",
   "internal_error",

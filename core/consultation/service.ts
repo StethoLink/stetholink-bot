@@ -63,7 +63,8 @@ export function createConsultationService(deps: ConsultationServiceDeps) {
     if (input.encounterId && (!encounter || encounter.patientId !== patient.patientId || encounter.encounterId !== input.encounterId)) {
       throw new RouteError("invalid_request", "Encounter does not belong to this patient");
     }
-    return { patient, encounter, demographics: patientDemographics(patient), grounded: groundContext(patient, encounter, classification) };
+    // What the connector left out or could not load is carried into the draft for the physician.
+    return { patient, encounter, demographics: patientDemographics(patient), grounded: groundContext(patient, encounter, classification), chartNotes: patient.chartNotes ?? [] };
   }
 
   /**
@@ -94,9 +95,9 @@ export function createConsultationService(deps: ConsultationServiceDeps) {
     throw failure;
   }
 
-  function safetyNotes(grounded: ReturnType<typeof groundContext>) {
+  function safetyNotes(grounded: ReturnType<typeof groundContext>, chartNotes: readonly string[] = []) {
     const flags: ConsultationGrounding["safetyFlags"] = ["clinician_review_required"];
-    const notes: string[] = [];
+    const notes: string[] = [...chartNotes];
     if (grounded.conflicts.length) {
       flags.push("conflicting_facts");
       notes.push("Conflicting source assertions require clinician reconciliation; no assertion was chosen as true.");
@@ -128,7 +129,7 @@ export function createConsultationService(deps: ConsultationServiceDeps) {
    */
   async function author(chart: { patientId: string; encounterId?: string }, physicianRequest: string,
     options: { clarifications?: readonly ConsultationClarification[]; proceed?: boolean } = {}): Promise<ConsultationDraft | ConsultationClarificationNeeded> {
-    const { encounter, grounded, demographics } = await loadChart(chart);
+    const { encounter, grounded, demographics, chartNotes } = await loadChart(chart);
     const reasonForVisit = encounter?.reasonForVisit?.trim() || null;
     const clarifications = [...options.clarifications ?? []];
     const context: AuthoringContext = {
@@ -141,7 +142,7 @@ export function createConsultationService(deps: ConsultationServiceDeps) {
       // Nothing is drafted or stored: the physician answers, or chooses to proceed.
       return { outcome: "clarification_needed", specialty: referral.specialty || null, concerns: referral.concerns, clarifications, canAnswer: !clarificationsExhausted(clarifications) };
     }
-    const { flags, notes } = safetyNotes(grounded);
+    const { flags, notes } = safetyNotes(grounded, chartNotes);
     const rendered = renderReferral(referral, context, notes);
     const grounding: ConsultationGrounding = {
       reason: reasonForVisit, question: referral.clinicalQuestion, specialty: referral.specialty,
@@ -210,7 +211,7 @@ export function createConsultationService(deps: ConsultationServiceDeps) {
     if (normalizedIntent && (normalizedIntent.patientId !== input.patientId || normalizedIntent.encounterId !== input.encounterId)) {
       throw new RouteError("invalid_request", "Consultation intent does not match the requested context");
     }
-    const { encounter, grounded, demographics } = await loadChart(input);
+    const { encounter, grounded, demographics, chartNotes } = await loadChart(input);
     const result = await deps.provider.generate({
       instructions: SYSTEM_INSTRUCTIONS,
       // No demographics, raw legacy lists, identity, free text intent, chat or attachments.
@@ -223,7 +224,7 @@ export function createConsultationService(deps: ConsultationServiceDeps) {
     const evidenceIds = validateSelection(result.text, grounded.eligibleFacts.map((fact) => fact.id));
     const safety = await deps.safety.assess(result.text);
     if (safety.level === "blocked") throw new RouteError("safety_blocked", "Draft withheld by safety check");
-    const gaps = grounded.missing.map(renderFact);
+    const gaps = [...grounded.missing.map(renderFact), ...chartNotes];
     const safetyFlags: ConsultationGrounding["safetyFlags"] = ["clinician_review_required"];
     if (grounded.conflicts.length) {
       safetyFlags.push("conflicting_facts");

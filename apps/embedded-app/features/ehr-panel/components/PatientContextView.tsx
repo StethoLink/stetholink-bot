@@ -1,6 +1,6 @@
 import type { PatientContext } from "@/shared/contracts";
 import { ChartFacts } from "./ChartFacts";
-import { SyntheticBadge } from "./StateViews";
+import { LiveBadge, SyntheticBadge } from "./StateViews";
 
 function age(birthDate?: string): string | undefined {
   if (!birthDate) return undefined;
@@ -40,7 +40,7 @@ export function PatientContextView({ patient, compact = false }: { patient: Pati
         <h2 id={`pt-${p.patientId}`} className="text-base font-semibold break-words">
           {p.displayName}
         </h2>
-        {p.source === "synthetic" && <SyntheticBadge />}
+        {p.source === "synthetic" ? <SyntheticBadge /> : <LiveBadge />}
       </header>
       {demographics && <p className="text-xs text-slate-700">{demographics}</p>}
 
@@ -77,6 +77,14 @@ export function PatientContextView({ patient, compact = false }: { patient: Pati
         </section>
       </div>
       {p.clinicalFacts && <ChartFacts facts={p.clinicalFacts} />}
+      {!!p.chartNotes?.length && (
+        <div role="note" aria-label="What was not loaded from the chart" className="mt-3 rounded border border-amber-700 bg-amber-50 p-2 text-sm text-amber-950">
+          <p className="font-semibold">Not everything in the chart is shown here</p>
+          <ul className="mt-1 list-disc space-y-0.5 pl-5">
+            {p.chartNotes.map((note) => <li key={note} className="break-words">{note}</li>)}
+          </ul>
+        </div>
+      )}
     </section>
   );
 }
