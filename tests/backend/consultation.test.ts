@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
 import { createConsultationService } from "@/core/consultation/service";
 import type { ClinicianContext } from "@/core/auth/clinician";
-import { syntheticClinicalAdapter } from "@/integrations/mock/connector";
-import { mockProvider } from "@/core/agent/providers/mock-provider";
+import { syntheticClinicalAdapter } from "@/tests/fixtures/clinical-adapter";
+import { mockProvider } from "@/tests/fixtures/mock-provider";
 import { clinicalSafetyGuard } from "@/core/agent/safety/guard";
 
 const actor: ClinicianContext = {

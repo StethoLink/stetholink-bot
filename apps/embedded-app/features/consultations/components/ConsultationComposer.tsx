@@ -10,10 +10,6 @@ import { ConsultationReview } from "./ConsultationReview";
 export interface AssistantInfo {
   provider: string;
   model: string;
-  /** False when the deterministic demo fallback is in use. */
-  liveInference: boolean;
-  /** False when a live model is selected but its key or cost limits are missing. */
-  configured: boolean;
 }
 
 /** The assistant's challenge to a request, shown before anything is drafted. */
@@ -136,16 +132,10 @@ export function ConsultationComposer({ patientId, encounterId, canReview = false
   }
   return (
     <Card aria-label="Consultation assistant" className="space-y-3">
-      <CardHeader title="Consultation assistant" actions={assistant?.liveInference ? <AiBadge>AI-assisted</AiBadge> : undefined}
-        description={assistant?.liveInference
+      <CardHeader title="Consultation assistant" actions={assistant ? <AiBadge>AI-assisted</AiBadge> : undefined}
+        description={assistant
           ? <>Drafts are written by {assistant.provider} model <span className="font-medium">{assistant.model}</span> from this chart, then every statement is checked against it.</>
           : undefined} />
-      {assistant && !assistant.liveInference && (
-        <Alert tone="warning"><span className="font-semibold">Demo fallback.</span> No language model is configured. Drafts copy the chart record into sections without AI inference.</Alert>
-      )}
-      {assistant?.liveInference && !assistant.configured && (
-        <Alert tone="danger">The model is not fully configured, so drafting will fail until its key and cost limits are set. Tell your StethoLink administrator.</Alert>
-      )}
       {busy ? (
         <WorkInProgress label={pending ? "Reading your answers and the chart" : "Reading the chart and drafting the consultation"} steps={STEPS} onCancel={() => abort.current?.abort()} />
       ) : pending ? (

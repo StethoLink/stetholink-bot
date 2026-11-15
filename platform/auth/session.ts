@@ -1,7 +1,8 @@
 import "server-only";
 import { cookies, headers } from "next/headers";
 import { z } from "zod";
-import { getEnv, syntheticStagingEnabled } from "@/platform/tenants/env";
+import { getEnv } from "@/platform/tenants/env";
+import { getTenant } from "@/platform/tenants";
 import { dataClassificationSchema } from "@/shared/schemas";
 import type { VerifiedLaunch } from "./identity";
 import { launchCookie, readHandle, sessionCookie, storeHandle } from "./session-store";
@@ -24,8 +25,8 @@ const launchSchema = z.object({
     authorization: z.literal("active"),
     dataClassification: dataClassificationSchema,
   }),
-  source: z.enum(["smart", "synthetic"]),
-  ehrAccessToken: z.string().min(1).optional(),
+  source: z.literal("smart"),
+  ehrAccessToken: z.string().min(1),
   ehrUser: z.string().min(1).max(200).optional(),
 });
 
@@ -67,39 +68,16 @@ export async function requireSameOrigin() {
   }
 }
 
-export function localSyntheticEnabled() {
-  const env = getEnv();
-  return env.CLINICAL_DATA_MODE === "synthetic" && env.NODE_ENV !== "production" && !env.VERCEL_ENV && !env.VERCEL_TARGET_ENV &&
-    env.AUTH_MODE === "dev" && env.CLINICAL_DATA_SOURCE === "synthetic";
-}
-
+/** The only session is the one a verified SMART launch from the EHR stored. Nothing else signs a clinician in. */
 export async function requireClinician(options: { navigation?: boolean } = {}): Promise<VerifiedLaunch> {
   if (!options.navigation) await requireSameOrigin();
-  const env = getEnv();
+  // Reading the cookie first also marks the page as per-request, so a build never evaluates server configuration.
   const jar = await cookies();
-  const active = syntheticStagingEnabled(env) || (env.AUTH_MODE === "smart" && env.CLINICAL_DATA_SOURCE !== "synthetic");
-  const raw = active ? await readHandle(jar.get(sessionCookie)?.value, "session") : undefined;
-  const verified = launchSchema.safeParse(raw);
-  // A session is valid only for the tenant's classification: no synthetic session in live
-  // mode (synthetic launches are disabled there) and no live session in synthetic mode.
+  const tenant = getTenant();
+  const verified = launchSchema.safeParse(await readHandle(jar.get(sessionCookie)?.value, "session"));
   if (verified.success && verified.data.context.expiresAt > Date.now() &&
-      verified.data.context.tenantId === env.TENANT_ID &&
-      verified.data.context.dataClassification === env.CLINICAL_DATA_MODE &&
-      (verified.data.source === "synthetic" ? syntheticStagingEnabled(env) :
-        env.AUTH_MODE === "smart" && env.CLINICAL_DATA_SOURCE !== "synthetic" && !!verified.data.ehrAccessToken)) {
+      verified.data.context.tenantId === tenant.id && verified.data.context.dataClassification === tenant.dataClassification) {
     return verified.data;
-  }
-  if (localSyntheticEnabled()) {
-    const chart = { alpha: ["syn-pt-001", "syn-enc-001"], ahmed: ["syn-pt-ahmed", "syn-enc-ahmed"], omar: ["syn-pt-omar", "syn-enc-omar"] }[env.LOCAL_SYNTHETIC_CHART];
-    return {
-      source: "synthetic",
-      context: {
-        clinicianId: "11111111-1111-4111-8111-111111111111", tenantId: env.TENANT_ID,
-        roles: ["clinician"], scopes: ["chart:read", "consultation:draft", "scribe:record"],
-        patientId: chart[0], encounterId: chart[1],
-        expiresAt: Date.now() + 60_000, authorization: "active", dataClassification: "synthetic",
-      },
-    };
   }
   throw new AuthError("unauthenticated", "Open StethoLink from the active EHR chart");
 }

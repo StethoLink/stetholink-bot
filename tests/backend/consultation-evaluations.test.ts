@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { createOpenAIProvider } from "@/core/agent/providers/openai-provider";
-import { mockProvider } from "@/core/agent/providers/mock-provider";
+import { mockProvider } from "@/tests/fixtures/mock-provider";
 import type { ModelProvider } from "@/core/agent/providers/types";
 import { clinicalSafetyGuard } from "@/core/agent/safety/guard";
 import { groundContext } from "@/core/consultation/grounding";

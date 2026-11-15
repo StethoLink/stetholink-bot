@@ -36,7 +36,7 @@ describe("clinical contract module boundaries", () => {
 
   it.each([
     'import type { Vendor } from "@/integrations/fhir/connector";',
-    'export * from "../../integrations/mock/connector";',
+    'export * from "../../tests/fixtures/clinical-adapter";',
     'import { cookies } from "next/headers";',
     'import { store } from "@/platform/persistence/repository";',
     'import { View } from "@/apps/embedded-app/features/ehr-panel";',
@@ -48,6 +48,6 @@ describe("clinical contract module boundaries", () => {
 
   it("keeps shared contracts independent of Core and implementation fixtures", () => {
     expect(forbiddenImports(join(root, "shared/contracts/example.ts"), 'export type { ClinicalDataAdapter } from "@/core/tools/connector";')).toHaveLength(1);
-    expect(forbiddenImports(join(root, "core/tools/example.ts"), 'import { syntheticPatients } from "@/shared/mocks/synthetic-data";')).toHaveLength(1);
+    expect(forbiddenImports(join(root, "core/tools/example.ts"), 'import { syntheticPatients } from "@/tests/fixtures/synthetic-data";')).toHaveLength(1);
   });
 });

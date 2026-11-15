@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { createChatOrchestrator } from "@/core/agent/orchestrator/orchestrator";
-import { mockProvider } from "@/core/agent/providers/mock-provider";
+import { mockProvider } from "@/tests/fixtures/mock-provider";
 import { clinicalSafetyGuard } from "@/core/agent/safety/guard";
 import { chatResponseSchema } from "@/shared/schemas";
 

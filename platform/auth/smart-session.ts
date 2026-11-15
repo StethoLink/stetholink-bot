@@ -6,6 +6,7 @@ import { z } from "zod";
 import { beginSmartLaunch, checkSmartDiscovery, clinicianReference, ehrLaunchScope, parseClinicianMap, exchangeSmartCode, sameFhirUser, secureEndpoint, SmartDiscoveryError, SmartExchangeError, type SmartRegistration } from "@/integrations/fhir/smart";
 import { createFhirConnector, FhirReadError } from "@/integrations/fhir/connector";
 import { getEnv, specialistMap } from "@/platform/tenants/env";
+import { getTenant } from "@/platform/tenants";
 import { saveSpecialistSession } from "./specialist-session";
 import { RouteError } from "@/core/errors";
 import { ChartUnavailableError } from "@/core/tools/connector";
@@ -23,8 +24,7 @@ export { ehrLaunchScope };
 
 function registration() {
   const env = getEnv();
-  if (env.AUTH_MODE !== "smart" || env.CLINICAL_DATA_SOURCE === "synthetic" ||
-      !env.FHIR_BASE_URL || !env.SMART_CLIENT_ID || !env.SMART_AUTHORIZATION_URL || !env.SMART_TOKEN_URL ||
+  if (!env.FHIR_BASE_URL || !env.SMART_CLIENT_ID || !env.SMART_AUTHORIZATION_URL || !env.SMART_TOKEN_URL ||
       !env.SMART_REDIRECT_URI || !env.SMART_SCOPE || !env.SMART_OIDC_ISSUER || !env.SMART_JWKS_URL || !env.SMART_CLINICIAN_MAP) {
     throw new SmartLaunchFailure("not_configured", undefined, new RouteError("not_implemented", "SMART launch is not configured"));
   }
@@ -37,7 +37,7 @@ function registration() {
     clientId: env.SMART_CLIENT_ID, redirectUri: env.SMART_REDIRECT_URI, scope: ehrLaunchScope(env.SMART_SCOPE),
     oidcIssuer: env.SMART_OIDC_ISSUER, jwksUrl: env.SMART_JWKS_URL,
     // A verified SMART session is live only for a tenant configured for live clinical data.
-    tenantId: env.TENANT_ID, dataClassification: env.CLINICAL_DATA_MODE, mapping,
+    tenantId: env.TENANT_ID, dataClassification: getTenant().dataClassification, mapping,
   };
   try {
     secureEndpoint(reg.oidcIssuer);

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import type { ClinicianContext } from "@/core/auth/clinician";
-import { mockProvider } from "@/core/agent/providers/mock-provider";
+import { mockProvider } from "@/tests/fixtures/mock-provider";
 import { clinicalSafetyGuard } from "@/core/agent/safety/guard";
 import { statedNumbers } from "@/core/scribe/numbers";
 import { buildNoteInput, renderNoteText, validateNote, type NoteContext } from "@/core/scribe/note";
@@ -10,8 +10,9 @@ import type { ChartWriteLedger, ScribeRepository, StoredChartWrite, StoredScribe
 import type { ChartWriteItem, ClinicalWriteAdapter } from "@/core/tools/chart-writer";
 import { createFhirWriter, grantsCreate } from "@/integrations/fhir/writer";
 import { createOpenAITranscription } from "@/integrations/transcription/openai";
-import { mockTranscription } from "@/integrations/transcription/mock";
-import { liveModeProblems, parseEnv } from "@/platform/tenants/env";
+import { mockTranscription } from "@/tests/fixtures/transcription";
+import { configurationProblems, parseEnv } from "@/platform/tenants/env";
+import { completeConfig } from "@/tests/helpers/config";
 import type { ClinicalFact, ScribeNote, TranscriptSegment } from "@/shared/contracts";
 
 /** Every visit, patient and identifier here is fictional. */
@@ -326,12 +327,12 @@ describe("transcription providers and configuration", () => {
     expect(calls[0].form.get("language")).toBe("ar");
     expect(calls[0].form.get("prompt")).toBe("Metformin 500 mg oral tablet");
   });
-  it("live mode with the scribe on needs an approved, priced, real transcription provider", () => {
-    const base = { CLINICAL_DATA_MODE: "live", AUTH_MODE: "smart", CLINICAL_DATA_SOURCE: "fhir", STETHOLINK_DATABASE_URL: "postgres://x@db.example.test/x", AI_PROVIDER: "openai", OPENAI_API_KEY: "k",
-      OPENAI_INPUT_USD_PER_MILLION: "1", OPENAI_OUTPUT_USD_PER_MILLION: "1", MODEL_LIVE_DATA_APPROVED: "true", SCRIBE_ENABLED: "true", SESSION_ENCRYPTION_KEY: "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=" };
-    expect(() => parseEnv(base)).toThrow(/TRANSCRIPTION_PROVIDER must be a real provider/);
+  it("the scribe needs an approved, priced, real transcription provider, and has no stand-in", () => {
+    const base = { ...completeConfig, SCRIBE_ENABLED: "true" };
+    expect(() => parseEnv(base)).toThrow(/TRANSCRIPTION_LIVE_DATA_APPROVED must be true/);
+    expect(() => parseEnv({ ...base, TRANSCRIPTION_PROVIDER: "mock" })).toThrow(/TRANSCRIPTION_PROVIDER=mock was removed/);
     const scribe = { ...base, TRANSCRIPTION_PROVIDER: "openai", TRANSCRIPTION_USD_PER_MINUTE: "0.0045", TRANSCRIPTION_LIVE_DATA_APPROVED: "true", SCRIBE_NOTE_INPUT_USD_PER_MILLION: "0.25", SCRIBE_NOTE_OUTPUT_USD_PER_MILLION: "2" };
-    expect(liveModeProblems(parseEnv(scribe))).toEqual([]);
+    expect(configurationProblems(parseEnv(scribe))).toEqual([]);
     expect(() => parseEnv({ ...scribe, TRANSCRIPTION_USD_PER_MINUTE: "0.02" })).toThrow(/above TRANSCRIPTION_MAX_USD_PER_MINUTE/);
     expect(() => parseEnv({ ...scribe, TRANSCRIPTION_LIVE_DATA_APPROVED: "false" })).toThrow(/TRANSCRIPTION_LIVE_DATA_APPROVED/);
     // Audio is never stored: no other retention value exists.

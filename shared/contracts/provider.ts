@@ -106,8 +106,6 @@ export interface ConsultationDeliveryView {
   report: ProviderResponseView | null;
   canSend: boolean;
   canRetry: boolean;
-  /** True only where the synthetic specialist simulator is available. */
-  canSimulate: boolean;
 }
 
 /** Physician command. The provider must be the destination recorded in the approval; identity and chart scope come from the server session. */

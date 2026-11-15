@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { createPortalTransport } from "@/integrations/providers/portal";
 import { allowRequest } from "@/platform/http/rate-limit";
-import { parseEnv, providerDirectory, specialistMap } from "@/platform/tenants/env";
+import { parseEnv as parseServerEnv, providerDirectory, specialistMap } from "@/platform/tenants/env";
+import { completeConfig } from "@/tests/helpers/config";
 import { specialistResponseRequestSchema } from "@/shared/schemas";
 
 /** Every service, specialist and address here is fictional. */
+const parseEnv = (change: Record<string, string>) => parseServerEnv({ ...completeConfig, ...change });
 const directory = JSON.stringify([{ id: "fictional-cardiology-service", displayName: "Fictional Cardiology Service", specialties: ["Cardiology"], transport: "portal" }]);
 const specialist = { specialistId: "77777777-7777-4777-8777-777777777771", providerId: "fictional-cardiology-service", displayName: "Dr Fictional" };
 

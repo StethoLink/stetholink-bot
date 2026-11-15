@@ -12,7 +12,8 @@ import {
   type ChatAction,
   type ChatState,
 } from "@/apps/embedded-app/features/assistant";
-import { ApiClientError, createMockApiClient, type StethoLinkApiClient } from "@/shared/api-client";
+import { ApiClientError, type StethoLinkApiClient } from "@/shared/api-client";
+import { createMockApiClient } from "@/tests/fixtures/mock-api-client";
 
 // Mock CSS imports in the logic tests.
 // Vitest compiles JSX with the classic runtime until esbuild.jsx is set to "automatic".

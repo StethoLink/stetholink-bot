@@ -1,5 +1,5 @@
 import { RouteError } from "@/core/errors";
-import type { ModelProvider } from "./types";
+import type { ModelProvider } from "@/core/agent/providers/types";
 
 interface AuthoringInput {
   physicianRequest: string;

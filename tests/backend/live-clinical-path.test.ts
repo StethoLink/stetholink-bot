@@ -7,14 +7,14 @@ import type { ModelProvider, ModelRequest } from "@/core/agent/providers/types";
 import { createConsultationService } from "@/core/consultation/service";
 import { createChatOrchestrator } from "@/core/agent/orchestrator/orchestrator";
 import { createOpenAIProvider } from "@/core/agent/providers/openai-provider";
-import { mockProvider } from "@/core/agent/providers/mock-provider";
+import { mockProvider } from "@/tests/fixtures/mock-provider";
 import { clinicalSafetyGuard } from "@/core/agent/safety/guard";
 import { buildEnvelope, createProviderRouter } from "@/core/routing/router";
 import { createProviderRegistry } from "@/core/routing/registry";
 import { createProviderResponseService } from "@/core/routing/responses";
 import type { DeliveryRecord, DeliveryRepository, ProviderTransport } from "@/core/routing/ports";
-import { createMockSpecialistTransport, mockSpecialistCallback } from "@/integrations/mock/specialist";
-import { syntheticClinicalAdapter } from "@/integrations/mock/connector";
+import { createMockSpecialistTransport, mockSpecialistCallback } from "@/tests/fixtures/specialist";
+import { syntheticClinicalAdapter } from "@/tests/fixtures/clinical-adapter";
 import { consultationDraftSchema, consultationEnvelopeSchema } from "@/shared/schemas";
 
 /**

@@ -8,10 +8,6 @@ permissions:
 jobs:
   check:
     runs-on: ubuntu-latest
-    env:
-      AI_PROVIDER: mock
-      CLINICAL_DATA_SOURCE: synthetic
-      NEXT_PUBLIC_API_MODE: http
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

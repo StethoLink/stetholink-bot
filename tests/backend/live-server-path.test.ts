@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { VerifiedLaunch } from "@/platform/auth/identity";
 import type { ConsultationDraft } from "@/shared/contracts";
 import type { ModelProvider, ModelRequest } from "@/core/agent/providers/types";
-import { mockProvider } from "@/core/agent/providers/mock-provider";
+import { mockProvider } from "@/tests/fixtures/mock-provider";
 import { completeSmartLaunch, fakeEhr, FAKE_EHR, smartEnv } from "../helpers/smart-launch";
 import { citedEvidenceIds } from "@/shared/utils/referral-text";
 
@@ -51,9 +51,9 @@ const { GET: smartCallback } = await import("@/apps/embedded-app/app/api/smart/c
 const FHIR = FAKE_EHR.fhir;
 const TOKEN = FAKE_EHR.accessToken;
 const live = {
-  NODE_ENV: "production", TENANT_ID: "fictional-hospital", CLINICAL_DATA_MODE: "live",
-  MOCK_RECIPIENT_IDS: "synthetic-cardiology", STETHOLINK_DATABASE_URL: "postgres://stetholink_runtime@db.example.test/postgres",
-  AI_PROVIDER: "openai", MODEL_LIVE_DATA_APPROVED: "true", PROVIDER_TIMEOUT_MS: 1000, LOCAL_SYNTHETIC_CHART: "alpha",
+  NODE_ENV: "production", TENANT_ID: "fictional-hospital",
+  STETHOLINK_DATABASE_URL: "postgres://stetholink_runtime@db.example.test/postgres",
+  AI_PROVIDER: "openai", MODEL_LIVE_DATA_APPROVED: "true", PROVIDER_TIMEOUT_MS: 1000,
 };
 let fhir: ReturnType<typeof vi.fn<typeof fetch>>;
 /**
@@ -161,33 +161,21 @@ describe("verified live session through the server composition (signed SMART lau
     const consultations = getConsultations(session);
     await consultations.approve(approval);
     expect(repository.approve).toHaveBeenCalledWith(approval);
-    // The simulated specialists are never offered to, or reachable from, a live session.
+    // No simulated specialist exists: without a configured directory nothing can be sent anywhere.
     await expect(consultations.route("d1", { providerId: "synthetic-cardiology", expectedVersion: 2, idempotencyKey: "k2" })).rejects.toMatchObject({ code: "not_implemented" });
-    await expect(consultations.simulateSpecialist("d1")).rejects.toMatchObject({ code: "not_implemented" });
+    expect(consultations).not.toHaveProperty("simulateSpecialist");
     repository.get.mockResolvedValueOnce({ id: "d1" } as never);
     expect(await consultations.providers("d1")).toEqual([]);
-  });
-  it("keeps an EHR launch read-only on a tenant that is not configured for live data", async () => {
-    env.CLINICAL_DATA_MODE = "synthetic";
-    model.current = fakeLiveModel().provider;
-    const sandbox = await launched();
-    expect(sandbox.context.dataClassification).toBe("synthetic");
-    expect(() => getConsultations(sandbox)).toThrow(expect.objectContaining({ code: "forbidden", message: expect.stringContaining("CLINICAL_DATA_MODE") }));
-    expect(() => getChat(sandbox)).toThrow(expect.objectContaining({ code: "forbidden" }));
-    expect(await getClinicalServices(sandbox).patientContext.getContext("fic-pt-1")).toMatchObject({ patientId: "fic-pt-1", source: "fhir" });
-    expect(stored).toHaveLength(0);
   });
   it("denies a session whose classification is not the tenant's", async () => {
     model.current = fakeLiveModel().provider;
     const session = await launched();
-    // A synthetic-classified session in a live tenant, whatever its source.
+    // A synthetic-classified session is refused: this tenant reads a real EHR.
     expect(() => getConsultations(altered(session, { dataClassification: "synthetic" }))).toThrow(expect.objectContaining({ code: "forbidden" }));
-    expect(() => getClinicalServices(altered(session, { dataClassification: "synthetic" }, "synthetic"))).toThrow(expect.objectContaining({ code: "forbidden" }));
-    expect(() => getClinicalServices(altered(session, {}, "synthetic"))).toThrow(expect.objectContaining({ code: "forbidden" }));
-    // A live-classified session in a synthetic tenant.
-    env.CLINICAL_DATA_MODE = "synthetic";
-    expect(() => getClinicalServices(session)).toThrow(expect.objectContaining({ code: "forbidden" }));
-    expect(() => getChat(session)).toThrow(expect.objectContaining({ code: "forbidden" }));
+    expect(() => getClinicalServices(altered(session, { dataClassification: "synthetic" }))).toThrow(expect.objectContaining({ code: "forbidden" }));
+    // So is a session that carries no EHR grant, and one of another tenant.
+    expect(() => getClinicalServices({ ...session, ehrAccessToken: undefined })).toThrow(expect.objectContaining({ code: "forbidden" }));
+    expect(() => getClinicalServices(altered(session, { tenantId: "another-hospital" }))).toThrow(expect.objectContaining({ code: "forbidden" }));
     expect(fhir).not.toHaveBeenCalled();
   });
 });

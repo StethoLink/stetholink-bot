@@ -1,19 +1,21 @@
 import "server-only";
+import type { DataClassification } from "@/shared/contracts";
 import { getEnv, providerDirectory } from "./env";
 
-// One configured tenant per deployment. Supabase deployments also require a dedicated project.
+// One configured tenant per deployment.
 export function getTenant() {
   const env = getEnv();
   return {
     id: env.TENANT_ID,
     connector: env.CLINICAL_DATA_SOURCE,
-    /** The one classification every session, draft, envelope and callback of this tenant carries. */
-    dataClassification: env.CLINICAL_DATA_MODE,
-    // A live tenant sends only to its configured services; the simulated ones exist for synthetic tenants only.
-    recipients: new Set((env.CLINICAL_DATA_MODE === "live" ? env.PROVIDER_ALLOWLIST ?? "" : env.MOCK_RECIPIENT_IDS).split(",").map((id) => id.trim()).filter(Boolean)),
-    /** Receiving services of a live tenant. */
-    directory: env.CLINICAL_DATA_MODE === "live"
-      ? providerDirectory(env).map((entry) => ({ ...entry, synthetic: false }))
-      : [],
+    /**
+     * The one classification every session, draft, envelope and callback of this tenant carries.
+     * A deployment reads a real EHR, so it is always "live"; "synthetic" survives only as the
+     * label of fictional test fixtures and of rows stored by earlier versions, which no session can open.
+     */
+    dataClassification: "live" as DataClassification,
+    recipients: new Set((env.PROVIDER_ALLOWLIST ?? "").split(",").map((id) => id.trim()).filter(Boolean)),
+    /** Receiving services of the tenant. */
+    directory: providerDirectory(env).map((entry) => ({ ...entry, synthetic: false })),
   };
 }

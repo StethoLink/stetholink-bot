@@ -4,6 +4,7 @@ import { cookies } from "next/headers";
 import { z } from "zod";
 import { database } from "@/platform/persistence/database";
 import { getEnv, specialistMap, type SpecialistEntry } from "@/platform/tenants/env";
+import { getTenant } from "@/platform/tenants";
 import { dataClassificationSchema } from "@/shared/schemas";
 import type { DataClassification } from "@/shared/contracts";
 import { AuthError, cookieOptions, requireSameOrigin } from "./session";
@@ -33,7 +34,7 @@ export async function saveSpecialistSession(entry: SpecialistEntry) {
   const expiresAt = Date.now() + env.SPECIALIST_SESSION_MINUTES * 60_000;
   const specialist: SpecialistContext = {
     specialistId: entry.specialistId, tenantId: env.TENANT_ID, providerId: entry.providerId, displayName: entry.displayName,
-    scopes: ["inbox:read", "inbox:respond"], expiresAt, authorization: "active", dataClassification: env.CLINICAL_DATA_MODE,
+    scopes: ["inbox:read", "inbox:respond"], expiresAt, authorization: "active", dataClassification: getTenant().dataClassification,
   };
   const jar = await cookies();
   // Signing in replaces whatever session this browser held, clinician or specialist.
@@ -48,7 +49,7 @@ export async function requireSpecialist(options: { navigation?: boolean } = {}):
   const stored = specialistSchema.safeParse(await readHandle(jar.get(sessionCookie)?.value, "session"));
   // The session must still match the tenant and its classification, and the specialist must still be registered for that service.
   if (stored.success && stored.data.specialist.expiresAt > Date.now() && stored.data.specialist.tenantId === env.TENANT_ID &&
-      stored.data.specialist.dataClassification === env.CLINICAL_DATA_MODE &&
+      stored.data.specialist.dataClassification === getTenant().dataClassification &&
       specialistMap(env).some((entry) => entry.specialistId === stored.data.specialist.specialistId && entry.providerId === stored.data.specialist.providerId)) {
     return stored.data.specialist;
   }

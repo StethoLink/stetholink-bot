@@ -5,10 +5,10 @@ import type { ClinicalDataAdapter } from "@/core/tools/connector";
 import type { ModelProvider } from "@/core/agent/providers/types";
 import { createConsultationService } from "@/core/consultation/service";
 import { MAX_CONTEXT_BYTES, MAX_FACTS } from "@/core/consultation/grounding";
-import { mockProvider } from "@/core/agent/providers/mock-provider";
+import { mockProvider } from "@/tests/fixtures/mock-provider";
 import { clinicalSafetyGuard } from "@/core/agent/safety/guard";
-import { syntheticClinicalAdapter } from "@/integrations/mock/connector";
-import { ahmedClinicalFacts, ahmedConsultationRequest, ahmedPatient } from "@/shared/mocks/synthetic-data";
+import { syntheticClinicalAdapter } from "@/tests/fixtures/clinical-adapter";
+import { ahmedClinicalFacts, ahmedConsultationRequest, ahmedPatient } from "@/tests/fixtures/synthetic-data";
 import { consultationDraftSchema } from "@/shared/schemas";
 import { PROMPT_VERSION, SYSTEM_INSTRUCTIONS } from "@/core/agent/prompts/system";
 

@@ -5,10 +5,10 @@ import { createSpendingLimiter } from "@/core/agent/providers/spending";
 import { clinicalSafetyGuard } from "@/core/agent/safety/guard";
 import { createConsultationService } from "@/core/consultation/service";
 import type { ClinicalDataAdapter } from "@/core/tools/connector";
-import { syntheticClinicalAdapter } from "@/integrations/mock/connector";
+import { syntheticClinicalAdapter } from "@/tests/fixtures/clinical-adapter";
 import { getEnv } from "@/platform/tenants/env";
 import type { ClinicalFact, ConsultationDraft } from "@/shared/contracts";
-import { omarClinicalFacts, omarEncounter, omarPatient } from "@/shared/mocks/synthetic-data";
+import { omarClinicalFacts, omarEncounter, omarPatient } from "@/tests/fixtures/synthetic-data";
 import { consultationDraftSchema } from "@/shared/schemas";
 import { citedEvidenceIds, parseReferralText } from "@/shared/utils/referral-text";
 

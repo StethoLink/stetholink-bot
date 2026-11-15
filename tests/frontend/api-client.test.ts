@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { ApiClientError, createHttpApiClient, createMockApiClient } from "@/shared/api-client";
+import { ApiClientError, createHttpApiClient } from "@/shared/api-client";
+import { createMockApiClient } from "@/tests/fixtures/mock-api-client";
 
 describe("mock API client", () => {
   it("serves synthetic patient context", async () => {

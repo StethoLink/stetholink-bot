@@ -1,6 +1,6 @@
 import type { ConsultationDraft } from "@/shared/contracts";
 import { CONTRACT_VERSION } from "@/shared/constants";
-import { syntheticDrafts, syntheticEncounters, syntheticPatients } from "@/shared/mocks/synthetic-data";
+import { syntheticDrafts, syntheticEncounters, syntheticPatients } from "@/tests/fixtures/synthetic-data";
 import {
   chatResponseSchema,
   consultationDraftSchema,
@@ -8,8 +8,8 @@ import {
   patientContextSchema,
 } from "@/shared/schemas";
 import { createId, nowIso } from "@/shared/utils";
-import { ApiClientError } from "./errors";
-import type { StethoLinkApiClient } from "./types";
+import { ApiClientError } from "@/shared/api-client/errors";
+import type { StethoLinkApiClient } from "@/shared/api-client/types";
 
 /**
  * In-memory client backed by synthetic data, so the UI can be built before the backend exists.

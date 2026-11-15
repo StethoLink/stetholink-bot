@@ -13,7 +13,7 @@ import {
   type DraftAction,
   type DraftState,
 } from "@/apps/embedded-app/features/consultations";
-import { createMockApiClient } from "@/shared/api-client";
+import { createMockApiClient } from "@/tests/fixtures/mock-api-client";
 
 // Mock CSS imports in the logic tests.
 // Vitest compiles JSX with the classic runtime until esbuild.jsx is set to "automatic".
@@ -125,7 +125,7 @@ import type { ConsultationDeliveryView } from "@/shared/contracts";
 
 describe("delivery status wording", () => {
   const view = (status: ConsultationDeliveryView["status"], failureCode?: ConsultationDeliveryView["attempts"][number]["failureCode"]): ConsultationDeliveryView => ({
-    draftId: "d", version: 3, status, provider: null, responses: [], report: null, canSend: false, canRetry: false, canSimulate: false,
+    draftId: "d", version: 3, status, provider: null, responses: [], report: null, canSend: false, canRetry: false,
     attempts: failureCode ? [{ requestId: "8d5f6f0e-6f0e-4d7c-9b65-0f7a4f0f5a11", number: 1, providerId: "p", status: failureCode === "provider_rejected" ? "rejected" : "failed",
       failureCode, createdAt: "2026-01-15T10:00:00.000Z", updatedAt: "2026-01-15T10:00:00.000Z" }] : [],
   });

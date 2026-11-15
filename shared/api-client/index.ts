@@ -1,15 +1,13 @@
 import { createHttpApiClient } from "./http-client";
-import { createMockApiClient } from "./mock-client";
 import type { StethoLinkApiClient } from "./types";
 
 export { ApiClientError } from "./errors";
 export { createHttpApiClient } from "./http-client";
-export { createMockApiClient } from "./mock-client";
 export type { StethoLinkApiClient } from "./types";
 
-/** Selects the client from NEXT_PUBLIC_API_MODE ("mock" | "http"). Defaults to "http". */
+/** The browser talks to the server over HTTP only. There is no in-memory client. */
 export function createApiClient(): StethoLinkApiClient {
-  return process.env.NEXT_PUBLIC_API_MODE === "mock" ? createMockApiClient({ latencyMs: 300 }) : createHttpApiClient();
+  return createHttpApiClient();
 }
 
 let singleton: StethoLinkApiClient | undefined;

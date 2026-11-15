@@ -4,9 +4,7 @@ set -euo pipefail
 # Run on a trusted runner. The disposable database binds only to loopback.
 db="stetholink-m05-${GITHUB_RUN_ID:-$$}"
 tmp=$(mktemp -d)
-app_pid=
 cleanup() {
-  if [[ -n "$app_pid" ]]; then kill "$app_pid" 2>/dev/null || true; fi
   docker rm -f "$db" >/dev/null 2>&1 || true
   rm -f "$tmp/ca.crt"
   rmdir "$tmp"
@@ -36,24 +34,8 @@ docker cp "$db:/var/lib/postgresql/server.crt" "$tmp/ca.crt"
 export STETHOLINK_DATABASE_URL="postgres://stetholink_runtime@localhost:$db_port/postgres"
 export STETHOLINK_DATABASE_CA
 STETHOLINK_DATABASE_CA=$(cat "$tmp/ca.crt")
-export STAGING_LAUNCH_SECRET
-STAGING_LAUNCH_SECRET=$(openssl rand -hex 32)
-export AUTH_MODE=staging VERCEL_ENV=preview VERCEL_TARGET_ENV=preview
-export AI_PROVIDER=mock CLINICAL_DATA_SOURCE=synthetic TENANT_ID=ci-synthetic
-export STAGING_SESSION_SECONDS=45 STAGING_BASE_URL=http://127.0.0.1:3075
 
-node node_modules/next/dist/bin/next start apps/embedded-app --hostname 127.0.0.1 --port 3075 &
-app_pid=$!
-for _ in {1..30}; do
-  if curl --silent --fail "$STAGING_BASE_URL/api/health" >/dev/null; then break; fi
-  sleep 1
-done
-node tests/e2e/staging.mts
-kill "$app_pid"
-wait "$app_pid" || true
-app_pid=
-node tests/e2e/m3-restart.mts
-STETHOLINK_TEST_OWNER_URL="postgres://postgres@127.0.0.1:$db_port/postgres" node tests/e2e/m5-m6-flow.mts
-node tests/e2e/m7-assistant-flow.mts
-# Live code path with fake SMART, FHIR and model servers and fictional data.
+# The product has one mode, so one flow: the production build against a fake SMART issuer, a fake FHIR
+# server, a fake transcription endpoint and a fake model endpoint that the test starts itself.
+# Every fake and every fictional record lives under tests/. It verifies no real EHR and no real model.
 node tests/e2e/live-ehr-flow.mts

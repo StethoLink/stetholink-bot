@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ahmedClinicalFacts, ahmedConsultationRequest, ahmedEncounter, ahmedMissingInformation, ahmedPatient, syntheticDrafts, syntheticEncounters, syntheticPatients } from "@/shared/mocks/synthetic-data";
+import { ahmedClinicalFacts, ahmedConsultationRequest, ahmedEncounter, ahmedMissingInformation, ahmedPatient, syntheticDrafts, syntheticEncounters, syntheticPatients } from "@/tests/fixtures/synthetic-data";
 import { apiErrorSchema, approvalRequestSchema, attachmentReferenceSchema, clinicalFactSchema, clinicianIdentitySchema, consultationDraftSchema, consultationRequestSchema, encounterContextSchema, missingInformationSchema, patientContextSchema, providerIdSchema } from "@/shared/schemas";
 import { API_ERROR_CODES } from "@/shared/constants";
 

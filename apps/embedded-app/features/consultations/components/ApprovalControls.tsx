@@ -16,7 +16,7 @@ export interface ApprovalControlsProps {
   submitting: boolean;
   error?: string;
   /** Tenant-allowed destinations offering the requested specialty. */
-  destinations?: readonly { id: string; displayName: string; synthetic?: boolean }[];
+  destinations?: readonly { id: string; displayName: string }[];
   /** True until the allowed destinations have been read from the server. */
   destinationsLoading?: boolean;
   onDecide: (decision: ApprovalDecision, recipientId?: string) => void;
@@ -67,9 +67,8 @@ export function ApprovalControls({ status, submitting, error, destinations = [],
               <label className="field-label" htmlFor={`${id}-destination`}>Destination</label>
               <select id={`${id}-destination`} className="field" value={recipient} required onChange={(e) => setRecipient(e.target.value)}>
                 <option value="">Choose a destination</option>
-                {destinations.map((d) => <option key={d.id} value={d.id}>{d.displayName}{d.synthetic ? " (simulated)" : ""}</option>)}
+                {destinations.map((d) => <option key={d.id} value={d.id}>{d.displayName}</option>)}
               </select>
-              {chosen?.synthetic && <span className="field-hint text-amber-900">Simulated provider. No real specialist or organisation receives this consultation.</span>}
             </div>
             <div>
               <p className="font-medium">What happens when you confirm</p>

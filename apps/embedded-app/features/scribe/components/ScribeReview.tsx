@@ -38,8 +38,8 @@ function WriteRow({ write, label }: { write: ChartWriteResult; label: string }) 
 }
 
 /** Review of one recorded visit: the transcript, the drafted note with its sources, what is new for the chart, and the physician's approval. */
-export function ScribeReview({ session, canApprove, liveTranscription, onChange, onDiscard, onNew }: {
-  session: ScribeSessionView; canApprove: boolean; liveTranscription: boolean; onChange(next: ScribeSessionView): void; onDiscard(): void; onNew(): void;
+export function ScribeReview({ session, canApprove, onChange, onDiscard, onNew }: {
+  session: ScribeSessionView; canApprove: boolean; onChange(next: ScribeSessionView): void; onDiscard(): void; onNew(): void;
 }) {
   const notify = useToast();
   const note = session.note;
@@ -104,11 +104,11 @@ export function ScribeReview({ session, canApprove, liveTranscription, onChange,
       </div>
 
       <Card className="space-y-3">
-        <CardHeader title="Visit note (SOAP)" actions={<>{note.provenance.liveInference ? <AiBadge /> : <Badge tone="warning">Demo fallback (no AI inference)</Badge>}
+        <CardHeader title="Visit note (SOAP)" actions={<>{note.provenance.liveInference ? <AiBadge /> : <Badge tone="warning">No AI inference</Badge>}
           {session.status === "note_ready" ? <Badge tone="warning" dot>Awaiting physician review</Badge> : <Badge tone="success" dot>Approved</Badge>}</>}
           description={note.provenance.liveInference
             ? `Drafted by ${note.provenance.model} from the transcript. Every statement points at the words of the visit that support it.`
-            : "No language model is configured: each sentence of the transcript is listed as it was said."} />
+            : "This note was stored without model inference: each sentence of the transcript is listed as it was said."} />
         {(note.rejectedStatements > 0 || note.rejectedUpdates > 0) && (
           <Alert tone="warning">{note.rejectedStatements + note.rejectedUpdates} drafted item{note.rejectedStatements + note.rejectedUpdates === 1 ? " was" : "s were"} removed because the words of the visit did not support {note.rejectedStatements + note.rejectedUpdates === 1 ? "it" : "them"}. Check the transcript for anything missing.</Alert>
         )}
@@ -212,7 +212,6 @@ export function ScribeReview({ session, canApprove, liveTranscription, onChange,
       <Card aria-label="Transcript" className="space-y-2">
         <CardHeader level={3} title="Transcript" description={session.transcriptDeleted ? undefined : `The words cannot be edited. Deleted when the note is in the chart, or on ${new Date(session.transcriptExpiresAt).toLocaleDateString(undefined, { dateStyle: "medium" })}.`}
           actions={open && session.segments.some((segment) => segment.speaker) ? <Button size="sm" disabled={busy} onClick={() => void swapSpeakers()}>Swap clinician and patient</Button> : undefined} />
-        {!liveTranscription && !session.transcriptDeleted && <Alert tone="warning">Demo stand-in: this is a fixed fictional visit, not what was recorded.</Alert>}
         {session.transcriptDeleted ? <p className="text-sm text-slate-700">The transcript was deleted. The audio was never stored.</p> : (
           <ol className="space-y-1.5">
             {session.segments.map((segment) => {

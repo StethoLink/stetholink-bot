@@ -1,13 +1,10 @@
 import "server-only";
 import { z } from "zod";
-import { DATA_CLASSIFICATIONS } from "@/shared/constants";
 import { responsesEndpoint } from "@/core/agent/providers/openai-provider";
 
 const envSchema = z.object({
-  TENANT_ID: z.string().min(1).max(128).default("local-synthetic"),
-  MOCK_RECIPIENT_IDS: z.string().default("synthetic-cardiology,synthetic-cardiology-declines,synthetic-cardiology-offline,synthetic-radiology"),
-  MOCK_PROVIDER_SECRET: z.string().min(32).optional(),
-  // Receiving specialist services of a live tenant: JSON list of { id, displayName, specialties, transport, active }.
+  TENANT_ID: z.string().min(1).max(128),
+  // Receiving specialist services of the tenant: JSON list of { id, displayName, specialties, transport, active }.
   PROVIDER_DIRECTORY: z.string().optional(),
   // Ids from PROVIDER_DIRECTORY this tenant may send to (enforced in Core and again in PostgreSQL).
   PROVIDER_ALLOWLIST: z.string().default(""),
@@ -17,18 +14,11 @@ const envSchema = z.object({
   EMAIL_PROVIDER: z.enum(["none", "console"]).default("none"),
   SPECIALIST_SESSION_MINUTES: z.coerce.number().int().min(5).max(60).default(30),
   PROVIDER_TIMEOUT_MS: z.coerce.number().int().min(100).max(30_000).default(10_000),
-  LOCAL_SYNTHETIC_CHART: z.enum(["alpha", "ahmed", "omar"]).default("alpha"),
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
-  VERCEL_ENV: z.string().optional(),
-  VERCEL_TARGET_ENV: z.string().optional(),
-  // Tenant data classification. "live" means real patients; see liveModeProblems below.
-  CLINICAL_DATA_MODE: z.enum(DATA_CLASSIFICATIONS).default("synthetic"),
   // Operator statement that the configured model deployment may process real patient data.
   MODEL_LIVE_DATA_APPROVED: z.enum(["true", "false"]).default("false"),
-  AI_PROVIDER: z.enum(["mock", "openai"]).default("mock"),
-  // Preview staging stays on the deterministic mock unless a live model is explicitly allowed.
-  // Staging exists only in synthetic mode, so only synthetic charts are sent either way.
-  STAGING_LIVE_MODEL: z.enum(["disabled", "enabled"]).default("disabled"),
+  // The only model provider. There is no stand-in: without its key and rates the server does not start.
+  AI_PROVIDER: z.enum(["openai"]).default("openai"),
   // Cumulative model spend allowed per server instance per UTC day (in addition to the per-call limit).
   AI_DAILY_BUDGET_USD: z.coerce.number().positive().max(1000).default(2),
   OPENAI_API_KEY: z.string().optional(),
@@ -59,7 +49,7 @@ const envSchema = z.object({
   SCRIBE_NOTE_REASONING_EFFORT: z.enum(["minimal", "low", "medium", "high"]).default("low"),
   SCRIBE_NOTE_INPUT_USD_PER_MILLION: z.coerce.number().positive().max(1000).optional(),
   SCRIBE_NOTE_OUTPUT_USD_PER_MILLION: z.coerce.number().positive().max(1000).optional(),
-  TRANSCRIPTION_PROVIDER: z.enum(["mock", "openai", "elevenlabs"]).default("mock"),
+  TRANSCRIPTION_PROVIDER: z.enum(["openai", "elevenlabs"]).default("openai"),
   TRANSCRIPTION_MODEL: z.string().min(1).max(128).default("gpt-transcribe"),
   // Operator-verified price per audio minute, and the most the operator accepts to pay.
   TRANSCRIPTION_USD_PER_MINUTE: z.coerce.number().positive().max(1).optional(),
@@ -71,8 +61,10 @@ const envSchema = z.object({
   EHR_WRITE_ENABLED: z.enum(["true", "false"]).default("false"),
   FHIR_NOTE_DOC_STATUS: z.enum(["preliminary", "final"]).default("preliminary"),
   FHIR_NOTE_TYPE_CODE: z.string().regex(/^[0-9]{3,7}-[0-9]$/).optional(),
-  AUTH_MODE: z.enum(["dev", "smart", "staging", "supabase"]).default("dev"),
-  CLINICAL_DATA_SOURCE: z.enum(["synthetic", "fhir", "openemr"]).default("synthetic"),
+  // The only way in is the verified SMART launch from the EHR.
+  AUTH_MODE: z.enum(["smart"]).default("smart"),
+  // The EHR the chart is read from. Required: there is no built-in chart.
+  CLINICAL_DATA_SOURCE: z.enum(["fhir", "openemr"]),
   FHIR_BASE_URL: z.url().optional(),
   SMART_CLIENT_ID: z.string().optional(),
   SMART_AUTHORIZATION_URL: z.url().optional(),
@@ -90,36 +82,49 @@ const envSchema = z.object({
   COOKIE_MODE: z.enum(["lax", "embedded"]).default("lax"),
   STETHOLINK_DATABASE_URL: z.string().optional(),
   STETHOLINK_DATABASE_CA: z.string().optional(),
-  STAGING_LAUNCH_SECRET: z.string().min(32).optional(),
-  STAGING_SESSION_SECONDS: z.coerce.number().int().min(5).max(900).default(300),
 });
 
 export type ServerEnv = z.infer<typeof envSchema>;
 
 /**
- * Why this configuration may not run with real patient data. Empty when CLINICAL_DATA_MODE=live
- * is fully configured. Live mode needs the verified EHR launch, an EHR data source, durable
- * storage and a model deployment approved for live data, with every synthetic launch path off.
+ * What is missing before this server may run. The product has one mode: a verified EHR launch,
+ * the EHR's own chart, durable storage and a real model deployment approved for patient data.
+ * Nothing stands in for a missing part, so an incomplete configuration is refused at startup.
  * Messages name settings only, never their values.
  */
-export function liveModeProblems(env: ServerEnv): string[] {
+export function configurationProblems(env: ServerEnv): string[] {
   const problems: string[] = [];
-  if (env.AUTH_MODE !== "smart") problems.push("AUTH_MODE must be smart (dev and staging launches are synthetic only)");
-  if (env.CLINICAL_DATA_SOURCE === "synthetic") problems.push("CLINICAL_DATA_SOURCE must be fhir or openemr");
+  const smart = ["FHIR_BASE_URL", "SMART_CLIENT_ID", "SMART_AUTHORIZATION_URL", "SMART_TOKEN_URL", "SMART_REDIRECT_URI", "SMART_OIDC_ISSUER", "SMART_JWKS_URL", "SMART_SCOPE", "SMART_CLINICIAN_MAP"] as const;
+  const missing = smart.filter((name) => !env[name]);
+  if (missing.length) problems.push(`${missing.join(", ")} must be set (the EHR launch)`);
   if (!env.STETHOLINK_DATABASE_URL) problems.push("STETHOLINK_DATABASE_URL must be set");
   if (!env.SESSION_ENCRYPTION_KEY) problems.push("SESSION_ENCRYPTION_KEY must be set (the stored EHR token is encrypted)");
-  if (env.STAGING_LAUNCH_SECRET) problems.push("STAGING_LAUNCH_SECRET must not be set");
-  if (env.AI_PROVIDER === "mock") problems.push("AI_PROVIDER must be a real model provider (the mock never drafts from live data)");
   if (env.MODEL_LIVE_DATA_APPROVED !== "true") problems.push("MODEL_LIVE_DATA_APPROVED must be true");
-  if (env.AI_PROVIDER === "openai" && !(env.OPENAI_API_KEY && env.OPENAI_INPUT_USD_PER_MILLION && env.OPENAI_OUTPUT_USD_PER_MILLION)) {
+  if (!(env.OPENAI_API_KEY && env.OPENAI_INPUT_USD_PER_MILLION && env.OPENAI_OUTPUT_USD_PER_MILLION)) {
     problems.push("OPENAI_API_KEY, OPENAI_INPUT_USD_PER_MILLION and OPENAI_OUTPUT_USD_PER_MILLION must be set");
   }
   if (env.SCRIBE_ENABLED === "true") problems.push(...scribeProblems(env).map((problem) => `scribe: ${problem}`));
   return problems;
 }
+
+/**
+ * Settings and values that selected built-in fictional charts, the stand-in model, the simulated
+ * specialist or a launch without an EHR. They no longer exist. A deployment that still sets one
+ * is refused by name, so it cannot believe it is running in the mode it asked for.
+ */
+const REMOVED_VALUES: Record<string, readonly string[]> = {
+  AUTH_MODE: ["dev", "staging", "supabase"], CLINICAL_DATA_SOURCE: ["synthetic"], CLINICAL_DATA_MODE: ["synthetic"],
+  AI_PROVIDER: ["mock"], TRANSCRIPTION_PROVIDER: ["mock"], NEXT_PUBLIC_API_MODE: ["mock"],
+};
+const REMOVED_SETTINGS = ["STAGING_LAUNCH_SECRET", "STAGING_SESSION_SECONDS", "STAGING_LIVE_MODEL", "MOCK_RECIPIENT_IDS", "MOCK_PROVIDER_SECRET", "LOCAL_SYNTHETIC_CHART"];
+export function removedSettings(source: Record<string, string | undefined>): string[] {
+  return [
+    ...Object.entries(REMOVED_VALUES).filter(([name, values]) => values.includes(source[name] ?? "")).map(([name]) => `${name}=${source[name]} was removed`),
+    ...REMOVED_SETTINGS.filter((name) => source[name]).map((name) => `${name} was removed and must not be set`),
+  ];
+}
 const directoryEntry = z.object({
   id: z.string().min(1).max(128).regex(/^[A-Za-z0-9._-]+$/), displayName: z.string().min(1).max(200), specialties: z.array(z.string().min(1).max(100)).min(1).max(20),
-  // The simulated specialist ("mock") can never be configured here.
   transport: z.enum(["portal"]), active: z.boolean().default(true),
 }).strict();
 const specialistEntry = z.object({
@@ -136,7 +141,7 @@ function parseList<T>(raw: string | undefined, schema: z.ZodType<T>, name: strin
   if (!parsed.success) throw new ServerConfigurationError(`${name} is not in the expected format`);
   return parsed.data;
 }
-/** The tenant's receiving services, from server configuration. Empty for a synthetic tenant, which uses the simulated ones. */
+/** The tenant's receiving services, from server configuration. */
 export function providerDirectory(env: ServerEnv): ProviderDirectoryEntry[] {
   const entries = parseList(env.PROVIDER_DIRECTORY, directoryEntry, "PROVIDER_DIRECTORY");
   if (new Set(entries.map((entry) => entry.id)).size !== entries.length || entries.some((entry) => entry.id.startsWith("synthetic-"))) {
@@ -156,7 +161,6 @@ export function specialistMap(env: ServerEnv): SpecialistEntry[] {
 /** Why the scribe may not run with a real transcription provider. Empty when it is fully configured. */
 export function scribeProblems(env: ServerEnv): string[] {
   const problems: string[] = [];
-  if (env.TRANSCRIPTION_PROVIDER === "mock") problems.push("TRANSCRIPTION_PROVIDER must be a real provider (the stand-in never receives live speech)");
   if (env.TRANSCRIPTION_LIVE_DATA_APPROVED !== "true") problems.push("TRANSCRIPTION_LIVE_DATA_APPROVED must be true");
   if (!env.TRANSCRIPTION_USD_PER_MINUTE) problems.push("TRANSCRIPTION_USD_PER_MINUTE must be set");
   else if (env.TRANSCRIPTION_USD_PER_MINUTE > env.TRANSCRIPTION_MAX_USD_PER_MINUTE) problems.push("TRANSCRIPTION_USD_PER_MINUTE is above TRANSCRIPTION_MAX_USD_PER_MINUTE");
@@ -168,33 +172,33 @@ export function scribeProblems(env: ServerEnv): string[] {
 
 export class ServerConfigurationError extends Error {}
 
-/** Parses and validates server configuration. Refuses an incomplete live-mode configuration. */
+/** Parses and validates server configuration. Refuses an incomplete configuration; nothing falls back to fabricated data. */
 export function parseEnv(source: Record<string, string | undefined>): ServerEnv {
-  const env = envSchema.parse(Object.fromEntries(Object.entries(source).filter(([, v]) => v !== "")));
+  const removed = removedSettings(source);
+  if (removed.length) throw new ServerConfigurationError(`Fictional charts, the stand-in model, the simulated specialist and launches without an EHR are no longer part of StethoLink: ${removed.join("; ")}`);
+  const parsed = envSchema.safeParse(Object.fromEntries(Object.entries(source).filter(([, v]) => v !== "")));
+  if (!parsed.success) {
+    // Setting names and the kind of problem only; a rejected value is never echoed.
+    const names = [...new Set(parsed.error.issues.map((issue) => `${String(issue.path[0])} ${source[String(issue.path[0])] ? "is not valid" : "must be set"}`))];
+    throw new ServerConfigurationError(`StethoLink is not configured: ${names.join("; ")}`);
+  }
+  const env = parsed.data;
   if (env.TRANSCRIPTION_BASE_URL && !responsesEndpoint(env.TRANSCRIPTION_BASE_URL, env.NODE_ENV !== "production")) {
     throw new ServerConfigurationError("TRANSCRIPTION_BASE_URL must be an HTTPS URL without credentials or parameters (HTTP is accepted only for a loopback address outside production)");
   }
   if (env.OPENAI_BASE_URL && !responsesEndpoint(env.OPENAI_BASE_URL, env.NODE_ENV !== "production")) {
     throw new ServerConfigurationError("OPENAI_BASE_URL must be an HTTPS URL without credentials or parameters (HTTP is accepted only for a loopback address outside production)");
   }
-  // Malformed directory or specialist settings stop the server in either mode.
+  // Malformed directory or specialist settings stop the server.
   const directory = providerDirectory(env);
   const specialists = specialistMap(env);
   const allow = env.PROVIDER_ALLOWLIST.split(",").map((id) => id.trim()).filter(Boolean);
   if (allow.some((id) => !directory.some((entry) => entry.id === id))) throw new ServerConfigurationError("PROVIDER_ALLOWLIST names a provider that is not in PROVIDER_DIRECTORY");
   if (specialists.some((entry) => !directory.some((provider) => provider.id === entry.providerId))) throw new ServerConfigurationError("SPECIALIST_MAP names a provider that is not in PROVIDER_DIRECTORY");
   if (env.EMAIL_PROVIDER === "console" && env.NODE_ENV === "production") throw new ServerConfigurationError("EMAIL_PROVIDER=console prints sign-in codes to the log and is refused in production");
-  if (env.CLINICAL_DATA_MODE === "live") {
-    const problems = liveModeProblems(env);
-    if (problems.length) throw new ServerConfigurationError(`CLINICAL_DATA_MODE=live is refused: ${problems.join("; ")}`);
-  }
+  const problems = configurationProblems(env);
+  if (problems.length) throw new ServerConfigurationError(`StethoLink is not configured: ${problems.join("; ")}`);
   return env;
-}
-
-export function syntheticStagingEnabled(env: ServerEnv) {
-  return env.CLINICAL_DATA_MODE === "synthetic" && env.AUTH_MODE === "staging" && env.VERCEL_ENV === "preview" &&
-    (!env.VERCEL_TARGET_ENV || env.VERCEL_TARGET_ENV === "preview") &&
-    env.CLINICAL_DATA_SOURCE === "synthetic" && (env.AI_PROVIDER === "mock" || env.STAGING_LIVE_MODEL === "enabled");
 }
 
 let cached: ServerEnv | undefined;

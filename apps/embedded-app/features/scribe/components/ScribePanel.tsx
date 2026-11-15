@@ -127,14 +127,11 @@ export function ScribePanel({ openSessionId, onOpenSession }: { openSessionId?: 
   const nearLimit = recorder.state.elapsedMs > (capabilities.maxMinutes - 2) * 60_000;
 
   if (session && !live && busy !== "generating" && session.status !== "recording") {
-    return <ScribeReview session={session} canApprove={capabilities.canApprove} liveTranscription={capabilities.liveTranscription} onChange={setSession} onDiscard={() => void discard()} onNew={reset} />;
+    return <ScribeReview session={session} canApprove={capabilities.canApprove} onChange={setSession} onDiscard={() => void discard()} onNew={reset} />;
   }
   return (
     <Card aria-label="Visit scribe" className="space-y-3">
       <CardHeader title="Visit scribe" description={`Records the visit, then drafts a note for you to review. Spoken language: ${capabilities.spokenLanguage}. Note language: ${capabilities.noteLanguage === "ar" ? "Arabic" : "English"}.`} />
-      {!capabilities.liveTranscription && (
-        <Alert tone="warning"><span className="font-semibold">Demo stand-in.</span> No transcription service is configured. Whatever is recorded, a fixed fictional visit is used as the transcript.</Alert>
-      )}
       {problem && (
         <Alert tone="danger" title={problem.title} action={problem.newWindow ? <Button size="sm" onClick={() => window.open(window.location.href, "_blank", "noopener")}>Open in a new window</Button> : undefined}>{problem.text}</Alert>
       )}

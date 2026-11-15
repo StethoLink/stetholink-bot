@@ -1,12 +1,10 @@
 import "server-only";
-import { mockProvider } from "@/core/agent/providers/mock-provider";
 import { createOpenAIProvider } from "@/core/agent/providers/openai-provider";
 import { clinicalSafetyGuard } from "@/core/agent/safety/guard";
 import { RouteError } from "@/core/errors";
 import { createScribeService, type ScribeConfig } from "@/core/scribe/service";
 import type { TranscriptionProvider } from "@/core/scribe/ports";
 import { createElevenLabsTranscription } from "@/integrations/transcription/elevenlabs";
-import { mockTranscription } from "@/integrations/transcription/mock";
 import { createOpenAITranscription, type TranscriptionEvent } from "@/integrations/transcription/openai";
 import { auditConsultation } from "@/platform/audit";
 import type { VerifiedLaunch } from "@/platform/auth/identity";
@@ -28,14 +26,12 @@ export function getTranscriptionProvider(): TranscriptionProvider {
   switch (env.TRANSCRIPTION_PROVIDER) {
     case "openai": return createOpenAITranscription({ ...shared, apiKey: env.OPENAI_API_KEY, baseUrl: env.TRANSCRIPTION_BASE_URL ?? env.OPENAI_BASE_URL, allowLoopbackHttp: env.NODE_ENV !== "production" }, fetch, { budget, observe });
     case "elevenlabs": return createElevenLabsTranscription({ ...shared, apiKey: env.ELEVENLABS_API_KEY }, fetch, { budget, observe });
-    case "mock": return mockTranscription;
   }
 }
 
 /** The note model: its own, cheaper model setting, the same provider gate and cost bounds. One call per visit. */
 function getNoteProvider() {
   const env = getEnv();
-  if (env.AI_PROVIDER !== "openai") return mockProvider;
   return createOpenAIProvider({
     apiKey: env.OPENAI_API_KEY, model: env.SCRIBE_NOTE_MODEL, ...(env.OPENAI_BASE_URL ? { baseUrl: env.OPENAI_BASE_URL } : {}), allowLoopbackHttp: env.NODE_ENV !== "production",
     timeoutMs: env.OPENAI_TIMEOUT_MS, maxRetries: env.OPENAI_MAX_RETRIES, maxInputTokens: 120_000, maxOutputTokens: 12_000, maxCostUsd: Math.min(1, env.SCRIBE_MAX_VISIT_USD),
@@ -47,7 +43,7 @@ function getNoteProvider() {
 
 export function scribeConfig(): ScribeConfig {
   const env = getEnv();
-  const problems = env.TRANSCRIPTION_PROVIDER === "mock" ? [] : scribeProblems(env).filter((problem) => !problem.includes("LIVE_DATA_APPROVED") || env.CLINICAL_DATA_MODE === "live");
+  const problems = scribeProblems(env);
   const reason = env.SCRIBE_ENABLED !== "true" ? "The scribe is not switched on for this hospital. Ask your StethoLink administrator."
     : !env.STETHOLINK_DATABASE_URL ? "The scribe needs the StethoLink database, which is not configured."
     : problems.length ? "The scribe is not fully configured. Tell your StethoLink administrator." : undefined;

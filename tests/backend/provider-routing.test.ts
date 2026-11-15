@@ -8,14 +8,14 @@ import { createProviderResponseService } from "@/core/routing/responses";
 import { buildEnvelope, createProviderRouter } from "@/core/routing/router";
 import { toolRegistry } from "@/core/tools/registry";
 import { createConsultationService } from "@/core/consultation/service";
-import { mockProvider } from "@/core/agent/providers/mock-provider";
+import { mockProvider } from "@/tests/fixtures/mock-provider";
 import { clinicalSafetyGuard } from "@/core/agent/safety/guard";
-import { syntheticClinicalAdapter } from "@/integrations/mock/connector";
-import { createMockSpecialistTransport, mockSpecialistCallback, mockSpecialistNextStep, syntheticProviderDirectory } from "@/integrations/mock/specialist";
+import { syntheticClinicalAdapter } from "@/tests/fixtures/clinical-adapter";
+import { createMockSpecialistTransport, mockSpecialistCallback, mockSpecialistNextStep, syntheticProviderDirectory } from "@/tests/fixtures/specialist";
 import { signProviderCallback, verifyProviderCallback, CALLBACK_HEADERS } from "@/platform/providers/callback-auth";
 import type { ConsultationDraft, ConsultationEnvelope, ProviderCallback } from "@/shared/contracts";
 import { consultationEnvelopeSchema, createConsultationDraftRequestSchema, providerCallbackSchema, transitionRequestSchema } from "@/shared/schemas";
-import { ahmedConsultationRequest, ahmedPatient } from "@/shared/mocks/synthetic-data";
+import { ahmedConsultationRequest, ahmedPatient } from "@/tests/fixtures/synthetic-data";
 
 const TENANT = "synthetic-tenant";
 const physician: ClinicianContext = {
@@ -73,7 +73,7 @@ function setup(draft: ConsultationDraft, transport: ProviderTransport = createMo
   const store = memoryRepository(draft);
   const send = vi.spyOn(transport, "send");
   const audit = vi.fn();
-  const router = createProviderRouter({ repository: store.repository, registry, transport: () => transport, tenantId: TENANT, dataClassification: "synthetic", timeoutMs, simulator: true, audit });
+  const router = createProviderRouter({ repository: store.repository, registry, transport: () => transport, tenantId: TENANT, dataClassification: "synthetic", timeoutMs, audit });
   const command = (providerId = "synthetic-cardiology", key = "key-1", version = 2) => ({ providerId, expectedVersion: version, idempotencyKey: key });
   return { ...store, router, send, audit, command };
 }
@@ -99,7 +99,7 @@ describe("provider router", () => {
     await expect(router.route("unknown-draft", command(), physician)).rejects.toMatchObject({ code: "not_found" });
     expect(send).not.toHaveBeenCalled();
     const result = await router.route(draft.id, command(), physician);
-    expect(result).toMatchObject({ status: "sent", provider: { id: "synthetic-cardiology" }, canSend: false, canRetry: false, canSimulate: true });
+    expect(result).toMatchObject({ status: "sent", provider: { id: "synthetic-cardiology" }, canSend: false, canRetry: false });
     expect(send).toHaveBeenCalledTimes(1);
     expect(audit).toHaveBeenCalledWith(expect.objectContaining({ action: "consultation.dispatched", requestId: attempts[0].requestId }));
   });
@@ -176,7 +176,7 @@ describe("provider router", () => {
     const draft = { ...(await approvedDraft()), approvedRecipientId: "synthetic-cardiology-offline" };
     const { router, send, command, attempts, audit } = setup(draft);
     const failed = await router.route(draft.id, command("synthetic-cardiology-offline"), physician);
-    expect(failed).toMatchObject({ status: "failed", canRetry: true, canSimulate: false });
+    expect(failed).toMatchObject({ status: "failed", canRetry: true });
     expect(failed.attempts[0].failureCode).toBe("transport_error");
     expect(audit).toHaveBeenCalledWith(expect.objectContaining({ action: "consultation.dispatch_failed", failureCode: "transport_error" }));
     await expect(router.route(draft.id, command("synthetic-cardiology", "redirect", 4), physician)).rejects.toMatchObject({ code: "forbidden" });

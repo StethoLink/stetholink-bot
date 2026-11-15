@@ -2,7 +2,7 @@ import type { ClinicianContext } from "@/core/auth/clinician";
 
 export interface VerifiedLaunch {
   context: ClinicianContext;
-  source: "smart" | "synthetic";
+  source: "smart";
   ehrAccessToken?: string;
   /** "Practitioner/<id>" from the verified fhirUser claim: the author of anything written to the chart. */
   ehrUser?: string;

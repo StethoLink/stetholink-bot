@@ -39,11 +39,11 @@ function Provenance({ draft }: { draft: ConsultationDraft }) {
   const grounding = draft.grounding;
   const authoring = grounding?.authoring;
   if (!grounding || !authoring) return <p className="text-xs text-slate-700">AI-generated content. A clinician must review it before it is used in care.</p>;
+  // A record's own provenance: this server always drafts with a model, so only a record stored without one reads this way.
   if (!authoring.liveInference) {
     return (
       <p role="note" className="alert alert-warning">
-        <span className="font-semibold">Demo fallback, not AI.</span> No language model is configured, so the chart record was copied into the
-        sections without any model inference. Revision instructions are not interpreted in this mode.
+        <span className="font-semibold">Not AI.</span> This draft was stored without model inference: the chart record was copied into the sections.
       </p>
     );
   }
@@ -194,7 +194,7 @@ export function ConsultationDraftView({ draft }: { draft: ConsultationDraft }) {
         </h2>
         <div className="flex flex-wrap gap-2">
           {authoring && !authoring.liveInference ? (
-            <Badge tone="warning">Demo fallback (no AI inference)</Badge>
+            <Badge tone="warning">No AI inference</Badge>
           ) : (
             <AiBadge />
           )}

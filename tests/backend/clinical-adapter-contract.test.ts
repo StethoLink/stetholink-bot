@@ -2,8 +2,8 @@ import { describe, expect, expectTypeOf, it, vi } from "vitest";
 import type { ClinicalDataAdapter } from "@/shared/contracts";
 import type { ClinicalDataAdapter as CoreClinicalDataAdapter } from "@/core/tools/connector";
 import { createPatientContextService } from "@/core/patient-context/service";
-import { syntheticClinicalAdapter } from "@/integrations/mock/connector";
-import { ahmedPatient, syntheticEncounters, syntheticPatients } from "@/shared/mocks/synthetic-data";
+import { syntheticClinicalAdapter } from "@/tests/fixtures/clinical-adapter";
+import { ahmedPatient, syntheticEncounters, syntheticPatients } from "@/tests/fixtures/synthetic-data";
 import { encounterContextSchema, patientContextSchema } from "@/shared/schemas";
 
 describe("normalized ClinicalDataAdapter contract", () => {

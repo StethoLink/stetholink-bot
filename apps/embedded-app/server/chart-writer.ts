@@ -13,7 +13,7 @@ import { getEnv } from "@/platform/tenants/env";
 export function getChartWriter(session: VerifiedLaunch): ClinicalWriteAdapter | null {
   const env = getEnv();
   const tenant = getTenant();
-  if (env.EHR_WRITE_ENABLED !== "true" || session.source !== "smart" || !session.ehrAccessToken || !env.FHIR_BASE_URL || tenant.connector === "synthetic" ||
+  if (env.EHR_WRITE_ENABLED !== "true" || session.source !== "smart" || !session.ehrAccessToken || !env.FHIR_BASE_URL ||
       tenant.dataClassification !== "live" || session.context.dataClassification !== "live" || !session.context.encounterId || !session.context.scopes.includes("chart:write")) return null;
   return createFhirWriter({
     baseUrl: env.FHIR_BASE_URL, accessToken: session.ehrAccessToken, patientId: session.context.patientId, encounterId: session.context.encounterId,

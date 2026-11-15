@@ -3,7 +3,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { EncounterSummaryView, PatientContextView, loadResource, type ResourceState } from "@/apps/embedded-app/features/ehr-panel";
-import { createMockApiClient } from "@/shared/api-client";
+import { createMockApiClient } from "@/tests/fixtures/mock-api-client";
 
 // Vitest compiles JSX with the classic runtime until esbuild.jsx is set to "automatic".
 (globalThis as { React?: typeof React }).React = React;

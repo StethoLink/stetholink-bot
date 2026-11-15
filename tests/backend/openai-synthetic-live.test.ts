@@ -2,8 +2,8 @@ import { expect, it } from "vitest";
 import { createOpenAIProvider } from "@/core/agent/providers/openai-provider";
 import { createConsultationService } from "@/core/consultation/service";
 import { clinicalSafetyGuard } from "@/core/agent/safety/guard";
-import { syntheticClinicalAdapter } from "@/integrations/mock/connector";
-import { ahmedConsultationRequest } from "@/shared/mocks/synthetic-data";
+import { syntheticClinicalAdapter } from "@/tests/fixtures/clinical-adapter";
+import { ahmedConsultationRequest } from "@/tests/fixtures/synthetic-data";
 import { getEnv } from "@/platform/tenants/env";
 import { consultationDraftSchema } from "@/shared/schemas";
 

@@ -1,48 +1,29 @@
 import "server-only";
-import { createHmac } from "node:crypto";
-import { getEnv, syntheticStagingEnabled } from "@/platform/tenants/env";
 import { getTenant } from "@/platform/tenants";
-import { localSyntheticEnabled } from "@/platform/auth/session";
 import { createProviderRegistry } from "@/core/routing/registry";
 import type { ProviderDescriptor } from "@/shared/contracts";
-import { createMockSpecialistTransport, syntheticProviderDirectory } from "@/integrations/mock/specialist";
 import { createPortalTransport } from "@/integrations/providers/portal";
 
-/**
- * The simulated specialists exist only for a synthetic tenant in local development or preview
- * staging. They are never available to a tenant configured for live clinical data.
- */
-export function syntheticRoutingEnabled() {
-  return getTenant().dataClassification === "synthetic" && (localSyntheticEnabled() || syntheticStagingEnabled(getEnv()));
-}
-
-/** A live tenant routes to the services in its configured directory; durable storage is required either way. */
-export function liveRoutingEnabled() {
+/** Consultations are sent only to the active, allowlisted services of the tenant's configured directory. */
+export function routingEnabled() {
   const tenant = getTenant();
-  return tenant.dataClassification === "live" && tenant.directory.some((provider) => provider.active && tenant.recipients.has(provider.id));
+  return tenant.directory.some((provider) => provider.active && tenant.recipients.has(provider.id));
 }
 /** The tenant's allowed providers. The same allowlist is enforced again inside the database. */
 export function getProviderRegistry() {
   const tenant = getTenant();
-  return createProviderRegistry(syntheticRoutingEnabled() ? syntheticProviderDirectory : tenant.directory, tenant.recipients);
+  return createProviderRegistry(tenant.directory, tenant.recipients);
 }
-const mockTransport = createMockSpecialistTransport();
 const portalTransport = createPortalTransport();
+/** There is no simulated specialist: a provider without a real transport gets none, and the send fails visibly. */
 export function getProviderTransport(provider: ProviderDescriptor) {
-  if (syntheticRoutingEnabled()) return provider.synthetic && provider.transport === "mock" ? mockTransport : undefined;
-  // A live tenant never reaches the simulated specialist: only non-synthetic inbox services are transmitted to.
-  return getTenant().dataClassification === "live" && !provider.synthetic && provider.transport === "portal" ? portalTransport : undefined;
+  return !provider.synthetic && provider.transport === "portal" ? portalTransport : undefined;
 }
 /**
- * Per-provider callback secret for the synthetic specialists. Deployed previews must use
- * a server-side secret; the fixed development value works only on a local machine.
+ * Callback secret of a provider that answers over HTTP. No such transport is registered yet
+ * (the specialist inbox is the only one), so no provider has a secret and every callback is refused.
  */
-export function providerCallbackSecret(providerId: string) {
-  const env = getEnv();
-  if (!syntheticRoutingEnabled() || !getTenant().recipients.has(providerId)) return undefined;
-  const provider = syntheticProviderDirectory.find((candidate) => candidate.id === providerId);
-  if (!provider?.active || provider.transport !== "mock") return undefined;
-  const root = env.MOCK_PROVIDER_SECRET ?? env.STAGING_LAUNCH_SECRET ??
-    (localSyntheticEnabled() ? "local-development-only-mock-provider-secret" : undefined);
-  return root && createHmac("sha256", root).update(`stetholink-provider-callback:${providerId}`).digest("hex");
+export function providerCallbackSecret(providerId: string): string | undefined {
+  void providerId;
+  return undefined;
 }

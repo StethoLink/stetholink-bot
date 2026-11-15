@@ -89,7 +89,7 @@ export const consultationDeliveryViewSchema = z.object({
   })),
   responses: z.array(responseView),
   report: responseView.nullable(),
-  canSend: z.boolean(), canRetry: z.boolean(), canSimulate: z.boolean(),
+  canSend: z.boolean(), canRetry: z.boolean(),
 }) satisfies z.ZodType<ConsultationDeliveryView>;
 
 export const dispatchRequestSchema = z.object({

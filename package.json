@@ -6,7 +6,6 @@
     "dev": "next dev apps/embedded-app",
     "build": "next build apps/embedded-app",
     "start": "next start apps/embedded-app",
-    "demo": "node scripts/demo.mjs",
     "smart:preflight": "node scripts/smart-preflight.mts",
     "lint": "eslint",
     "typecheck": "next typegen apps/embedded-app && tsc --noEmit",

@@ -6,7 +6,8 @@ vi.mock("@/platform/persistence/database", () => ({ database: () => { throw new 
 vi.mock("next/headers", () => ({ cookies: async () => ({ get: () => undefined, set: () => undefined }), headers: async () => new Headers() }));
 const { openPayload, sealPayload } = await import("@/platform/auth/session-store");
 const { cookieOptions } = await import("@/platform/auth/session");
-const { parseEnv, liveModeProblems } = await import("@/platform/tenants/env");
+const { parseEnv, configurationProblems } = await import("@/platform/tenants/env");
+const { completeConfig } = await import("@/tests/helpers/config");
 
 const KEY_A = Buffer.alloc(32, 1).toString("base64");
 const KEY_B = Buffer.alloc(32, 2).toString("base64");
@@ -38,15 +39,13 @@ describe("stored sessions", () => {
     expect(openPayload({ ...stored, data: Buffer.from("x" + Buffer.from(stored.data, "base64").toString("latin1"), "latin1").toString("base64") })).toBeUndefined();
     expect(openPayload(session)).toBeUndefined();
     env.SESSION_ENCRYPTION_KEY = undefined;
-    // Local development without a key keeps working on synthetic data.
+    // The store itself passes plain rows through without a key; the server refuses to start without one.
     expect(openPayload(session)).toEqual(session);
   });
   it("need a key before real patient data is allowed", () => {
-    const live = { CLINICAL_DATA_MODE: "live", AUTH_MODE: "smart", CLINICAL_DATA_SOURCE: "fhir", STETHOLINK_DATABASE_URL: "postgres://x@db.example.test/x", AI_PROVIDER: "openai", OPENAI_API_KEY: "k",
-      OPENAI_INPUT_USD_PER_MILLION: "1", OPENAI_OUTPUT_USD_PER_MILLION: "1", MODEL_LIVE_DATA_APPROVED: "true" };
-    expect(() => parseEnv(live)).toThrow(/SESSION_ENCRYPTION_KEY/);
-    expect(liveModeProblems(parseEnv({ ...live, SESSION_ENCRYPTION_KEY: KEY_A }))).toEqual([]);
-    expect(() => parseEnv({ SESSION_ENCRYPTION_KEY: "too-short" })).toThrow();
+    expect(() => parseEnv({ ...completeConfig, SESSION_ENCRYPTION_KEY: undefined })).toThrow(/SESSION_ENCRYPTION_KEY/);
+    expect(configurationProblems(parseEnv({ ...completeConfig, SESSION_ENCRYPTION_KEY: KEY_A }))).toEqual([]);
+    expect(() => parseEnv({ ...completeConfig, SESSION_ENCRYPTION_KEY: "too-short" })).toThrow(/SESSION_ENCRYPTION_KEY is not valid/);
   });
 });
 

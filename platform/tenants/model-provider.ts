@@ -1,6 +1,5 @@
 import "server-only";
 import { getEnv } from "@/platform/tenants/env";
-import { mockProvider } from "@/core/agent/providers/mock-provider";
 import { createOpenAIProvider, type ModelCallEvent } from "@/core/agent/providers/openai-provider";
 import { createSpendingLimiter } from "@/core/agent/providers/spending";
 import { createLedgerLimiter } from "@/platform/persistence/spend-ledger";
@@ -11,7 +10,7 @@ export type { ModelProvider, ModelRequest, ModelResult, ModelMessage } from "@/c
 // One limiter per server instance, so the daily limit spans every request it handles.
 const globals = globalThis as typeof globalThis & { stetholinkModelBudget?: SpendingLimiter };
 
-/** The durable ledger wherever a database is configured; the in-process limit only for local use without one. */
+/** The durable ledger. The in-process limit remains only for code run without a database (unit tests). */
 export function spendingLimiter(kind: "model" | "transcription"): SpendingLimiter {
   const env = getEnv();
   if (env.STETHOLINK_DATABASE_URL) return createLedgerLimiter(env.TENANT_ID, kind, env.AI_DAILY_BUDGET_USD);
@@ -24,28 +23,25 @@ function observe(event: ModelCallEvent) {
   console.info(JSON.stringify({ action: "model.call", ...event, at: new Date().toISOString() }));
 }
 
-/** The only place a concrete provider is chosen. Add new providers here. */
+/**
+ * The only place a concrete provider is chosen. Add new providers here. There is no stand-in:
+ * server configuration is refused at startup without the provider's key and rates.
+ */
 export function getModelProvider(): ModelProvider {
   const env = getEnv();
-  switch (env.AI_PROVIDER) {
-    case "openai":
-      return createOpenAIProvider({
-        apiKey: env.OPENAI_API_KEY, model: env.OPENAI_MODEL,
-        ...(env.OPENAI_BASE_URL ? { baseUrl: env.OPENAI_BASE_URL } : {}), allowLoopbackHttp: env.NODE_ENV !== "production",
-        timeoutMs: env.OPENAI_TIMEOUT_MS, maxRetries: env.OPENAI_MAX_RETRIES,
-        maxInputTokens: env.OPENAI_MAX_INPUT_TOKENS, maxOutputTokens: env.OPENAI_MAX_OUTPUT_TOKENS,
-        maxCostUsd: env.OPENAI_MAX_COST_USD, reasoningEffort: env.OPENAI_REASONING_EFFORT,
-        inputUsdPerMillion: env.OPENAI_INPUT_USD_PER_MILLION, outputUsdPerMillion: env.OPENAI_OUTPUT_USD_PER_MILLION,
-        liveDataApproved: env.MODEL_LIVE_DATA_APPROVED === "true",
-      }, fetch, { budget: budget(), observe });
-    case "mock":
-      return mockProvider;
-  }
+  return createOpenAIProvider({
+    apiKey: env.OPENAI_API_KEY, model: env.OPENAI_MODEL,
+    ...(env.OPENAI_BASE_URL ? { baseUrl: env.OPENAI_BASE_URL } : {}), allowLoopbackHttp: env.NODE_ENV !== "production",
+    timeoutMs: env.OPENAI_TIMEOUT_MS, maxRetries: env.OPENAI_MAX_RETRIES,
+    maxInputTokens: env.OPENAI_MAX_INPUT_TOKENS, maxOutputTokens: env.OPENAI_MAX_OUTPUT_TOKENS,
+    maxCostUsd: env.OPENAI_MAX_COST_USD, reasoningEffort: env.OPENAI_REASONING_EFFORT,
+    inputUsdPerMillion: env.OPENAI_INPUT_USD_PER_MILLION, outputUsdPerMillion: env.OPENAI_OUTPUT_USD_PER_MILLION,
+    liveDataApproved: env.MODEL_LIVE_DATA_APPROVED === "true",
+  }, fetch, { budget: budget(), observe });
 }
 
 /** What the interface may say about the configured assistant. No secrets. */
 export function describeAssistant() {
   const env = getEnv();
-  const live = env.AI_PROVIDER !== "mock";
-  return { provider: env.AI_PROVIDER, model: live ? env.OPENAI_MODEL : "mock-1", liveInference: live, configured: !live || Boolean(env.OPENAI_API_KEY && env.OPENAI_INPUT_USD_PER_MILLION && env.OPENAI_OUTPUT_USD_PER_MILLION) };
+  return { provider: env.AI_PROVIDER, model: env.OPENAI_MODEL };
 }

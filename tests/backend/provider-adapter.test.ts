@@ -2,9 +2,9 @@ import { createHmac } from "node:crypto";
 import { describe, expect, it, vi } from "vitest";
 import { ProviderTransportError, type ProviderTransport } from "@/core/routing/ports";
 import { createHttpPartnerAdapter } from "@/integrations/providers/http-partner";
-import { createMockSpecialistTransport, mockSpecialistCallback } from "@/integrations/mock/specialist";
+import { createMockSpecialistTransport, mockSpecialistCallback } from "@/tests/fixtures/specialist";
 import type { ConsultationEnvelope } from "@/shared/contracts";
-import { omarClinicalFacts, omarMissingInformation } from "@/shared/mocks/synthetic-data";
+import { omarClinicalFacts, omarMissingInformation } from "@/tests/fixtures/synthetic-data";
 
 // Fake transports only. No provider endpoint, credential or agreement exists; these tests show
 // what an adapter must do before it can be considered for a real integration.

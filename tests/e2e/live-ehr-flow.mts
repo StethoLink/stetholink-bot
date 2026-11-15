@@ -5,8 +5,8 @@ import { setTimeout } from "node:timers/promises";
 import { startFakeEhr } from "./fakes/ehr.mts";
 import { ensureTrustedLocalhost, startTlsProxy } from "./fakes/tls.mts";
 
-// LIVE code path, black box, with FAKE servers and FICTIONAL data:
-//   production build in CLINICAL_DATA_MODE=live  +  fake SMART/OIDC issuer (real signed ID tokens)
+// The product's only code path, black box, with FAKE servers and FICTIONAL data (the fakes live here, under tests/):
+//   production build  +  fake SMART/OIDC issuer (real signed ID tokens)
 //   +  fake FHIR R4 server (one invented patient)  +  fake model endpoint  +  disposable PostgreSQL.
 // SMART launch -> chart facts shown -> draft cites FHIR facts -> physician approves.
 // It verifies the protocol and the boundaries. It does not verify a real EHR or a real model.
@@ -34,7 +34,7 @@ const proxy = await startTlsProxy(tls, httpsPort, appPort);
 let app: ChildProcess | undefined;
 
 const liveEnv: Record<string, string> = {
-  NODE_ENV: "production", TENANT_ID: "ci-live-hospital", CLINICAL_DATA_MODE: "live", AUTH_MODE: "smart", CLINICAL_DATA_SOURCE: "fhir",
+  NODE_ENV: "production", TENANT_ID: "ci-live-hospital", AUTH_MODE: "smart", CLINICAL_DATA_SOURCE: "fhir",
   FHIR_BASE_URL: ehr.fhirBase, SMART_CLIENT_ID: clientId, SMART_AUTHORIZATION_URL: `${ehr.oidcIssuer}/authorize`, SMART_TOKEN_URL: `${ehr.oidcIssuer}/token`,
   SMART_REDIRECT_URI: `${base}/api/smart/callback`, SMART_OIDC_ISSUER: ehr.oidcIssuer, SMART_JWKS_URL: `${ehr.oidcIssuer}/jwks`, SMART_SCOPE: scope,
   SMART_CLINICIAN_MAP: JSON.stringify([{ ...physician, role: "physician" }, { ...nurse, role: "clinician" }]),
@@ -55,9 +55,10 @@ const liveEnv: Record<string, string> = {
 };
 
 async function start(extra: Record<string, string> = {}) {
-  const env: Record<string, string | undefined> = { ...process.env, ...liveEnv, ...extra };
-  // Synthetic launch paths do not exist in live mode; the server refuses to start with them configured.
-  for (const key of ["STAGING_LAUNCH_SECRET", "VERCEL_ENV", "VERCEL_TARGET_ENV", "STAGING_SESSION_SECONDS", "MOCK_PROVIDER_SECRET"]) delete env[key];
+  const inherited: Record<string, string | undefined> = { ...process.env };
+  // Settings of the removed synthetic modes must not leak in from the caller's shell: the server refuses to start with them.
+  for (const key of ["STAGING_LAUNCH_SECRET", "VERCEL_ENV", "VERCEL_TARGET_ENV", "STAGING_SESSION_SECONDS", "STAGING_LIVE_MODEL", "MOCK_PROVIDER_SECRET", "MOCK_RECIPIENT_IDS", "LOCAL_SYNTHETIC_CHART", "CLINICAL_DATA_MODE", "NEXT_PUBLIC_API_MODE"]) delete inherited[key];
+  const env: Record<string, string | undefined> = { ...inherited, ...liveEnv, ...extra };
   app = spawn(process.execPath, ["node_modules/next/dist/bin/next", "start", "apps/embedded-app", "--hostname", "127.0.0.1", "--port", String(appPort)],
     { env, stdio: ["ignore", "ignore", "inherit"] });
   for (let i = 0; i < 150; i++) {
@@ -101,14 +102,30 @@ const chart = { patientId: "fic-pt-1", encounterId: "fic-enc-1" };
 const run = crypto.randomUUID();
 
 try {
-  // --- Live mode refuses an incomplete configuration --------------------------------------
-  assert.equal(await start({ MODEL_LIVE_DATA_APPROVED: "false" }), false, "Live mode must not start without model approval for live data");
-  await stop();
+  // --- The server refuses an incomplete configuration, and every removed stand-in, at startup ---
+  for (const [why, change] of [
+    ["without model approval for patient data", { MODEL_LIVE_DATA_APPROVED: "false" }],
+    ["without a model key", { OPENAI_API_KEY: "" }],
+    ["without an EHR data source", { CLINICAL_DATA_SOURCE: "" }],
+    ["without the SMART registration", { SMART_CLIENT_ID: "" }],
+    ["with the stand-in model", { AI_PROVIDER: "mock" }],
+    ["with built-in fictional charts", { CLINICAL_DATA_SOURCE: "synthetic" }],
+    ["with synthetic mode", { CLINICAL_DATA_MODE: "synthetic" }],
+    ["with the development sign-in", { AUTH_MODE: "dev" }],
+    ["with the staging sign-in", { AUTH_MODE: "staging", STAGING_LAUNCH_SECRET: "x".repeat(64) }],
+    ["with the stand-in transcription", { TRANSCRIPTION_PROVIDER: "mock" }],
+    ["with simulated specialists", { MOCK_RECIPIENT_IDS: "synthetic-cardiology" }],
+  ] as const) {
+    assert.equal(await start(change), false, `The server must not start ${why}`);
+    await stop();
+  }
   assert.equal(await start(), true);
 
-  // --- No session without the EHR launch; no synthetic launch in live mode -----------------
+  // --- No session without the EHR launch; the removed launches, demo and simulator are gone ---
   await call("/api/auth/session", 401);
   await call("/api/staging/launch", 404, { body: { profile: "physician" } });
+  await call("/staging", 404);
+  await call("/api/consultations/demo", 404, { method: "POST" });
   await call("/api/smart/launch?" + new URLSearchParams({ iss: "https://untrusted.example.test/fhir", launch: "x" }), 403);
   const unmapped = await smartLaunch("fic-sub-unmapped", 403);
   assert.equal(unmapped.cookie, undefined);
@@ -275,10 +292,10 @@ try {
   const send = (version: number, key: string) => ({ providerId: "fictional-cardiology-service", expectedVersion: version, idempotencyKey: key });
   await call(`${drafts}/${freshDraft.id}/delivery`, 409, { cookie: doctor, body: send(freshDraft.version, "live-early-" + run) });
   const sent = (await call(`${drafts}/${draft.id}/delivery`, 200, { cookie: doctor, body: send(approved.version, "live-send-" + run) })).json;
-  assert.deepEqual([sent.status, sent.provider.transport, sent.canSimulate], ["sent", "portal", false]);
+  assert.deepEqual([sent.status, sent.provider.transport, "canSimulate" in sent], ["sent", "portal", false]);
   // The same command again reports the same single request.
   assert.equal((await call(`${drafts}/${draft.id}/delivery`, 200, { cookie: doctor, body: send(approved.version, "live-send-" + run) })).json.attempts.length, 1);
-  await call(`${drafts}/${draft.id}/delivery/simulate`, 501, { cookie: doctor, body: {} });
+  await call(`${drafts}/${draft.id}/delivery/simulate`, 404, { cookie: doctor, body: {} });
 
   // The specialist opens the inbox from the EHR, outside any chart. The session is not a chart session.
   const consultant = (await smartLaunch(cardiologist.subject, 303, {}));
@@ -340,6 +357,17 @@ try {
   assert.equal(ehr.state.created.length, beforeChart + 2);
   // The reply of a request that was never answered cannot be written.
   assert.deepEqual((await call(`${drafts}/${freshDraft.id}/chart`, 200, { cookie: doctor })).json, []);
+
+  // --- The simulator route is gone; sessions and stored work survive a new server process ---
+  await call(`${drafts}/${draft.id}/delivery/simulate`, 404, { cookie: doctor, body: {} });
+  const beforeRestart = { draft: (await call(`${drafts}/${draft.id}`, 200, { cookie: doctor })).json, delivery: (await call(`${drafts}/${draft.id}/delivery`, 200, { cookie: doctor })).json };
+  assert.equal("canSimulate" in beforeRestart.delivery, false);
+  await stop();
+  assert.equal(await start(), true);
+  assert.equal((await call("/api/auth/session", 200, { cookie: doctor })).json.clinicianId, physician.clinicianId);
+  assert.deepEqual((await call(`${drafts}/${draft.id}`, 200, { cookie: doctor })).json, beforeRestart.draft);
+  assert.deepEqual((await call(`${drafts}/${draft.id}/delivery`, 200, { cookie: doctor })).json, beforeRestart.delivery);
+  await call(`${drafts}/${draft.id}`, 404, { cookie: observer });
 
   // --- Optional: the same sessions in a real browser (LIVE_E2E_BROWSER=1; needs Playwright with Chromium) ---
   if (process.env.LIVE_E2E_BROWSER === "1") {

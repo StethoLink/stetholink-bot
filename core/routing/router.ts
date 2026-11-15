@@ -54,7 +54,7 @@ export function buildEnvelope(draft: ConsultationDraft, provider: ProviderDescri
 }
 
 export function deliveryView(draft: ConsultationDraft, attempts: DeliveryRecord[], responses: ConsultationDeliveryView["responses"],
-  providers: readonly ProviderDescriptor[], simulator: boolean): ConsultationDeliveryView {
+  providers: readonly ProviderDescriptor[]): ConsultationDeliveryView {
   const status = lifecycle(draft);
   const latest = attempts[0];
   // Before the first attempt the destination is the one the physician approved.
@@ -69,7 +69,6 @@ export function deliveryView(draft: ConsultationDraft, attempts: DeliveryRecord[
     report: latest ? responses.findLast((response) => response.kind === "report" && response.requestId === latest.requestId) ?? null : null,
     canSend: status === "approved",
     canRetry: status === "failed" && latest?.status === "failed",
-    canSimulate: simulator && !!latest && provider?.transport === "mock" && ["sent", "accepted"].includes(latest.status) && ["sent", "accepted"].includes(status),
   };
 }
 
@@ -81,7 +80,6 @@ export function createProviderRouter(deps: {
   /** Classification of the verified session and tenant this router acts for. */
   dataClassification: DataClassification;
   timeoutMs?: number;
-  simulator?: boolean;
   audit?(event: RoutingEvent): void;
 }) {
   const timeoutMs = deps.timeoutMs ?? 10_000;
@@ -90,7 +88,7 @@ export function createProviderRouter(deps: {
     const draft = await deps.repository.get(draftId);
     if (!draft) throw new RouteError("not_found", "Draft not found");
     const [attempts, responses, providers] = await Promise.all([deps.repository.deliveries(draftId), deps.repository.responses(draftId), deps.registry.list()]);
-    return deliveryView(draft, attempts, responses, providers, deps.simulator ?? false);
+    return deliveryView(draft, attempts, responses, providers);
   }
 
   /** Transmits a queued request once and records the outcome. Safe to call again after a crash. */

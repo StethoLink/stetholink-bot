@@ -6,11 +6,15 @@ const compat = new FlatCompat({ baseDirectory: dirname(fileURLToPath(import.meta
 const ui = "@/apps/embedded-app/features";
 const app = "@/apps/embedded-app/app";
 const server = "@/apps/embedded-app/server";
-const restrict = (patterns) => ({ "no-restricted-imports": ["error", { patterns }] });
+// Fictional fixtures and test doubles live under tests/ and never reach the running product (AGENTS.md).
+// The rule is part of every block below because a later block replaces an earlier one for the same file.
+const fixtures = { group: ["@/tests", "@/tests/**", "**/tests/**", "**/fixtures/**", "**/mocks/**"], message: "Product code must not import test fixtures or test doubles. Without a real EHR, model or transport it fails with a configuration error." };
+const restrict = (patterns) => ({ "no-restricted-imports": ["error", { patterns: [...patterns, fixtures] }] });
 
 export default [
   ...compat.extends("next/core-web-vitals", "next/typescript"),
   { settings: { next: { rootDir: "apps/embedded-app/" } } },
+  { files: ["apps/**/*.{ts,tsx,mjs}", "core/**/*.ts", "platform/**/*.ts", "integrations/**/*.ts", "shared/**/*.ts", "scripts/**/*.{mjs,mts}"], rules: restrict([]) },
   {
     files: ["apps/embedded-app/features/**/*.{ts,tsx}", "shared/api-client/**/*.ts"],
     rules: restrict([{ group: [server, `${server}/**`, `${app}/**`, "@/platform/**", "@/integrations/**", "server-only"], message: "Use the app's HTTP client from browser code." }]),

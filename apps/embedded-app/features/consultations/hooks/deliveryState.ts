@@ -74,7 +74,6 @@ export const deliveryApi = {
   providers: (draftId: string) => call(eligibleProvidersSchema, `${draftUrl(draftId)}/providers`),
   send: (draftId: string, body: { providerId: string; expectedVersion: number; idempotencyKey: string }) =>
     call(consultationDeliveryViewSchema, `${draftUrl(draftId)}/delivery`, body),
-  simulate: (draftId: string) => call(consultationDeliveryViewSchema, `${draftUrl(draftId)}/delivery/simulate`, {}),
   list: () => call(consultationListSchema, "/api/consultations/drafts"),
   chart: (draftId: string) => call(z.array(chartWriteResultSchema), `${draftUrl(draftId)}/chart`),
   writeToChart: (draftId: string, items: ("consultation" | "report")[]) => call(z.array(chartWriteResultSchema), `${draftUrl(draftId)}/chart`, { items }),

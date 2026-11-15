@@ -4,10 +4,10 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 import { ApprovalControls, ConsultationDraftView, StatusTracker, consultationTracker } from "@/apps/embedded-app/features/consultations";
-import { mockProvider } from "@/core/agent/providers/mock-provider";
+import { mockProvider } from "@/tests/fixtures/mock-provider";
 import { clinicalSafetyGuard } from "@/core/agent/safety/guard";
 import { createConsultationService } from "@/core/consultation/service";
-import { syntheticClinicalAdapter } from "@/integrations/mock/connector";
+import { syntheticClinicalAdapter } from "@/tests/fixtures/clinical-adapter";
 import type { ConsultationDraft } from "@/shared/contracts";
 import { citedEvidenceIds, parseReferralText, parseStatement, renderStatement } from "@/shared/utils/referral-text";
 
@@ -60,7 +60,7 @@ describe("consultation draft view", () => {
   it("never presents the deterministic fallback as AI, and shows model provenance for a live draft", async () => {
     const draft = await authoredDraft();
     const fallback = html(draft);
-    expect(fallback).toContain("Demo fallback, not AI.");
+    expect(fallback).toContain("Not AI.");
     expect(fallback).not.toContain(">AI-generated<");
     const live = html({ ...draft, grounding: { ...draft.grounding!, provenance: { ...draft.grounding!.provenance, provider: "openai", model: "model-x" },
       authoring: { ...draft.grounding!.authoring!, liveInference: true, rejectedStatements: 2, usage: { inputTokens: 1200, outputTokens: 300, estimatedCostUsd: 0.0123, latencyMs: 4200, attempts: 1 } } } });
@@ -112,6 +112,6 @@ describe("approval destinations", () => {
     expect(render({ destinations: [] })).toContain("No allowed provider offers the requested specialty");
     expect(render({ destinations: [] })).toMatch(/<button[^>]*disabled=""[^>]*>Approve<\/button>/);
     expect(render({ destinations: [], destinationsLoading: true })).not.toContain("No allowed provider");
-    expect(render({ destinations: [{ id: "synthetic-cardiology", displayName: "Synthetic Cardiology Consult Service", synthetic: true }] })).not.toMatch(/disabled=""[^>]*>Approve</);
+    expect(render({ destinations: [{ id: "synthetic-cardiology", displayName: "Synthetic Cardiology Consult Service" }] })).not.toMatch(/disabled=""[^>]*>Approve</);
   });
 });

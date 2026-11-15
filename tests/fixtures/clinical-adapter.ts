@@ -1,4 +1,4 @@
-import { syntheticEncounters, syntheticPatients } from "@/shared/mocks/synthetic-data";
+import { syntheticEncounters, syntheticPatients } from "@/tests/fixtures/synthetic-data";
 import type { ClinicalDataAdapter as CoreClinicalDataAdapter } from "@/core/tools/connector";
 import type { ClinicalDataAdapter } from "@/shared/contracts";
 import { encounterContextSchema, patientContextSchema } from "@/shared/schemas";
