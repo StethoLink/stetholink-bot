@@ -4,16 +4,19 @@
 apps/embedded-app/       Embedded UI, HTTP contracts and service composition
 core/auth/               Provider-neutral clinician authorization context
 core/agent/              Model interfaces, prompts, orchestration and safety checks
-core/tools/              Clinical connector interface and the (empty) model tool allowlist
 core/consultation/       Draft generation, grounding and approval
 core/routing/            Provider registry, router, transport port and callback ingestion
 core/patient-context/    Patient-context service
-integrations/            FHIR, OpenEMR and synthetic connectors; provider adapters; mock specialist transport
+core/scribe/             Transcription port, sentence splitting, SOAP note generation and validation, scribe service
+core/tools/              Clinical read port, clinical write port (create only), empty model tool allowlist
+integrations/            FHIR reader, fact normalization and writer; OpenEMR and synthetic connectors; transcription
+                         adapters; provider adapters; inbox (portal) and mock specialist transports
 platform/auth/           Identity adapters and opaque server-side sessions
 platform/persistence/    PostgreSQL session and consultation storage
 platform/tenants/        Server-side tenant configuration
 platform/providers/      Tenant provider configuration and callback signature verification
-platform/audit/          Structured routing and callback events
+platform/audit/          Structured routing, callback and chart-write events
+platform/http/           Request limits
 shared/                  HTTP contracts, validation and API client
 supabase/                PostgreSQL migrations, RLS and authorization tests
 ```
@@ -24,7 +27,9 @@ The clinician launches StethoLink from an active EHR chart. SMART App Launch is 
 
 The callback exchanges the code and verifies the signed ID token, including issuer, audience, authorized party, nonce and expiration. A tenant-administered mapping binds the verified subject and `fhirUser` to a stable clinician UUID and role. The SMART grant supplies patient and encounter IDs. Authenticated FHIR reads confirm resource identity and the encounter's patient. The clinician uses their hospital session throughout the launch.
 
-The platform creates a revocable session containing clinician UUID, tenant, roles, scopes, chart context, expiry and active authorization. The EHR token remains server-side. Browser cookies contain opaque random handles and use HTTP-only, SameSite=Lax and Secure in deployed environments. Logout revokes the local session. A new launch replaces the prior chart session. The Core receives a `ClinicianContext` and typed interfaces. Future trusted identity adapters can supply the same context.
+The platform creates a revocable session containing clinician UUID, tenant, roles, scopes, chart context, expiry and active authorization. StethoLink permissions come from the tenant's clinician mapping, never from the EHR token: every mapped clinician may read, record and draft (`chart:read`, `scribe:record`, `consultation:draft`); only a mapped physician may approve, send and write to the chart (`consultation:approve`, `consultation:route`, `chart:write`). The EHR token remains server-side and the stored session is encrypted (AES-256-GCM, key from configuration, rotation by a list of previous keys). Browser cookies contain opaque random handles and are HTTP-only and Secure; SameSite=Lax for a top-level window, or SameSite=None with Partitioned for the EHR's iframe (`COOKIE_MODE`). A session lasts at most 15 minutes; the clinician then reopens StethoLink from the chart.
+
+A launch whose token carries no patient, for a signed identity listed in the tenant's specialist map, creates a specialist session instead. It holds no patient, no encounter and no EHR token, uses a separate database setting (`stetholink.specialist`), and can reach only the inbox of its own service. Logout revokes the local session. A new launch replaces the prior chart session. The Core receives a `ClinicianContext` and typed interfaces. Future trusted identity adapters can supply the same context.
 
 ## Database authorization
 
@@ -50,7 +55,7 @@ clinician readback -> delivery view (RLS: same tenant, clinician, patient, encou
 - Clinician commands cannot set `sent`, `accepted`, `responded` or `failed`. Those come only from the transport result and from verified provider callbacks.
 - Callbacks are deduplicated by response id, never move state backwards, are refused for superseded, rejected or cancelled requests, and are still linked when they arrive before the transport result or after a timeout.
 
-Routing currently runs only for synthetic sessions (local development or preview staging) with the synthetic provider directory. Elsewhere the routes answer 501 or 404.
+A synthetic tenant routes to the simulated specialists. A live tenant routes to the receiving services in its own configuration (`PROVIDER_DIRECTORY`, `PROVIDER_ALLOWLIST`); the server refuses a simulated provider there. The first real transport is `portal`: a specialist service inside the same hospital. The stored delivery request is its inbox entry, so "sending" is an acknowledgement of a durable row and is idempotent by nature. The specialist reads only requests sent to that service (same tenant, same classification), sees only the envelope, and accepts, declines with a reason or reports. The reply is recorded through the same `ProviderResponseService` and `record_provider_callback` as a signed callback; only the way the sender is authenticated differs. The envelope and the consultation text carry no EHR record reference: a fact travels under its own opaque id.
 
 ## Consultation assistant
 
@@ -62,6 +67,34 @@ Provider-specific logic sits behind `ProviderAdapter` in `integrations/providers
 
 A preview-only route verifies a server-configured secret and resolves fixed synthetic launch profiles. It exercises the same durable session and database boundaries as SMART. Local development opens a fixed synthetic chart for the mock workflow. Vercel production denies both synthetic authentication modes. [Staging checks](../../tests/e2e/README.md)
 
-Staging uses the deterministic mock model unless a live model is explicitly enabled; only synthetic charts are sent either way. Synthetic output checks reject invalid draft structures, unsafe formatting and selected unauthorized claims or treatment instructions. Generated drafts remain pending until physician review. SMART chart access is read-only.
+Staging uses the deterministic mock model unless a live model is explicitly enabled; only synthetic charts are sent either way. Synthetic output checks reject invalid draft structures, unsafe formatting and selected unauthorized claims or treatment instructions. Generated drafts remain pending until physician review.
 
-Before enabling a hospital integration, register the SMART client, provision the clinician mapping and restricted database login, verify actual launch and supported FHIR scopes, and test the embedding and cookie model with the hospital. Review provider and database data residency, schedule expiration cleanup, and configure infrastructure logs to omit OAuth query strings and clinical payloads. Delivery to real providers and validation of model behavior with hospital data require separate integration work. [SMART setup](../openemr.md)
+## Chart facts from FHIR
+
+`integrations/fhir/connector.ts` reads the launched patient and encounter and five patient-scoped searches, following `next` links only on the registered FHIR base and up to fixed caps. `integrations/fhir/facts.ts` turns the resources into facts with a keyed-digest id, the record reference and the documented time: active problems (not refuted or entered in error; a provisional diagnosis keeps that word), active medication orders (the dose only as recorded, otherwise "Dose not recorded in the order"), allergies (none recorded is an explicit unknown; a recorded "no known allergy" is a fact in its own words), and the latest final value of each vital sign and laboratory test inside a time window, with interpretation and reference range copied as text. Selection under the Core limits is deterministic, and whatever was left out or could not be loaded is listed in `chartNotes`, shown to the clinician and written into the draft. A visit whose status or class cannot be used is refused with its reason.
+
+## AI scribe
+
+The clinician confirms that the patient agreed; only then is the microphone requested. The browser records mono Opus in parts of 20 to 30 seconds cut at pauses, drops silent parts and uploads each part in order. The server checks session, classification, size, duration, the visit's time limit and its cost ceiling, sends the part to the `TranscriptionProvider` from memory and stores only the recognized sentences (`scribe_segments`, row-level security on tenant, clinician, patient, encounter and classification). Audio is never written to disk or database.
+
+Ending the visit makes one model call (`core/scribe/note.ts`). The model has no tools and returns one JSON object. Every statement must quote the exact words of a transcript sentence or cite a chart fact; every figure must have been said (Arabic number words are read as numbers); assessment and plan must quote the clinician. What fails is removed and counted; a response that is mostly unsupported is refused. Items heard in the visit (allergies, conditions, medicines the patient takes, measurements) are compared with the chart and marked new, already in chart or conflicting. A conflict is shown and never resolved.
+
+## Writing to the EHR
+
+Writing replaces the earlier read-only rule, by product decision, under these controls. `ClinicalWriteAdapter` (`core/tools/chart-writer.ts`) has one operation, create; `integrations/fhir/writer.ts` issues only a conditional `POST` (`If-None-Exist` on StethoLink's own identifier) for the launched patient and encounter with the clinician's own token, after checking the granted scopes and the server's CapabilityStatement. What can be written: the visit note, the approved consultation and the specialist's reply as `DocumentReference`; and the items the physician selected as `AllergyIntolerance` (unconfirmed unless the physician confirms it), `Condition` and `MedicationStatement`.
+
+```text
+physician approval -> approve_scribe_note     (physician + chart:write; the note version and the exact selected items; only new, non-conflicting items)
+each item          -> begin_chart_write       (refused unless that item's origin was approved by this physician for this chart)
+                   -> ClinicalWriteAdapter.create (conditional create, outside any transaction)
+                   -> record_chart_write      (created | existing | failed | unsupported; a success is final)
+all items done     -> finish_scribe_session   (audit; the transcript is deleted once the note is in the chart)
+```
+
+The model cannot reach this path: it has no tools, and an item exists for writing only after a physician selected it. A session of a synthetic tenant gets no writer, so synthetic data never reaches an EHR; a live session writes only to its own launched chart. Where the EHR grants no scope or support, or write-back is off, the item is offered as text to copy.
+
+## Operations
+
+Model and transcription spending is reserved in PostgreSQL per tenant and day (`reserve_spend`), so the limit holds across instances and restarts. `run_retention`, called daily by a separate maintenance login, removes expired sessions, transcripts past their date and, where periods are set, closed visits, finished consultations and ledger rows. [Data map](../data-map.md), [go-live runbook](../go-live.md).
+
+Before enabling a hospital integration, follow the [go-live runbook](../go-live.md). What has and has not been verified against real servers is listed in [sandbox checks](../sandbox.md). [SMART setup](../openemr.md)

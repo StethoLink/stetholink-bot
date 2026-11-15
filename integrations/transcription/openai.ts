@@ -1,5 +1,5 @@
 import { RouteError } from "@/core/errors";
-import type { SpendingLimiter } from "@/core/agent/providers/types";
+import type { SpendingLimiter, SpendingReservation } from "@/core/agent/providers/types";
 import { responsesEndpoint } from "@/core/agent/providers/openai-provider";
 import type { TranscriptionProvider } from "@/core/scribe/ports";
 
@@ -30,8 +30,8 @@ export function createOpenAITranscription(config: OpenAITranscriptionConfig, req
         throw new RouteError("provider_unavailable", "The transcription provider is not approved for live clinical data (TRANSCRIPTION_LIVE_DATA_APPROVED)");
       }
       const cost = (input.durationSeconds / 60) * config.usdPerMinute;
-      let reservation: ReturnType<SpendingLimiter["reserve"]> | undefined;
-      try { reservation = options.budget?.reserve(cost); }
+      let reservation: SpendingReservation | undefined;
+      try { reservation = await options.budget?.reserve(cost, "transcription"); }
       catch { throw new RouteError("provider_unavailable", "The transcription spending limit has been reached"); }
       const form = new FormData();
       form.append("file", new Blob([input.audio as BlobPart], { type: input.mimeType }), `chunk.${input.mimeType.includes("mp4") ? "mp4" : input.mimeType.includes("ogg") ? "ogg" : input.mimeType.includes("wav") ? "wav" : "webm"}`);
@@ -60,7 +60,7 @@ export function createOpenAITranscription(config: OpenAITranscriptionConfig, req
         options.observe?.({ ...event, outcome: "error", reason: "invalid_response", latencyMs: Date.now() - started });
         throw new RouteError("provider_unavailable", "The transcription service returned an unusable result");
       }
-      reservation?.settle(cost);
+      await reservation?.settle(cost);
       const latencyMs = Date.now() - started;
       options.observe?.({ ...event, outcome: "ok", latencyMs, estimatedCostUsd: Number(cost.toFixed(6)) });
       const text = body.text.trim();

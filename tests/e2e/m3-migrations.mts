@@ -22,7 +22,8 @@ try {
       name.includes("clinician_approval_boundary") ? ["m4_approval_boundary.sql"] :
       name.includes("provider_routing") ? ["provider_routing.sql"] :
       name.includes("data_classification") ? ["data_classification.sql"] :
-      name.includes("chart_writes") ? ["scribe.sql"] : [];
+      name.includes("chart_writes") ? ["scribe.sql"] :
+      name.includes("retention") ? ["operations.sql"] : [];
     for (const suite of suites) {
       await sql.unsafe(await readFile("supabase/tests/" + suite, "utf8"));
       console.log("Passed", suite);

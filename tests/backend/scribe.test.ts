@@ -328,7 +328,7 @@ describe("transcription providers and configuration", () => {
   });
   it("live mode with the scribe on needs an approved, priced, real transcription provider", () => {
     const base = { CLINICAL_DATA_MODE: "live", AUTH_MODE: "smart", CLINICAL_DATA_SOURCE: "fhir", STETHOLINK_DATABASE_URL: "postgres://x@db.example.test/x", AI_PROVIDER: "openai", OPENAI_API_KEY: "k",
-      OPENAI_INPUT_USD_PER_MILLION: "1", OPENAI_OUTPUT_USD_PER_MILLION: "1", MODEL_LIVE_DATA_APPROVED: "true", SCRIBE_ENABLED: "true" };
+      OPENAI_INPUT_USD_PER_MILLION: "1", OPENAI_OUTPUT_USD_PER_MILLION: "1", MODEL_LIVE_DATA_APPROVED: "true", SCRIBE_ENABLED: "true", SESSION_ENCRYPTION_KEY: "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=" };
     expect(() => parseEnv(base)).toThrow(/TRANSCRIPTION_PROVIDER must be a real provider/);
     const scribe = { ...base, TRANSCRIPTION_PROVIDER: "openai", TRANSCRIPTION_USD_PER_MINUTE: "0.0045", TRANSCRIPTION_LIVE_DATA_APPROVED: "true", SCRIBE_NOTE_INPUT_USD_PER_MILLION: "0.25", SCRIBE_NOTE_OUTPUT_USD_PER_MILLION: "2" };
     expect(liveModeProblems(parseEnv(scribe))).toEqual([]);

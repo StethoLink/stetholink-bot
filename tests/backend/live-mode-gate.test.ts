@@ -5,7 +5,7 @@ import { liveModeProblems, parseEnv, ServerConfigurationError, syntheticStagingE
 const live = {
   CLINICAL_DATA_MODE: "live", AUTH_MODE: "smart", CLINICAL_DATA_SOURCE: "fhir", TENANT_ID: "fictional-hospital",
   STETHOLINK_DATABASE_URL: "postgres://stetholink_runtime@db.example.test/postgres",
-  AI_PROVIDER: "openai", MODEL_LIVE_DATA_APPROVED: "true", OPENAI_API_KEY: "fictional-key",
+  AI_PROVIDER: "openai", MODEL_LIVE_DATA_APPROVED: "true", SESSION_ENCRYPTION_KEY: "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=", OPENAI_API_KEY: "fictional-key",
   OPENAI_INPUT_USD_PER_MILLION: "1", OPENAI_OUTPUT_USD_PER_MILLION: "2",
 };
 

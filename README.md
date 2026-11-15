@@ -1,6 +1,21 @@
 # StethoLink
 
-StethoLink is an EHR-embedded application for preparing, reviewing, and routing consultation requests. The same app and workflow can run with a synthetic connector or a hospital-specific connector.
+StethoLink is a plugin inside the hospital EHR. A clinician opens it from the patient chart (SMART on FHIR) and can:
+
+- **Record a visit** and get a SOAP note in which every statement points at the words that support it. After the physician approves, the note and the selected new items (for example an allergy) are created in the EHR.
+- **Prepare a consultation** from the chart with a source for every statement, approve it, send it to a specialist service, read the reply and add it to the chart.
+
+The EHR stays the source of truth. StethoLink registers no patients, has no separate sign-in for clinicians and keeps only working data: drafts, a temporary transcript and audit records. The same application runs on fictional charts for development and demos.
+
+| To | Read |
+| --- | --- |
+| Deploy for a hospital pilot | [Go-live runbook](docs/go-live.md), [data map](docs/data-map.md) |
+| Understand how it works and what guards it | [Architecture](docs/architecture/ARCHITECTURE.md) |
+| See what was checked against real servers | [Sandbox checks](docs/sandbox.md) |
+| See the transcription benchmark and cost per visit | [Scribe benchmark](docs/ai/scribe-benchmark.md) |
+| See the interface | [Before and after](docs/ui/README.md) |
+
+Docker and any PostgreSQL 15+ are enough to run it; nothing depends on a particular cloud.
 
 ## Run the synthetic workflow on Windows
 

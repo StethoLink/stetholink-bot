@@ -1,5 +1,5 @@
 import { RouteError } from "@/core/errors";
-import type { SpendingLimiter } from "@/core/agent/providers/types";
+import type { SpendingLimiter, SpendingReservation } from "@/core/agent/providers/types";
 import type { RecognizedSegment, TranscriptionProvider } from "@/core/scribe/ports";
 import type { TranscriptionEvent } from "./openai";
 
@@ -23,8 +23,8 @@ export function createElevenLabsTranscription(config: ElevenLabsTranscriptionCon
         throw new RouteError("provider_unavailable", "The transcription provider is not approved for live clinical data (TRANSCRIPTION_LIVE_DATA_APPROVED)");
       }
       const cost = (input.durationSeconds / 60) * config.usdPerMinute;
-      let reservation: ReturnType<SpendingLimiter["reserve"]> | undefined;
-      try { reservation = options.budget?.reserve(cost); }
+      let reservation: SpendingReservation | undefined;
+      try { reservation = await options.budget?.reserve(cost, "transcription"); }
       catch { throw new RouteError("provider_unavailable", "The transcription spending limit has been reached"); }
       const form = new FormData();
       form.append("file", new Blob([input.audio as BlobPart], { type: input.mimeType }), "chunk.webm");
@@ -60,7 +60,7 @@ export function createElevenLabsTranscription(config: ElevenLabsTranscriptionCon
         else if (word.type !== "spacing") segments.push({ startMs: Math.round((word.start ?? 0) * 1000), endMs: Math.round((word.end ?? word.start ?? 0) * 1000), text: word.text, speakerLabel: word.speaker_id });
       }
       const text = body.text.trim();
-      reservation?.settle(cost);
+      await reservation?.settle(cost);
       const latencyMs = Date.now() - started;
       options.observe?.({ ...event, outcome: "ok", latencyMs, estimatedCostUsd: Number(cost.toFixed(6)) });
       return {

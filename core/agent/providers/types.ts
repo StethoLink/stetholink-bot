@@ -39,7 +39,10 @@ export interface ModelProvider {
  * admits the worst-case cost of one attempt or throws; `settle` replaces a reservation
  * with what was actually used.
  */
+export interface SpendingReservation { settle(actualUsd: number): void | Promise<void> }
 export interface SpendingLimiter {
-  reserve(usd: number): { settle(actualUsd: number): void };
-  snapshot(): { limitUsd: number; spentUsd: number; windowStartedAt: string };
+  /** `task` names what is being paid for (a model task, or "transcription"); it is recorded with the amount. */
+  reserve(usd: number, task?: string): SpendingReservation | Promise<SpendingReservation>;
+  /** Present on the in-process limiter only. */
+  snapshot?(): { limitUsd: number; spentUsd: number; windowStartedAt: string };
 }

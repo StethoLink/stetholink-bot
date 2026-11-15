@@ -29,8 +29,16 @@ const launchSchema = z.object({
   ehrUser: z.string().min(1).max(200).optional(),
 });
 
+/**
+ * Cookies hold opaque random handles only. In the default mode they are SameSite=Lax, for a
+ * top-level window. Inside the EHR's iframe the browser treats them as third-party, so the
+ * embedded mode sets SameSite=None; Secure; Partitioned (bound to the embedding EHR site).
+ * Cross-origin requests are still refused by `requireSameOrigin` in both modes.
+ */
 export function cookieOptions(maxAge: number) {
-  return { httpOnly: true, secure: getEnv().NODE_ENV === "production", sameSite: "lax" as const, path: "/", maxAge };
+  const env = getEnv();
+  if (env.COOKIE_MODE === "embedded") return { httpOnly: true, secure: true, sameSite: "none" as const, partitioned: true, path: "/", maxAge };
+  return { httpOnly: true, secure: env.NODE_ENV === "production", sameSite: "lax" as const, path: "/", maxAge };
 }
 
 export async function saveSession(launch: VerifiedLaunch) {

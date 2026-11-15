@@ -82,6 +82,12 @@ const envSchema = z.object({
   SMART_JWKS_URL: z.url().optional(),
   SMART_SCOPE: z.string().optional(),
   SMART_CLINICIAN_MAP: z.string().optional(),
+  // Encrypts stored sessions (which hold the EHR access token). 32 random bytes, base64. Required for live data.
+  SESSION_ENCRYPTION_KEY: z.string().regex(/^[A-Za-z0-9+/]{43}=$/).optional(),
+  // Earlier keys, comma separated, still accepted for reading during a rotation.
+  SESSION_ENCRYPTION_KEYS_PREVIOUS: z.string().optional(),
+  // lax: top-level window. embedded: inside the EHR's iframe (SameSite=None; Secure; Partitioned).
+  COOKIE_MODE: z.enum(["lax", "embedded"]).default("lax"),
   STETHOLINK_DATABASE_URL: z.string().optional(),
   STETHOLINK_DATABASE_CA: z.string().optional(),
   STAGING_LAUNCH_SECRET: z.string().min(32).optional(),
@@ -101,6 +107,7 @@ export function liveModeProblems(env: ServerEnv): string[] {
   if (env.AUTH_MODE !== "smart") problems.push("AUTH_MODE must be smart (dev and staging launches are synthetic only)");
   if (env.CLINICAL_DATA_SOURCE === "synthetic") problems.push("CLINICAL_DATA_SOURCE must be fhir or openemr");
   if (!env.STETHOLINK_DATABASE_URL) problems.push("STETHOLINK_DATABASE_URL must be set");
+  if (!env.SESSION_ENCRYPTION_KEY) problems.push("SESSION_ENCRYPTION_KEY must be set (the stored EHR token is encrypted)");
   if (env.STAGING_LAUNCH_SECRET) problems.push("STAGING_LAUNCH_SECRET must not be set");
   if (env.AI_PROVIDER === "mock") problems.push("AI_PROVIDER must be a real model provider (the mock never drafts from live data)");
   if (env.MODEL_LIVE_DATA_APPROVED !== "true") problems.push("MODEL_LIVE_DATA_APPROVED must be true");

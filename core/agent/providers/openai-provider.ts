@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { ModelProvider, SpendingLimiter } from "./types";
+import type { ModelProvider, SpendingLimiter, SpendingReservation } from "./types";
 import { RouteError } from "@/core/errors";
 
 const configSchema = z.object({
@@ -134,8 +134,8 @@ export function createOpenAIProvider(config: OpenAIProviderConfig, request: type
         for (let attempt = 0; attempt <= settings.maxRetries; attempt++) {
           if (controller.signal.aborted) throw new CallFailure("timeout");
           if (reservedCost + attemptCost > settings.maxCostUsd) throw new CallFailure("cost_limit");
-          let reservation: ReturnType<SpendingLimiter["reserve"]> | undefined;
-          try { reservation = options.budget?.reserve(attemptCost); }
+          let reservation: SpendingReservation | undefined;
+          try { reservation = await options.budget?.reserve(attemptCost, task); }
           catch { throw new CallFailure("budget_limit"); }
           reservedCost += attemptCost;
           attempts = attempt + 1;
@@ -162,7 +162,7 @@ export function createOpenAIProvider(config: OpenAIProviderConfig, request: type
           if (messages.length !== 1) throw new CallFailure("invalid_response");
           if (result.usage.input_tokens > inputTokenBound || result.usage.output_tokens > settings.maxOutputTokens) throw new CallFailure("usage_exceeded");
           const estimatedCostUsd = (result.usage.input_tokens * inputRate + result.usage.output_tokens * outputRate) / 1_000_000;
-          reservation?.settle(estimatedCostUsd);
+          await reservation?.settle(estimatedCostUsd);
           return { text: messages[0].content[0].text, model: result.model, provider: "openai", usage: {
             inputTokens: result.usage.input_tokens, outputTokens: result.usage.output_tokens,
             estimatedCostUsd: Number(estimatedCostUsd.toFixed(6)), latencyMs: Date.now() - started, attempts,

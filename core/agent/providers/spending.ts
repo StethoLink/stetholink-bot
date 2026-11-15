@@ -1,10 +1,16 @@
 import type { SpendingLimiter } from "./types";
 
+/** The in-process limiter answers at once and can report its window. */
+export interface InProcessSpendingLimiter extends SpendingLimiter {
+  reserve(usd: number, task?: string): { settle(actualUsd: number): void };
+  snapshot(): { limitUsd: number; spentUsd: number; windowStartedAt: string };
+}
+
 /**
  * In-process spending limit over a fixed window (default one UTC day). It bounds what one
  * server instance can spend; it is not a billing ledger and does not span instances.
  */
-export function createSpendingLimiter(limitUsd: number, options: { windowMs?: number; now?: () => number } = {}): SpendingLimiter {
+export function createSpendingLimiter(limitUsd: number, options: { windowMs?: number; now?: () => number } = {}): InProcessSpendingLimiter {
   const windowMs = options.windowMs ?? 86_400_000;
   const now = options.now ?? Date.now;
   let windowStart = Math.floor(now() / windowMs) * windowMs;

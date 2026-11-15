@@ -51,7 +51,7 @@ const liveEnv: Record<string, string> = {
   // Scribe and EHR write-back, against the fake transcription endpoint and the fake FHIR server.
   SCRIBE_ENABLED: "true", TRANSCRIPTION_PROVIDER: "openai", TRANSCRIPTION_MODEL: "fictional-transcribe-1", TRANSCRIPTION_USD_PER_MINUTE: "0.0045",
   TRANSCRIPTION_LIVE_DATA_APPROVED: "true", SCRIBE_NOTE_MODEL: "fictional-model-1", SCRIBE_NOTE_INPUT_USD_PER_MILLION: "0.25", SCRIBE_NOTE_OUTPUT_USD_PER_MILLION: "2",
-  EHR_WRITE_ENABLED: "true",
+  EHR_WRITE_ENABLED: "true", SESSION_ENCRYPTION_KEY: Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString("base64"),
 };
 
 async function start(extra: Record<string, string> = {}) {

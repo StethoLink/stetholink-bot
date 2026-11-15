@@ -3,6 +3,7 @@ import { getEnv } from "@/platform/tenants/env";
 import { mockProvider } from "@/core/agent/providers/mock-provider";
 import { createOpenAIProvider, type ModelCallEvent } from "@/core/agent/providers/openai-provider";
 import { createSpendingLimiter } from "@/core/agent/providers/spending";
+import { createLedgerLimiter } from "@/platform/persistence/spend-ledger";
 import type { ModelProvider, SpendingLimiter } from "@/core/agent/providers/types";
 
 export type { ModelProvider, ModelRequest, ModelResult, ModelMessage } from "@/core/agent/providers/types";
@@ -10,9 +11,13 @@ export type { ModelProvider, ModelRequest, ModelResult, ModelMessage } from "@/c
 // One limiter per server instance, so the daily limit spans every request it handles.
 const globals = globalThis as typeof globalThis & { stetholinkModelBudget?: SpendingLimiter };
 
-function budget() {
-  return globals.stetholinkModelBudget ??= createSpendingLimiter(getEnv().AI_DAILY_BUDGET_USD);
+/** The durable ledger wherever a database is configured; the in-process limit only for local use without one. */
+export function spendingLimiter(kind: "model" | "transcription"): SpendingLimiter {
+  const env = getEnv();
+  if (env.STETHOLINK_DATABASE_URL) return createLedgerLimiter(env.TENANT_ID, kind, env.AI_DAILY_BUDGET_USD);
+  return globals.stetholinkModelBudget ??= createSpendingLimiter(env.AI_DAILY_BUDGET_USD);
 }
+const budget = () => spendingLimiter("model");
 
 /** Metrics only. Prompts, chart content, model output and credentials are never logged. */
 function observe(event: ModelCallEvent) {

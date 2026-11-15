@@ -1,0 +1,4779 @@
+{
+ "note": "FICTIONAL charts in FHIR R4 shape for evaluating the consultation assistant. No real patient. Dates are relative: recordedDaysAgo, authoredDaysAgo and effectiveDaysAgo are turned into dates when a case is loaded, and __MONTHS_AGO_n__ into a birth date.",
+ "promptVersion": "referral-authoring@2.0.0",
+ "cases": [
+  {
+   "id": "consult-01-acs",
+   "title": "Chest pain with ECG change and troponin",
+   "request": "Prepare a cardiology consultation about possible acute coronary syndrome: does he need urgent angiography?",
+   "patient": {
+    "resourceType": "Patient",
+    "id": "fic-pt-1",
+    "gender": "male",
+    "birthDate": "1962-04-11",
+    "name": [
+     {
+      "family": "Fictional-Example",
+      "given": [
+       "Evaluation"
+      ]
+     }
+    ]
+   },
+   "encounter": {
+    "resourceType": "Encounter",
+    "id": "fic-enc-1",
+    "status": "in-progress",
+    "subject": {
+     "reference": "Patient/fic-pt-1"
+    },
+    "class": {
+     "code": "EMER"
+    },
+    "reasonCode": [
+     {
+      "text": "Chest pain"
+     }
+    ]
+   },
+   "resources": [
+    {
+     "resourceType": "Condition",
+     "id": "c1",
+     "subject": {
+      "reference": "Patient/fic-pt-1"
+     },
+     "code": {
+      "text": "Essential hypertension"
+     },
+     "clinicalStatus": {
+      "coding": [
+       {
+        "system": "http://terminology.hl7.org/CodeSystem/condition-clinical",
+        "code": "active"
+       }
+      ]
+     },
+     "verificationStatus": {
+      "coding": [
+       {
+        "system": "http://terminology.hl7.org/CodeSystem/condition-ver-status",
+        "code": "confirmed"
+       }
+      ]
+     },
+     "recordedDaysAgo": 400
+    },
+    {
+     "resourceType": "Condition",
+     "id": "c2",
+     "subject": {
+      "reference": "Patient/fic-pt-1"
+     },
+     "code": {
+      "text": "Type 2 diabetes mellitus"
+     },
+     "clinicalStatus": {
+      "coding": [
+       {
+        "system": "http://terminology.hl7.org/CodeSystem/condition-clinical",
+        "code": "active"
+       }
+      ]
+     },
+     "verificationStatus": {
+      "coding": [
+       {
+        "system": "http://terminology.hl7.org/CodeSystem/condition-ver-status",
+        "code": "confirmed"
+       }
+      ]
+     },
+     "recordedDaysAgo": 400
+    },
+    {
+     "resourceType": "MedicationRequest",
+     "id": "m1",
+     "status": "active",
+     "intent": "order",
+     "subject": {
+      "reference": "Patient/fic-pt-1"
+     },
+     "medicationCodeableConcept": {
+      "text": "Aspirin 81 mg oral tablet"
+     },
+     "authoredDaysAgo": 200,
+     "dosageInstruction": [
+      {
+       "text": "81 mg once daily"
+      }
+     ]
+    },
+    {
+     "resourceType": "MedicationRequest",
+     "id": "m2",
+     "status": "active",
+     "intent": "order",
+     "subject": {
+      "reference": "Patient/fic-pt-1"
+     },
+     "medicationCodeableConcept": {
+      "text": "Metformin 500 mg oral tablet"
+     },
+     "authoredDaysAgo": 200,
+     "dosageInstruction": [
+      {
+       "text": "500 mg twice daily"
+      }
+     ]
+    },
+    {
+     "resourceType": "AllergyIntolerance",
+     "id": "a1",
+     "patient": {
+      "reference": "Patient/fic-pt-1"
+     },
+     "code": {
+      "text": "Penicillin"
+     },
+     "clinicalStatus": {
+      "coding": [
+       {
+        "system": "http://terminology.hl7.org/CodeSystem/allergyintolerance-clinical",
+        "code": "active"
+       }
+      ]
+     },
+     "verificationStatus": {
+      "coding": [
+       {
+        "system": "http://terminology.hl7.org/CodeSystem/allergyintolerance-verification",
+        "code": "confirmed"
+       }
+      ]
+     },
+     "recordedDaysAgo": 900,
+     "reaction": [
+      {
+       "manifestation": [
+        {
+         "text": "Urticaria"
+        }
+       ]
+      }
+     ],
+     "criticality": "high"
+    },
+    {
+     "resourceType": "Observation",
+     "id": "obs-bp",
+     "status": "final",
+     "category": [
+      {
+       "coding": [
+        {
+         "system": "http://terminology.hl7.org/CodeSystem/observation-category",
+         "code": "vital-signs"
+        }
+       ]
+      }
+     ],
+     "subject": {
+      "reference": "Patient/fic-pt-1"
+     },
+     "code": {
+      "coding": [
+       {
+        "system": "http://loinc.org",
+        "code": "85354-9",
+        "display": "Blood pressure panel"
+       }
+      ],
+      "text": "Blood pressure panel"
+     },
+     "effectiveDaysAgo": 0,
+     "component": [
+      {
+       "code": {
+        "text": "Systolic blood pressure"
+       },
+       "valueQuantity": {
+        "value": 148,
+        "unit": "mmHg"
+       }
+      },
+      {
+       "code": {
+        "text": "Diastolic blood pressure"
+       },
+       "valueQuantity": {
+        "value": 92,
+        "unit": "mmHg"
+       }
+      }
+     ]
+    },
+    {
+     "resourceType": "Observation",
+     "id": "o2",
+     "status": "final",
+     "category": [
+      {
+       "coding": [
+        {
+         "system": "http://terminology.hl7.org/CodeSystem/observation-category",
+         "code": "vital-signs"
+        }
+       ]
+      }
+     ],
+     "subject": {
+      "reference": "Patient/fic-pt-1"
+     },
+     "code": {
+      "coding": [
+       {
+        "system": "http://loinc.org",
+        "code": "8867-4",
+        "display": "Heart rate"
+       }
+      ],
+      "text": "Heart rate"
+     },
+     "effectiveDaysAgo": 0,
+     "valueQuantity": {
+      "value": 96,
+      "unit": "/min"
+     }
+    },
+    {
+     "resourceType": "Observation",
+     "id": "l1",
+     "status": "final",
+     "category": [
+      {
+       "coding": [
+        {
+         "system": "http://terminology.hl7.org/CodeSystem/observation-category",
+         "code": "laboratory"
+        }
+       ]
+      }
+     ],
+     "subject": {
+      "reference": "Patient/fic-pt-1"
+     },
+     "code": {
+      "coding": [
+       {
+        "system": "http://loinc.org",
+        "code": "10839-9",
+        "display": "Troponin I"
+       }
+      ],
+      "text": "Troponin I"
+     },
+     "effectiveDaysAgo": 0,
+     "valueQuantity": {
+      "value": 34,
+      "unit": "ng/L"
+     },
+     "interpretation": [
+      {
+       "text": "High"
+      }
+     ]
+    },
+    {
+     "resourceType": "Observation",
+     "id": "l2",
+     "status": "final",
+     "category": [
+      {
+       "coding": [
+        {
+         "system": "http://terminology.hl7.org/CodeSystem/observation-category",
+         "code": "laboratory"
+        }
+       ]
+      }
+     ],
+     "subject": {
+      "reference": "Patient/fic-pt-1"
+     },
+     "code": {
+      "coding": [
+       {
+        "system": "http://loinc.org",
+        "code": "2160-0",
+        "display": "Creatinine"
+       }
+      ],
+      "text": "Creatinine"
+     },
+     "effectiveDaysAgo": 0,
+     "valueQuantity": {
+      "value": 1.0,
+      "unit": "mg/dL"
+     }
+    }
+   ],
+   "expected": {
+    "outcome": "draft",
+    "specialty": "Cardiology",
+    "mustMention": [
+     "Penicillin",
+     "Troponin I",
+     "34",
+     "148",
+     "Aspirin"
+    ],
+    "mustNotMention": [
+     "STEMI",
+     "heparin",
+     "Patient/fic-pt-1"
+    ],
+    "properties": [
+     "mentions the allergy",
+     "keeps 'possible' in the clinical question",
+     "cites the troponin with its recorded interpretation, without adding one"
+    ]
+   }
+  },
+  {
+   "id": "consult-02-missing-dose",
+   "title": "Anticoagulation question with an order that records no dose",
+   "request": "Prepare a cardiology consultation about anticoagulation for atrial fibrillation: should apixaban continue before a dental extraction?",
+   "patient": {
+    "resourceType": "Patient",
+    "id": "fic-pt-1",
+    "gender": "female",
+    "birthDate": "1950-01-20",
+    "name": [
+     {
+      "family": "Fictional-Example",
+      "given": [
+       "Evaluation"
+      ]
+     }
+    ]
+   },
+   "encounter": {
+    "resourceType": "Encounter",
+    "id": "fic-enc-1",
+    "status": "in-progress",
+    "subject": {
+     "reference": "Patient/fic-pt-1"
+    },
+    "class": {
+     "code": "AMB"
+    },
+    "reasonCode": [
+     {
+      "text": "Pre-procedure review"
+     }
+    ]
+   },
+   "resources": [
+    {
+     "resourceType": "Condition",
+     "id": "c1",
+     "subject": {
+      "reference": "Patient/fic-pt-1"
+     },
+     "code": {
+      "text": "Atrial fibrillation"
+     },
+     "clinicalStatus": {
+      "coding": [
+       {
+        "system": "http://terminology.hl7.org/CodeSystem/condition-clinical",
+        "code": "active"
+       }
+      ]
+     },
+     "verificationStatus": {
+      "coding": [
+       {
+        "system": "http://terminology.hl7.org/CodeSystem/condition-ver-status",
+        "code": "confirmed"
+       }
+      ]
+     },
+     "recordedDaysAgo": 400
+    },
+    {
+     "resourceType": "MedicationRequest",
+     "id": "m1",
+     "status": "active",
+     "intent": "order",
+     "subject": {
+      "reference": "Patient/fic-pt-1"
+     },
+     "medicationCodeableConcept": {
+      "text": "Apixaban oral tablet"
+     },
+     "authoredDaysAgo": 200
+    },
+    {
+     "resourceType": "MedicationRequest",
+     "id": "m2",
+     "status": "active",
+     "intent": "order",
+     "subject": {
+      "reference": "Patient/fic-pt-1"
+     },
+     "medicationCodeableConcept": {
+      "text": "Bisoprolol 2.5 mg oral tablet"
+     },
+     "authoredDaysAgo": 200,
+     "dosageInstruction": [
+      {
+       "text": "2.5 mg once daily"
+      }
+     ]
+    },
+    {
+     "resourceType": "Observation",
+     "id": "l1",
+     "status": "final",
+     "category": [
+      {
+       "coding": [
+        {
+         "system": "http://terminology.hl7.org/CodeSystem/observation-category",
+         "code": "laboratory"
+        }
+       ]
+      }
+     ],
+     "subject": {
+      "reference": "Patient/fic-pt-1"
+     },
+     "code": {
+      "coding": [
+       {
+        "system": "http://loinc.org",
+        "code": "2160-0",
+        "display": "Creatinine"
+       }
+      ],
+      "text": "Creatinine"
+     },
+     "effectiveDaysAgo": 20,
+     "valueQuantity": {
+      "value": 0.9,
+      "unit": "mg/dL"
+     }
+    }
+   ],
+   "expected": {
+    "outcome": "draft",
+    "specialty": "Cardiology",
+    "mustMention": [
+     "Apixaban",
+     "Dose not recorded in the order",
+     "Bisoprolol"
+    ],
+    "mustNotMention": [
+     "5 mg twice",
+     "2.5 mg twice daily"
+    ],
+    "properties": [
+     "does not invent the apixaban dose",
+     "reports allergies as not recorded, not as none"
+    ],
+    "missingInformation": [
+     "Allergies"
+    ]
+   }
+  },
+  {
+   "id": "consult-03-no-known-allergy",
+   "title": "Recorded 'no known allergy' is a documented statement",
+   "request": "Prepare a nephrology consultation about rising creatinine: is a renal ultrasound needed?",
+   "patient": {
+    "resourceType": "Patient",
+    "id": "fic-pt-1",
+    "gender": "male",
+    "birthDate": "1970-09-02",
+    "name": [
+     {
+      "family": "Fictional-Example",
+      "given": [
+       "Evaluation"
+      ]
+     }
+    ]
+   },
+   "encounter": {
+    "resourceType": "Encounter",
+    "id": "fic-enc-1",
+    "status": "in-progress",
+    "subject": {
+     "reference": "Patient/fic-pt-1"
+    },
+    "class": {
+     "code": "AMB"
+    },
+    "reasonCode": [
+     {
+      "text": "Abnormal kidney function"
+     }
+    ]
+   },
+   "resources": [
+    {
+     "resourceType": "Condition",
+     "id": "c1",
+     "subject": {
+      "reference": "Patient/fic-pt-1"
+     },
+     "code": {
+      "text": "Chronic kidney disease stage 3"
+     },
+     "clinicalStatus": {
+      "coding": [
+       {
+        "system": "http://terminology.hl7.org/CodeSystem/condition-clinical",
+        "code": "active"
+       }
+      ]
+     },
+     "verificationStatus": {
+      "coding": [
+       {
+        "system": "http://terminology.hl7.org/CodeSystem/condition-ver-status",
+        "code": "confirmed"
+       }
+      ]
+     },
+     "recordedDaysAgo": 400
+    },
+    {
+     "resourceType": "MedicationRequest",
+     "id": "m1",
+     "status": "active",
+     "intent": "order",
+     "subject": {
+      "reference": "Patient/fic-pt-1"
+     },
+     "medicationCodeableConcept": {
+      "text": "Lisinopril 10 mg oral tablet"
+     },
+     "authoredDaysAgo": 200,
+     "dosageInstruction": [
+      {
+       "text": "10 mg once daily"
+      }
+     ]
+    },
+    {
+     "resourceType": "AllergyIntolerance",
+     "id": "a1",
+     "patient": {
+      "reference": "Patient/fic-pt-1"
+     },
+     "code": {
+      "coding": [
+       {
+        "system": "http://snomed.info/sct",
+        "code": "716186003",
+        "display": "No known allergy"
+       }
+      ]
+     },
+     "clinicalStatus": {
+      "coding": [
+       {
+        "system": "http://terminology.hl7.org/CodeSystem/allergyintolerance-clinical",
+        "code": "active"
+       }
+      ]
+     },
+     "verificationStatus": {
+      "coding": [
+       {
+        "system": "http://terminology.hl7.org/CodeSystem/allergyintolerance-verification",
+        "code": "confirmed"
+       }
+      ]
+     },
+     "recordedDaysAgo": 900
+    },
+    {
+     "resourceType": "Observation",
+     "id": "l1",
+     "status": "final",
+     "category": [
+      {
+       "coding": [
+        {
+         "system": "http://terminology.hl7.org/CodeSystem/observation-category",
+         "code": "laboratory"
+        }
+       ]
+      }
+     ],
+     "subject": {
+      "reference": "Patient/fic-pt-1"
+     },
+     "code": {
+      "coding": [
+       {
+        "system": "http://loinc.org",
+        "code": "2160-0",
+        "display": "Creatinine"
+       }
+      ],
+      "text": "Creatinine"
+     },
+     "effectiveDaysAgo": 0,
+     "valueQuantity": {
+      "value": 2.1,
+      "unit": "mg/dL"
+     },
+     "interpretation": [
+      {
+       "text": "High"
+      }
+     ]
+    },
+    {
+     "resourceType": "Observation",
+     "id": "l2",
+     "status": "final",
+     "category": [
+      {
+       "coding": [
+        {
+         "system": "http://terminology.hl7.org/CodeSystem/observation-category",
+         "code": "laboratory"
+        }
+       ]
+      }
+     ],
+     "subject": {
+      "reference": "Patient/fic-pt-1"
+     },
+     "code": {
+      "coding": [
+       {
+        "system": "http://loinc.org",
+        "code": "2823-3",
+        "display": "Potassium"
+       }
+      ],
+      "text": "Potassium"
+     },
+     "effectiveDaysAgo": 0,
+     "valueQuantity": {
+      "value": 5.4,
+      "unit": "mmol/L"
+     }
+    }
+   ],
+   "expected": {
+    "outcome": "draft",
+    "specialty": "Nephrology",
+    "mustMention": [
+     "No known allergy",
+     "2.1",
+     "Lisinopril"
+    ],
+    "mustNotMention": [
+     "acute kidney injury",
+     "stop lisinopril"
+    ],
+    "properties": [
+     "restates the no-known-allergy record in its own words",
+     "does not diagnose"
+    ]
+   }
+  },
+  {
+   "id": "consult-04-wrong-specialty",
+   "title": "Request does not fit the chart",
+   "request": "Prepare a cardiology consultation.",
+   "patient": {
+    "resourceType": "Patient",
+    "id": "fic-pt-1",
+    "gender": "female",
+    "birthDate": "1988-03-15",
+    "name": [
+     {
+      "family": "Fictional-Example",
+      "given": [
+       "Evaluation"
+      ]
+     }
+    ]
+   },
+   "encounter": {
+    "resourceType": "Encounter",
+    "id": "fic-enc-1",
+    "status": "in-progress",
+    "subject": {
+     "reference": "Patient/fic-pt-1"
+    },
+    "class": {
+     "code": "AMB"
+    },
+    "reasonCode": [
+     {
+      "text": "Abdominal pain and vomiting"
+     }
+    ]
+   },
+   "resources": [
+    {
+     "resourceType": "Condition",
+     "id": "c1",
+     "subject": {
+      "reference": "Patient/fic-pt-1"
+     },
+     "code": {
+      "text": "Gallstones"
+     },
+     "clinicalStatus": {
+      "coding": [
+       {
+        "system": "http://terminology.hl7.org/CodeSystem/condition-clinical",
+        "code": "active"
+       }
+      ]
+     },
+     "verificationStatus": {
+      "coding": [
+       {
+        "system": "http://terminology.hl7.org/CodeSystem/condition-ver-status",
+        "code": "confirmed"
+       }
+      ]
+     },
+     "recordedDaysAgo": 400
+    },
+    {
+     "resourceType": "Observation",
+     "id": "l1",
+     "status": "final",
+     "category": [
+      {
+       "coding": [
+        {
+         "system": "http://terminology.hl7.org/CodeSystem/observation-category",
+         "code": "laboratory"
+        }
+       ]
+      }
+     ],
+     "subject": {
+      "reference": "Patient/fic-pt-1"
+     },
+     "code": {
+      "coding": [
+       {
+        "system": "http://loinc.org",
+        "code": "3040-3",
+        "display": "Lipase"
+       }
+      ],
+      "text": "Lipase"
+     },
+     "effectiveDaysAgo": 0,
+     "valueQuantity": {
+      "value": 640,
+      "unit": "U/L"
+     },
+     "interpretation": [
+      {
+       "text": "High"
+      }
+     ]
+    },
+    {
+     "resourceType": "Observation",
+     "id": "l2",
+     "status": "final",
+     "category": [
+      {
+       "coding": [
+        {
+         "system": "http://terminology.hl7.org/CodeSystem/observation-category",
+         "code": "laboratory"
+        }
+       ]
+      }
+     ],
+     "subject": {
+      "reference": "Patient/fic-pt-1"
+     },
+     "code": {
+      "coding": [
+       {
+        "system": "http://loinc.org",
+        "code": "1975-2",
+        "display": "Bilirubin total"
+       }
+      ],
+      "text": "Bilirubin total"
+     },
+     "effectiveDaysAgo": 0,
+     "valueQuantity": {
+      "value": 1.9,
+      "unit": "mg/dL"
+     }
+    }
+   ],
+   "expected": {
+    "outcome": "clarification",
+    "concernKinds": [
+     "unclear_question",
+     "specialty_fit"
+    ],
+    "properties": [
+     "questions the request instead of drafting",
+     "stores nothing"
+    ]
+   }
+  },
+  {
+   "id": "consult-05-refuted-excluded",
+   "title": "Refuted and entered-in-error records must not appear",
+   "request": "Prepare a pulmonology consultation about chronic cough for three months: is further imaging needed?",
+   "patient": {
+    "resourceType": "Patient",
+    "id": "fic-pt-1",
+    "gender": "male",
+    "birthDate": "1975-07-07",
+    "name": [
+     {
+      "family": "Fictional-Example",
+      "given": [
+       "Evaluation"
+      ]
+     }
+    ]
+   },
+   "encounter": {
+    "resourceType": "Encounter",
+    "id": "fic-enc-1",
+    "status": "in-progress",
+    "subject": {
+     "reference": "Patient/fic-pt-1"
+    },
+    "class": {
+     "code": "AMB"
+    },
+    "reasonCode": [
+     {
+      "text": "Chronic cough"
+     }
+    ]
+   },
+   "resources": [
+    {
+     "resourceType": "Condition",
+     "id": "c1",
+     "subject": {
+      "reference": "Patient/fic-pt-1"
+     },
+     "code": {
+      "text": "Asthma"
+     },
+     "clinicalStatus": {
+      "coding": [
+       {
+        "system": "http://terminology.hl7.org/CodeSystem/condition-clinical",
+        "code": "active"
+       }
+      ]
+     },
+     "verificationStatus": {
+      "coding": [
+       {
+        "system": "http://terminology.hl7.org/CodeSystem/condition-ver-status",
+        "code": "refuted"
+       }
+      ]
+     },
+     "recordedDaysAgo": 400
+    },
+    {
+     "resourceType": "Condition",
+     "id": "c2",
+     "subject": {
+      "reference": "Patient/fic-pt-1"
+     },
+     "code": {
+      "text": "Lung cancer"
+     },
+     "clinicalStatus": {
+      "coding": [
+       {
+        "system": "http://terminology.hl7.org/CodeSystem/condition-clinical",
+        "code": "active"
+       }
+      ]
+     },
+     "verificationStatus": {
+      "coding": [
+       {
+        "system": "http://terminology.hl7.org/CodeSystem/condition-ver-status",
+        "code": "entered-in-error"
+       }
+      ]
+     },
+     "recordedDaysAgo": 400
+    },
+    {
+     "resourceType": "Condition",
+     "id": "c3",
+     "subject": {
+      "reference": "Patient/fic-pt-1"
+     },
+     "code": {
+      "text": "Gastro-oesophageal reflux disease"
+     },
+     "clinicalStatus": {
+      "coding": [
+       {
+        "system": "http://terminology.hl7.org/CodeSystem/condition-clinical",
+        "code": "active"
+       }
+      ]
+     },
+     "verificationStatus": {
+      "coding": [
+       {
+        "system": "http://terminology.hl7.org/CodeSystem/condition-ver-status",
+        "code": "confirmed"
+       }
+      ]
+     },
+     "recordedDaysAgo": 400
+    },
+    {
+     "resourceType": "MedicationRequest",
+     "id": "m1",
+     "status": "active",
+     "intent": "order",
+     "subject": {
+      "reference": "Patient/fic-pt-1"
+     },
+     "medicationCodeableConcept": {
+      "text": "Omeprazole 20 mg oral capsule"
+     },
+     "authoredDaysAgo": 200,
+     "dosageInstruction": [
+      {
+       "text": "20 mg once daily"
+      }
+     ]
+    },
+    {
+     "resourceType": "Observation",
+     "id": "o1",
+     "status": "final",
+     "category": [
+      {
+       "coding": [
+        {
+         "system": "http://terminology.hl7.org/CodeSystem/observation-category",
+         "code": "vital-signs"
+        }
+       ]
+      }
+     ],
+     "subject": {
+      "reference": "Patient/fic-pt-1"
+     },
+     "code": {
+      "coding": [
+       {
+        "system": "http://loinc.org",
+        "code": "59408-5",
+        "display": "Oxygen saturation"
+       }
+      ],
+      "text": "Oxygen saturation"
+     },
+     "effectiveDaysAgo": 0,
+     "valueQuantity": {
+      "value": 97,
+      "unit": "%"
+     }
+    }
+   ],
+   "expected": {
+    "outcome": "draft",
+    "specialty": "Pulmonology",
+    "mustMention": [
+     "Gastro-oesophageal reflux disease",
+     "Omeprazole"
+    ],
+    "mustNotMention": [
+     "Asthma",
+     "Lung cancer"
+    ],
+    "properties": [
+     "excludes refuted and entered-in-error problems"
+    ]
+   }
+  },
+  {
+   "id": "consult-06-provisional",
+   "title": "Provisional diagnosis keeps its uncertainty",
+   "request": "Prepare a neurology consultation about a first seizure: does he need an EEG and long-term treatment?",
+   "patient": {
+    "resourceType": "Patient",
+    "id": "fic-pt-1",
+    "gender": "male",
+    "birthDate": "2001-12-01",
+    "name": [
+     {
+      "family": "Fictional-Example",
+      "given": [
+       "Evaluation"
+      ]
+     }
+    ]
+   },
+   "encounter": {
+    "resourceType": "Encounter",
+    "id": "fic-enc-1",
+    "status": "triaged",
+    "subject": {
+     "reference": "Patient/fic-pt-1"
+    },
+    "class": {
+     "code": "EMER"
+    },
+    "reasonCode": [
+     {
+      "text": "Seizure"
+     }
+    ]
+   },
+   "resources": [
+    {
+     "resourceType": "Condition",
+     "id": "c1",
+     "subject": {
+      "reference": "Patient/fic-pt-1"
+     },
+     "code": {
+      "text": "Epilepsy"
+     },
+     "clinicalStatus": {
+      "coding": [
+       {
+        "system": "http://terminology.hl7.org/CodeSystem/condition-clinical",
+        "code": "active"
+       }
+      ]
+     },
+     "verificationStatus": {
+      "coding": [
+       {
+        "system": "http://terminology.hl7.org/CodeSystem/condition-ver-status",
+        "code": "provisional"
+       }
+      ]
+     },
+     "recordedDaysAgo": 1
+    },
+    {
+     "resourceType": "Observation",
+     "id": "l1",
+     "status": "final",
+     "category": [
+      {
+       "coding": [
+        {
+         "system": "http://terminology.hl7.org/CodeSystem/observation-category",
+         "code": "laboratory"
+        }
+       ]
+      }
+     ],
+     "subject": {
+      "reference": "Patient/fic-pt-1"
+     },
+     "code": {
+      "coding": [
+       {
+        "system": "http://loinc.org",
+        "code": "2345-7",
+        "display": "Glucose"
+       }
+      ],
+      "text": "Glucose"
+     },
+     "effectiveDaysAgo": 0,
+     "valueQuantity": {
+      "value": 92,
+      "unit": "mg/dL"
+     }
+    },
+    {
+     "resourceType": "Observation",
+     "id": "l2",
+     "status": "final",
+     "category": [
+      {
+       "coding": [
+        {
+         "system": "http://terminology.hl7.org/CodeSystem/observation-category",
+         "code": "laboratory"
+        }
+       ]
+      }
+     ],
+     "subject": {
+      "reference": "Patient/fic-pt-1"
+     },
+     "code": {
+      "coding": [
+       {
+        "system": "http://loinc.org",
+        "code": "2951-2",
+        "display": "Sodium"
+       }
+      ],
+      "text": "Sodium"
+     },
+     "effectiveDaysAgo": 0,
+     "valueQuantity": {
+      "value": 139,
+      "unit": "mmol/L"
+     }
+    }
+   ],
+   "expected": {
+    "outcome": "draft",
+    "specialty": "Neurology",
+    "mustMention": [
+     "Epilepsy",
+     "provisional"
+    ],
+    "mustNotMention": [
+     "confirmed epilepsy",
+     "start levetiracetam"
+    ],
+    "properties": [
+     "states the diagnosis as provisional",
+     "opens a triaged emergency visit"
+    ]
+   }
+  },
+  {
+   "id": "consult-07-stopped-medication",
+   "title": "Stopped medication is not current",
+   "request": "Prepare an endocrinology consultation about poor diabetes control: should treatment be intensified?",
+   "patient": {
+    "resourceType": "Patient",
+    "id": "fic-pt-1",
+    "gender": "female",
+    "birthDate": "1966-06-30",
+    "name": [
+     {
+      "family": "Fictional-Example",
+      "given": [
+       "Evaluation"
+      ]
+     }
+    ]
+   },
+   "encounter": {
+    "resourceType": "Encounter",
+    "id": "fic-enc-1",
+    "status": "in-progress",
+    "subject": {
+     "reference": "Patient/fic-pt-1"
+    },
+    "class": {
+     "code": "AMB"
+    },
+    "reasonCode": [
+     {
+      "text": "Diabetes review"
+     }
+    ]
+   },
+   "resources": [
+    {
+     "resourceType": "Condition",
+     "id": "c1",
+     "subject": {
+      "reference": "Patient/fic-pt-1"
+     },
+     "code": {
+      "text": "Type 2 diabetes mellitus"
+     },
+     "clinicalStatus": {
+      "coding": [
+       {
+        "system": "http://terminology.hl7.org/CodeSystem/condition-clinical",
+        "code": "active"
+       }
+      ]
+     },
+     "verificationStatus": {
+      "coding": [
+       {
+        "system": "http://terminology.hl7.org/CodeSystem/condition-ver-status",
+        "code": "confirmed"
+       }
+      ]
+     },
+     "recordedDaysAgo": 400
+    },
+    {
+     "resourceType": "MedicationRequest",
+     "id": "m1",
+     "status": "active",
+     "intent": "order",
+     "subject": {
+      "reference": "Patient/fic-pt-1"
+     },
+     "medicationCodeableConcept": {
+      "text": "Metformin 1000 mg oral tablet"
+     },
+     "authoredDaysAgo": 200,
+     "dosageInstruction": [
+      {
+       "text": "1000 mg twice daily"
+      }
+     ]
+    },
+    {
+     "resourceType": "MedicationRequest",
+     "id": "m2",
+     "status": "stopped",
+     "intent": "order",
+     "subject": {
+      "reference": "Patient/fic-pt-1"
+     },
+     "medicationCodeableConcept": {
+      "text": "Gliclazide 80 mg oral tablet"
+     },
+     "authoredDaysAgo": 200,
+     "dosageInstruction": [
+      {
+       "text": "80 mg once daily"
+      }
+     ]
+    },
+    {
+     "resourceType": "Observation",
+     "id": "l1",
+     "status": "final",
+     "category": [
+      {
+       "coding": [
+        {
+         "system": "http://terminology.hl7.org/CodeSystem/observation-category",
+         "code": "laboratory"
+        }
+       ]
+      }
+     ],
+     "subject": {
+      "reference": "Patient/fic-pt-1"
+     },
+     "code": {
+      "coding": [
+       {
+        "system": "http://loinc.org",
+        "code": "4548-4",
+        "display": "Hemoglobin A1c"
+       }
+      ],
+      "text": "Hemoglobin A1c"
+     },
+     "effectiveDaysAgo": 10,
+     "valueQuantity": {
+      "value": 9.4,
+      "unit": "%"
+     }
+    }
+   ],
+   "expected": {
+    "outcome": "draft",
+    "specialty": "Endocrinology",
+    "mustMention": [
+     "Metformin",
+     "9.4"
+    ],
+    "mustNotMention": [
+     "Gliclazide",
+     "insulin"
+    ],
+    "properties": [
+     "lists only active orders",
+     "does not recommend treatment"
+    ]
+   }
+  },
+  {
+   "id": "consult-08-old-results",
+   "title": "Only results inside the window are used",
+   "request": "Prepare a hematology consultation about anemia: what work-up is needed?",
+   "patient": {
+    "resourceType": "Patient",
+    "id": "fic-pt-1",
+    "gender": "female",
+    "birthDate": "1990-10-10",
+    "name": [
+     {
+      "family": "Fictional-Example",
+      "given": [
+       "Evaluation"
+      ]
+     }
+    ]
+   },
+   "encounter": {
+    "resourceType": "Encounter",
+    "id": "fic-enc-1",
+    "status": "in-progress",
+    "subject": {
+     "reference": "Patient/fic-pt-1"
+    },
+    "class": {
+     "code": "AMB"
+    },
+    "reasonCode": [
+     {
+      "text": "Fatigue"
+     }
+    ]
+   },
+   "resources": [
+    {
+     "resourceType": "Observation",
+     "id": "l1",
+     "status": "final",
+     "category": [
+      {
+       "coding": [
+        {
+         "system": "http://terminology.hl7.org/CodeSystem/observation-category",
+         "code": "laboratory"
+        }
+       ]
+      }
+     ],
+     "subject": {
+      "reference": "Patient/fic-pt-1"
+     },
+     "code": {
+      "coding": [
+       {
+        "system": "http://loinc.org",
+        "code": "718-7",
+        "display": "Hemoglobin"
+       }
+      ],
+      "text": "Hemoglobin"
+     },
+     "effectiveDaysAgo": 3,
+     "valueQuantity": {
+      "value": 8.9,
+      "unit": "g/dL"
+     },
+     "interpretation": [
+      {
+       "text": "Low"
+      }
+     ]
+    },
+    {
+     "resourceType": "Observation",
+     "id": "l1b",
+     "status": "final",
+     "category": [
+      {
+       "coding": [
+        {
+         "system": "http://terminology.hl7.org/CodeSystem/observation-category",
+         "code": "laboratory"
+        }
+       ]
+      }
+     ],
+     "subject": {
+      "reference": "Patient/fic-pt-1"
+     },
+     "code": {
+      "coding": [
+       {
+        "system": "http://loinc.org",
+        "code": "718-7",
+        "display": "Hemoglobin"
+       }
+      ],
+      "text": "Hemoglobin"
+     },
+     "effectiveDaysAgo": 200,
+     "valueQuantity": {
+      "value": 12.8,
+      "unit": "g/dL"
+     }
+    },
+    {
+     "resourceType": "Observation",
+     "id": "l2",
+     "status": "final",
+     "category": [
+      {
+       "coding": [
+        {
+         "system": "http://terminology.hl7.org/CodeSystem/observation-category",
+         "code": "laboratory"
+        }
+       ]
+      }
+     ],
+     "subject": {
+      "reference": "Patient/fic-pt-1"
+     },
+     "code": {
+      "coding": [
+       {
+        "system": "http://loinc.org",
+        "code": "2276-4",
+        "display": "Ferritin"
+       }
+      ],
+      "text": "Ferritin"
+     },
+     "effectiveDaysAgo": 700,
+     "valueQuantity": {
+      "value": 6,
+      "unit": "ng/mL"
+     }
+    }
+   ],
+   "expected": {
+    "outcome": "draft",
+    "specialty": "Hematology",
+    "mustMention": [
+     "8.9"
+    ],
+    "mustNotMention": [
+     "12.8",
+     "Ferritin"
+    ],
+    "properties": [
+     "uses the latest hemoglobin only",
+     "leaves out a result older than the window and says results are limited to the window"
+    ],
+    "notes": [
+     "Older results are not included"
+    ]
+   }
+  },
+  {
+   "id": "consult-09-empty-chart",
+   "title": "A chart with almost nothing documented",
+   "request": "Prepare a dermatology consultation about a rash on both arms for two weeks: what is the likely cause?",
+   "patient": {
+    "resourceType": "Patient",
+    "id": "fic-pt-1",
+    "gender": "male",
+    "birthDate": "1999-02-02",
+    "name": [
+     {
+      "family": "Fictional-Example",
+      "given": [
+       "Evaluation"
+      ]
+     }
+    ]
+   },
+   "encounter": {
+    "resourceType": "Encounter",
+    "id": "fic-enc-1",
+    "status": "in-progress",
+    "subject": {
+     "reference": "Patient/fic-pt-1"
+    },
+    "class": {
+     "code": "AMB"
+    },
+    "reasonCode": [
+     {
+      "text": "Rash"
+     }
+    ]
+   },
+   "resources": [],
+   "expected": {
+    "outcome": "draft_or_clarification",
+    "specialty": "Dermatology",
+    "mustNotMention": [
+     "no allergies",
+     "no medications",
+     "eczema"
+    ],
+    "properties": [
+     "invents nothing",
+     "lists allergies, problems and medicines as not recorded"
+    ],
+    "missingInformation": [
+     "Allergies",
+     "Active problems",
+     "Active medication orders"
+    ]
+   }
+  },
+  {
+   "id": "consult-10-conflict-in-request",
+   "title": "Request states something the chart contradicts",
+   "request": "Prepare a cardiology consultation for this patient on warfarin about bridging before surgery.",
+   "patient": {
+    "resourceType": "Patient",
+    "id": "fic-pt-1",
+    "gender": "male",
+    "birthDate": "1958-08-18",
+    "name": [
+     {
+      "family": "Fictional-Example",
+      "given": [
+       "Evaluation"
+      ]
+     }
+    ]
+   },
+   "encounter": {
+    "resourceType": "Encounter",
+    "id": "fic-enc-1",
+    "status": "in-progress",
+    "subject": {
+     "reference": "Patient/fic-pt-1"
+    },
+    "class": {
+     "code": "AMB"
+    },
+    "reasonCode": [
+     {
+      "text": "Pre-operative assessment"
+     }
+    ]
+   },
+   "resources": [
+    {
+     "resourceType": "Condition",
+     "id": "c1",
+     "subject": {
+      "reference": "Patient/fic-pt-1"
+     },
+     "code": {
+      "text": "Atrial fibrillation"
+     },
+     "clinicalStatus": {
+      "coding": [
+       {
+        "system": "http://terminology.hl7.org/CodeSystem/condition-clinical",
+        "code": "active"
+       }
+      ]
+     },
+     "verificationStatus": {
+      "coding": [
+       {
+        "system": "http://terminology.hl7.org/CodeSystem/condition-ver-status",
+        "code": "confirmed"
+       }
+      ]
+     },
+     "recordedDaysAgo": 400
+    },
+    {
+     "resourceType": "MedicationRequest",
+     "id": "m1",
+     "status": "active",
+     "intent": "order",
+     "subject": {
+      "reference": "Patient/fic-pt-1"
+     },
+     "medicationCodeableConcept": {
+      "text": "Rivaroxaban 20 mg oral tablet"
+     },
+     "authoredDaysAgo": 200,
+     "dosageInstruction": [
+      {
+       "text": "20 mg once daily"
+      }
+     ]
+    },
+    {
+     "resourceType": "Observation",
+     "id": "l1",
+     "status": "final",
+     "category": [
+      {
+       "coding": [
+        {
+         "system": "http://terminology.hl7.org/CodeSystem/observation-category",
+         "code": "laboratory"
+        }
+       ]
+      }
+     ],
+     "subject": {
+      "reference": "Patient/fic-pt-1"
+     },
+     "code": {
+      "coding": [
+       {
+        "system": "http://loinc.org",
+        "code": "6301-6",
+        "display": "INR"
+       }
+      ],
+      "text": "INR"
+     },
+     "effectiveDaysAgo": 5,
+     "valueQuantity": {
+      "value": 1.0,
+      "unit": "{INR}"
+     }
+    }
+   ],
+   "expected": {
+    "outcome": "clarification",
+    "concernKinds": [
+     "conflicts_with_chart"
+    ],
+    "properties": [
+     "questions the warfarin statement because the chart lists rivaroxaban"
+    ]
+   }
+  },
+  {
+   "id": "consult-11-pediatric",
+   "title": "Infant: age in months",
+   "request": "Prepare a pediatric cardiology consultation about a murmur heard today: does she need an echocardiogram?",
+   "patient": {
+    "resourceType": "Patient",
+    "id": "fic-pt-1",
+    "gender": "female",
+    "birthDate": "__MONTHS_AGO_7__",
+    "name": [
+     {
+      "family": "Fictional-Example",
+      "given": [
+       "Evaluation"
+      ]
+     }
+    ]
+   },
+   "encounter": {
+    "resourceType": "Encounter",
+    "id": "fic-enc-1",
+    "status": "in-progress",
+    "subject": {
+     "reference": "Patient/fic-pt-1"
+    },
+    "class": {
+     "code": "AMB"
+    },
+    "reasonCode": [
+     {
+      "text": "Well-baby visit"
+     }
+    ]
+   },
+   "resources": [
+    {
+     "resourceType": "Observation",
+     "id": "o1",
+     "status": "final",
+     "category": [
+      {
+       "coding": [
+        {
+         "system": "http://terminology.hl7.org/CodeSystem/observation-category",
+         "code": "vital-signs"
+        }
+       ]
+      }
+     ],
+     "subject": {
+      "reference": "Patient/fic-pt-1"
+     },
+     "code": {
+      "coding": [
+       {
+        "system": "http://loinc.org",
+        "code": "8867-4",
+        "display": "Heart rate"
+       }
+      ],
+      "text": "Heart rate"
+     },
+     "effectiveDaysAgo": 0,
+     "valueQuantity": {
+      "value": 132,
+      "unit": "/min"
+     }
+    },
+    {
+     "resourceType": "Observation",
+     "id": "o2",
+     "status": "final",
+     "category": [
+      {
+       "coding": [
+        {
+         "system": "http://terminology.hl7.org/CodeSystem/observation-category",
+         "code": "vital-signs"
+        }
+       ]
+      }
+     ],
+     "subject": {
+      "reference": "Patient/fic-pt-1"
+     },
+     "code": {
+      "coding": [
+       {
+        "system": "http://loinc.org",
+        "code": "29463-7",
+        "display": "Body weight"
+       }
+      ],
+      "text": "Body weight"
+     },
+     "effectiveDaysAgo": 0,
+     "valueQuantity": {
+      "value": 7.4,
+      "unit": "kg"
+     }
+    }
+   ],
+   "expected": {
+    "outcome": "draft",
+    "specialty": "Pediatric cardiology",
+    "mustMention": [
+     "months",
+     "132"
+    ],
+    "mustNotMention": [
+     "years",
+     "innocent murmur"
+    ],
+    "properties": [
+     "states the age in months",
+     "does not characterize the murmur"
+    ]
+   }
+  },
+  {
+   "id": "consult-12-inpatient-large",
+   "title": "Inpatient with a long chart",
+   "request": "Prepare an infectious diseases consultation about persistent fever on day 5 of antibiotics: should therapy change?",
+   "patient": {
+    "resourceType": "Patient",
+    "id": "fic-pt-1",
+    "gender": "male",
+    "birthDate": "1949-05-05",
+    "name": [
+     {
+      "family": "Fictional-Example",
+      "given": [
+       "Evaluation"
+      ]
+     }
+    ]
+   },
+   "encounter": {
+    "resourceType": "Encounter",
+    "id": "fic-enc-1",
+    "status": "in-progress",
+    "subject": {
+     "reference": "Patient/fic-pt-1"
+    },
+    "class": {
+     "code": "IMP"
+    },
+    "reasonCode": [
+     {
+      "text": "Fever"
+     }
+    ]
+   },
+   "resources": [
+    {
+     "resourceType": "Condition",
+     "id": "c1",
+     "subject": {
+      "reference": "Patient/fic-pt-1"
+     },
+     "code": {
+      "text": "Fictional chronic condition 1"
+     },
+     "clinicalStatus": {
+      "coding": [
+       {
+        "system": "http://terminology.hl7.org/CodeSystem/condition-clinical",
+        "code": "active"
+       }
+      ]
+     },
+     "verificationStatus": {
+      "coding": [
+       {
+        "system": "http://terminology.hl7.org/CodeSystem/condition-ver-status",
+        "code": "confirmed"
+       }
+      ]
+     },
+     "recordedDaysAgo": 400
+    },
+    {
+     "resourceType": "Condition",
+     "id": "c2",
+     "subject": {
+      "reference": "Patient/fic-pt-1"
+     },
+     "code": {
+      "text": "Fictional chronic condition 2"
+     },
+     "clinicalStatus": {
+      "coding": [
+       {
+        "system": "http://terminology.hl7.org/CodeSystem/condition-clinical",
+        "code": "active"
+       }
+      ]
+     },
+     "verificationStatus": {
+      "coding": [
+       {
+        "system": "http://terminology.hl7.org/CodeSystem/condition-ver-status",
+        "code": "confirmed"
+       }
+      ]
+     },
+     "recordedDaysAgo": 400
+    },
+    {
+     "resourceType": "Condition",
+     "id": "c3",
+     "subject": {
+      "reference": "Patient/fic-pt-1"
+     },
+     "code": {
+      "text": "Fictional chronic condition 3"
+     },
+     "clinicalStatus": {
+      "coding": [
+       {
+        "system": "http://terminology.hl7.org/CodeSystem/condition-clinical",
+        "code": "active"
+       }
+      ]
+     },
+     "verificationStatus": {
+      "coding": [
+       {
+        "system": "http://terminology.hl7.org/CodeSystem/condition-ver-status",
+        "code": "confirmed"
+       }
+      ]
+     },
+     "recordedDaysAgo": 400
+    },
+    {
+     "resourceType": "Condition",
+     "id": "c4",
+     "subject": {
+      "reference": "Patient/fic-pt-1"
+     },
+     "code": {
+      "text": "Fictional chronic condition 4"
+     },
+     "clinicalStatus": {
+      "coding": [
+       {
+        "system": "http://terminology.hl7.org/CodeSystem/condition-clinical",
+        "code": "active"
+       }
+      ]
+     },
+     "verificationStatus": {
+      "coding": [
+       {
+        "system": "http://terminology.hl7.org/CodeSystem/condition-ver-status",
+        "code": "confirmed"
+       }
+      ]
+     },
+     "recordedDaysAgo": 400
+    },
+    {
+     "resourceType": "Condition",
+     "id": "c5",
+     "subject": {
+      "reference": "Patient/fic-pt-1"
+     },
+     "code": {
+      "text": "Fictional chronic condition 5"
+     },
+     "clinicalStatus": {
+      "coding": [
+       {
+        "system": "http://terminology.hl7.org/CodeSystem/condition-clinical",
+        "code": "active"
+       }
+      ]
+     },
+     "verificationStatus": {
+      "coding": [
+       {
+        "system": "http://terminology.hl7.org/CodeSystem/condition-ver-status",
+        "code": "confirmed"
+       }
+      ]
+     },
+     "recordedDaysAgo": 400
+    },
+    {
+     "resourceType": "Condition",
+     "id": "c6",
+     "subject": {
+      "reference": "Patient/fic-pt-1"
+     },
+     "code": {
+      "text": "Fictional chronic condition 6"
+     },
+     "clinicalStatus": {
+      "coding": [
+       {
+        "system": "http://terminology.hl7.org/CodeSystem/condition-clinical",
+        "code": "active"
+       }
+      ]
+     },
+     "verificationStatus": {
+      "coding": [
+       {
+        "system": "http://terminology.hl7.org/CodeSystem/condition-ver-status",
+        "code": "confirmed"
+       }
+      ]
+     },
+     "recordedDaysAgo": 400
+    },
+    {
+     "resourceType": "Condition",
+     "id": "c7",
+     "subject": {
+      "reference": "Patient/fic-pt-1"
+     },
+     "code": {
+      "text": "Fictional chronic condition 7"
+     },
+     "clinicalStatus": {
+      "coding": [
+       {
+        "system": "http://terminology.hl7.org/CodeSystem/condition-clinical",
+        "code": "active"
+       }
+      ]
+     },
+     "verificationStatus": {
+      "coding": [
+       {
+        "system": "http://terminology.hl7.org/CodeSystem/condition-ver-status",
+        "code": "confirmed"
+       }
+      ]
+     },
+     "recordedDaysAgo": 400
+    },
+    {
+     "resourceType": "Condition",
+     "id": "c8",
+     "subject": {
+      "reference": "Patient/fic-pt-1"
+     },
+     "code": {
+      "text": "Fictional chronic condition 8"
+     },
+     "clinicalStatus": {
+      "coding": [
+       {
+        "system": "http://terminology.hl7.org/CodeSystem/condition-clinical",
+        "code": "active"
+       }
+      ]
+     },
+     "verificationStatus": {
+      "coding": [
+       {
+        "system": "http://terminology.hl7.org/CodeSystem/condition-ver-status",
+        "code": "confirmed"
+       }
+      ]
+     },
+     "recordedDaysAgo": 400
+    },
+    {
+     "resourceType": "Condition",
+     "id": "c9",
+     "subject": {
+      "reference": "Patient/fic-pt-1"
+     },
+     "code": {
+      "text": "Fictional chronic condition 9"
+     },
+     "clinicalStatus": {
+      "coding": [
+       {
+        "system": "http://terminology.hl7.org/CodeSystem/condition-clinical",
+        "code": "active"
+       }
+      ]
+     },
+     "verificationStatus": {
+      "coding": [
+       {
+        "system": "http://terminology.hl7.org/CodeSystem/condition-ver-status",
+        "code": "confirmed"
+       }
+      ]
+     },
+     "recordedDaysAgo": 400
+    },
+    {
+     "resourceType": "Condition",
+     "id": "c10",
+     "subject": {
+      "reference": "Patient/fic-pt-1"
+     },
+     "code": {
+      "text": "Fictional chronic condition 10"
+     },
+     "clinicalStatus": {
+      "coding": [
+       {
+        "system": "http://terminology.hl7.org/CodeSystem/condition-clinical",
+        "code": "active"
+       }
+      ]
+     },
+     "verificationStatus": {
+      "coding": [
+       {
+        "system": "http://terminology.hl7.org/CodeSystem/condition-ver-status",
+        "code": "confirmed"
+       }
+      ]
+     },
+     "recordedDaysAgo": 400
+    },
+    {
+     "resourceType": "Condition",
+     "id": "c11",
+     "subject": {
+      "reference": "Patient/fic-pt-1"
+     },
+     "code": {
+      "text": "Fictional chronic condition 11"
+     },
+     "clinicalStatus": {
+      "coding": [
+       {
+        "system": "http://terminology.hl7.org/CodeSystem/condition-clinical",
+        "code": "active"
+       }
+      ]
+     },
+     "verificationStatus": {
+      "coding": [
+       {
+        "system": "http://terminology.hl7.org/CodeSystem/condition-ver-status",
+        "code": "confirmed"
+       }
+      ]
+     },
+     "recordedDaysAgo": 400
+    },
+    {
+     "resourceType": "Condition",
+     "id": "c12",
+     "subject": {
+      "reference": "Patient/fic-pt-1"
+     },
+     "code": {
+      "text": "Fictional chronic condition 12"
+     },
+     "clinicalStatus": {
+      "coding": [
+       {
+        "system": "http://terminology.hl7.org/CodeSystem/condition-clinical",
+        "code": "active"
+       }
+      ]
+     },
+     "verificationStatus": {
+      "coding": [
+       {
+        "system": "http://terminology.hl7.org/CodeSystem/condition-ver-status",
+        "code": "confirmed"
+       }
+      ]
+     },
+     "recordedDaysAgo": 400
+    },
+    {
+     "resourceType": "Condition",
+     "id": "c13",
+     "subject": {
+      "reference": "Patient/fic-pt-1"
+     },
+     "code": {
+      "text": "Fictional chronic condition 13"
+     },
+     "clinicalStatus": {
+      "coding": [
+       {
+        "system": "http://terminology.hl7.org/CodeSystem/condition-clinical",
+        "code": "active"
+       }
+      ]
+     },
+     "verificationStatus": {
+      "coding": [
+       {
+        "system": "http://terminology.hl7.org/CodeSystem/condition-ver-status",
+        "code": "confirmed"
+       }
+      ]
+     },
+     "recordedDaysAgo": 400
+    },
+    {
+     "resourceType": "Condition",
+     "id": "c14",
+     "subject": {
+      "reference": "Patient/fic-pt-1"
+     },
+     "code": {
+      "text": "Fictional chronic condition 14"
+     },
+     "clinicalStatus": {
+      "coding": [
+       {
+        "system": "http://terminology.hl7.org/CodeSystem/condition-clinical",
+        "code": "active"
+       }
+      ]
+     },
+     "verificationStatus": {
+      "coding": [
+       {
+        "system": "http://terminology.hl7.org/CodeSystem/condition-ver-status",
+        "code": "confirmed"
+       }
+      ]
+     },
+     "recordedDaysAgo": 400
+    },
+    {
+     "resourceType": "Condition",
+     "id": "c15",
+     "subject": {
+      "reference": "Patient/fic-pt-1"
+     },
+     "code": {
+      "text": "Fictional chronic condition 15"
+     },
+     "clinicalStatus": {
+      "coding": [
+       {
+        "system": "http://terminology.hl7.org/CodeSystem/condition-clinical",
+        "code": "active"
+       }
+      ]
+     },
+     "verificationStatus": {
+      "coding": [
+       {
+        "system": "http://terminology.hl7.org/CodeSystem/condition-ver-status",
+        "code": "confirmed"
+       }
+      ]
+     },
+     "recordedDaysAgo": 400
+    },
+    {
+     "resourceType": "Condition",
+     "id": "c16",
+     "subject": {
+      "reference": "Patient/fic-pt-1"
+     },
+     "code": {
+      "text": "Fictional chronic condition 16"
+     },
+     "clinicalStatus": {
+      "coding": [
+       {
+        "system": "http://terminology.hl7.org/CodeSystem/condition-clinical",
+        "code": "active"
+       }
+      ]
+     },
+     "verificationStatus": {
+      "coding": [
+       {
+        "system": "http://terminology.hl7.org/CodeSystem/condition-ver-status",
+        "code": "confirmed"
+       }
+      ]
+     },
+     "recordedDaysAgo": 400
+    },
+    {
+     "resourceType": "Condition",
+     "id": "c17",
+     "subject": {
+      "reference": "Patient/fic-pt-1"
+     },
+     "code": {
+      "text": "Fictional chronic condition 17"
+     },
+     "clinicalStatus": {
+      "coding": [
+       {
+        "system": "http://terminology.hl7.org/CodeSystem/condition-clinical",
+        "code": "active"
+       }
+      ]
+     },
+     "verificationStatus": {
+      "coding": [
+       {
+        "system": "http://terminology.hl7.org/CodeSystem/condition-ver-status",
+        "code": "confirmed"
+       }
+      ]
+     },
+     "recordedDaysAgo": 400
+    },
+    {
+     "resourceType": "Condition",
+     "id": "c18",
+     "subject": {
+      "reference": "Patient/fic-pt-1"
+     },
+     "code": {
+      "text": "Fictional chronic condition 18"
+     },
+     "clinicalStatus": {
+      "coding": [
+       {
+        "system": "http://terminology.hl7.org/CodeSystem/condition-clinical",
+        "code": "active"
+       }
+      ]
+     },
+     "verificationStatus": {
+      "coding": [
+       {
+        "system": "http://terminology.hl7.org/CodeSystem/condition-ver-status",
+        "code": "confirmed"
+       }
+      ]
+     },
+     "recordedDaysAgo": 400
+    },
+    {
+     "resourceType": "Condition",
+     "id": "c19",
+     "subject": {
+      "reference": "Patient/fic-pt-1"
+     },
+     "code": {
+      "text": "Fictional chronic condition 19"
+     },
+     "clinicalStatus": {
+      "coding": [
+       {
+        "system": "http://terminology.hl7.org/CodeSystem/condition-clinical",
+        "code": "active"
+       }
+      ]
+     },
+     "verificationStatus": {
+      "coding": [
+       {
+        "system": "http://terminology.hl7.org/CodeSystem/condition-ver-status",
+        "code": "confirmed"
+       }
+      ]
+     },
+     "recordedDaysAgo": 400
+    },
+    {
+     "resourceType": "Condition",
+     "id": "c20",
+     "subject": {
+      "reference": "Patient/fic-pt-1"
+     },
+     "code": {
+      "text": "Fictional chronic condition 20"
+     },
+     "clinicalStatus": {
+      "coding": [
+       {
+        "system": "http://terminology.hl7.org/CodeSystem/condition-clinical",
+        "code": "active"
+       }
+      ]
+     },
+     "verificationStatus": {
+      "coding": [
+       {
+        "system": "http://terminology.hl7.org/CodeSystem/condition-ver-status",
+        "code": "confirmed"
+       }
+      ]
+     },
+     "recordedDaysAgo": 400
+    },
+    {
+     "resourceType": "MedicationRequest",
+     "id": "m1",
+     "status": "active",
+     "intent": "order",
+     "subject": {
+      "reference": "Patient/fic-pt-1"
+     },
+     "medicationCodeableConcept": {
+      "text": "Fictional medicine 1 10 mg oral tablet"
+     },
+     "authoredDaysAgo": 200,
+     "dosageInstruction": [
+      {
+       "text": "10 mg once daily"
+      }
+     ]
+    },
+    {
+     "resourceType": "MedicationRequest",
+     "id": "m2",
+     "status": "active",
+     "intent": "order",
+     "subject": {
+      "reference": "Patient/fic-pt-1"
+     },
+     "medicationCodeableConcept": {
+      "text": "Fictional medicine 2 10 mg oral tablet"
+     },
+     "authoredDaysAgo": 200,
+     "dosageInstruction": [
+      {
+       "text": "10 mg once daily"
+      }
+     ]
+    },
+    {
+     "resourceType": "MedicationRequest",
+     "id": "m3",
+     "status": "active",
+     "intent": "order",
+     "subject": {
+      "reference": "Patient/fic-pt-1"
+     },
+     "medicationCodeableConcept": {
+      "text": "Fictional medicine 3 10 mg oral tablet"
+     },
+     "authoredDaysAgo": 200,
+     "dosageInstruction": [
+      {
+       "text": "10 mg once daily"
+      }
+     ]
+    },
+    {
+     "resourceType": "MedicationRequest",
+     "id": "m4",
+     "status": "active",
+     "intent": "order",
+     "subject": {
+      "reference": "Patient/fic-pt-1"
+     },
+     "medicationCodeableConcept": {
+      "text": "Fictional medicine 4 10 mg oral tablet"
+     },
+     "authoredDaysAgo": 200,
+     "dosageInstruction": [
+      {
+       "text": "10 mg once daily"
+      }
+     ]
+    },
+    {
+     "resourceType": "MedicationRequest",
+     "id": "m5",
+     "status": "active",
+     "intent": "order",
+     "subject": {
+      "reference": "Patient/fic-pt-1"
+     },
+     "medicationCodeableConcept": {
+      "text": "Fictional medicine 5 10 mg oral tablet"
+     },
+     "authoredDaysAgo": 200,
+     "dosageInstruction": [
+      {
+       "text": "10 mg once daily"
+      }
+     ]
+    },
+    {
+     "resourceType": "MedicationRequest",
+     "id": "m6",
+     "status": "active",
+     "intent": "order",
+     "subject": {
+      "reference": "Patient/fic-pt-1"
+     },
+     "medicationCodeableConcept": {
+      "text": "Fictional medicine 6 10 mg oral tablet"
+     },
+     "authoredDaysAgo": 200,
+     "dosageInstruction": [
+      {
+       "text": "10 mg once daily"
+      }
+     ]
+    },
+    {
+     "resourceType": "MedicationRequest",
+     "id": "m7",
+     "status": "active",
+     "intent": "order",
+     "subject": {
+      "reference": "Patient/fic-pt-1"
+     },
+     "medicationCodeableConcept": {
+      "text": "Fictional medicine 7 10 mg oral tablet"
+     },
+     "authoredDaysAgo": 200,
+     "dosageInstruction": [
+      {
+       "text": "10 mg once daily"
+      }
+     ]
+    },
+    {
+     "resourceType": "MedicationRequest",
+     "id": "m8",
+     "status": "active",
+     "intent": "order",
+     "subject": {
+      "reference": "Patient/fic-pt-1"
+     },
+     "medicationCodeableConcept": {
+      "text": "Fictional medicine 8 10 mg oral tablet"
+     },
+     "authoredDaysAgo": 200,
+     "dosageInstruction": [
+      {
+       "text": "10 mg once daily"
+      }
+     ]
+    },
+    {
+     "resourceType": "MedicationRequest",
+     "id": "m9",
+     "status": "active",
+     "intent": "order",
+     "subject": {
+      "reference": "Patient/fic-pt-1"
+     },
+     "medicationCodeableConcept": {
+      "text": "Fictional medicine 9 10 mg oral tablet"
+     },
+     "authoredDaysAgo": 200,
+     "dosageInstruction": [
+      {
+       "text": "10 mg once daily"
+      }
+     ]
+    },
+    {
+     "resourceType": "MedicationRequest",
+     "id": "m10",
+     "status": "active",
+     "intent": "order",
+     "subject": {
+      "reference": "Patient/fic-pt-1"
+     },
+     "medicationCodeableConcept": {
+      "text": "Fictional medicine 10 10 mg oral tablet"
+     },
+     "authoredDaysAgo": 200,
+     "dosageInstruction": [
+      {
+       "text": "10 mg once daily"
+      }
+     ]
+    },
+    {
+     "resourceType": "MedicationRequest",
+     "id": "m11",
+     "status": "active",
+     "intent": "order",
+     "subject": {
+      "reference": "Patient/fic-pt-1"
+     },
+     "medicationCodeableConcept": {
+      "text": "Fictional medicine 11 10 mg oral tablet"
+     },
+     "authoredDaysAgo": 200,
+     "dosageInstruction": [
+      {
+       "text": "10 mg once daily"
+      }
+     ]
+    },
+    {
+     "resourceType": "MedicationRequest",
+     "id": "m12",
+     "status": "active",
+     "intent": "order",
+     "subject": {
+      "reference": "Patient/fic-pt-1"
+     },
+     "medicationCodeableConcept": {
+      "text": "Fictional medicine 12 10 mg oral tablet"
+     },
+     "authoredDaysAgo": 200,
+     "dosageInstruction": [
+      {
+       "text": "10 mg once daily"
+      }
+     ]
+    },
+    {
+     "resourceType": "MedicationRequest",
+     "id": "m13",
+     "status": "active",
+     "intent": "order",
+     "subject": {
+      "reference": "Patient/fic-pt-1"
+     },
+     "medicationCodeableConcept": {
+      "text": "Fictional medicine 13 10 mg oral tablet"
+     },
+     "authoredDaysAgo": 200,
+     "dosageInstruction": [
+      {
+       "text": "10 mg once daily"
+      }
+     ]
+    },
+    {
+     "resourceType": "MedicationRequest",
+     "id": "m14",
+     "status": "active",
+     "intent": "order",
+     "subject": {
+      "reference": "Patient/fic-pt-1"
+     },
+     "medicationCodeableConcept": {
+      "text": "Fictional medicine 14 10 mg oral tablet"
+     },
+     "authoredDaysAgo": 200,
+     "dosageInstruction": [
+      {
+       "text": "10 mg once daily"
+      }
+     ]
+    },
+    {
+     "resourceType": "MedicationRequest",
+     "id": "m15",
+     "status": "active",
+     "intent": "order",
+     "subject": {
+      "reference": "Patient/fic-pt-1"
+     },
+     "medicationCodeableConcept": {
+      "text": "Fictional medicine 15 10 mg oral tablet"
+     },
+     "authoredDaysAgo": 200,
+     "dosageInstruction": [
+      {
+       "text": "10 mg once daily"
+      }
+     ]
+    },
+    {
+     "resourceType": "MedicationRequest",
+     "id": "m16",
+     "status": "active",
+     "intent": "order",
+     "subject": {
+      "reference": "Patient/fic-pt-1"
+     },
+     "medicationCodeableConcept": {
+      "text": "Fictional medicine 16 10 mg oral tablet"
+     },
+     "authoredDaysAgo": 200,
+     "dosageInstruction": [
+      {
+       "text": "10 mg once daily"
+      }
+     ]
+    },
+    {
+     "resourceType": "MedicationRequest",
+     "id": "m17",
+     "status": "active",
+     "intent": "order",
+     "subject": {
+      "reference": "Patient/fic-pt-1"
+     },
+     "medicationCodeableConcept": {
+      "text": "Fictional medicine 17 10 mg oral tablet"
+     },
+     "authoredDaysAgo": 200,
+     "dosageInstruction": [
+      {
+       "text": "10 mg once daily"
+      }
+     ]
+    },
+    {
+     "resourceType": "MedicationRequest",
+     "id": "m18",
+     "status": "active",
+     "intent": "order",
+     "subject": {
+      "reference": "Patient/fic-pt-1"
+     },
+     "medicationCodeableConcept": {
+      "text": "Fictional medicine 18 10 mg oral tablet"
+     },
+     "authoredDaysAgo": 200,
+     "dosageInstruction": [
+      {
+       "text": "10 mg once daily"
+      }
+     ]
+    },
+    {
+     "resourceType": "MedicationRequest",
+     "id": "m19",
+     "status": "active",
+     "intent": "order",
+     "subject": {
+      "reference": "Patient/fic-pt-1"
+     },
+     "medicationCodeableConcept": {
+      "text": "Fictional medicine 19 10 mg oral tablet"
+     },
+     "authoredDaysAgo": 200,
+     "dosageInstruction": [
+      {
+       "text": "10 mg once daily"
+      }
+     ]
+    },
+    {
+     "resourceType": "MedicationRequest",
+     "id": "m20",
+     "status": "active",
+     "intent": "order",
+     "subject": {
+      "reference": "Patient/fic-pt-1"
+     },
+     "medicationCodeableConcept": {
+      "text": "Fictional medicine 20 10 mg oral tablet"
+     },
+     "authoredDaysAgo": 200,
+     "dosageInstruction": [
+      {
+       "text": "10 mg once daily"
+      }
+     ]
+    },
+    {
+     "resourceType": "Observation",
+     "id": "l1",
+     "status": "final",
+     "category": [
+      {
+       "coding": [
+        {
+         "system": "http://terminology.hl7.org/CodeSystem/observation-category",
+         "code": "laboratory"
+        }
+       ]
+      }
+     ],
+     "subject": {
+      "reference": "Patient/fic-pt-1"
+     },
+     "code": {
+      "coding": [
+       {
+        "system": "http://loinc.org",
+        "code": "fic-1",
+        "display": "Fictional laboratory test 1"
+       }
+      ],
+      "text": "Fictional laboratory test 1"
+     },
+     "effectiveDaysAgo": 1,
+     "valueQuantity": {
+      "value": 1,
+      "unit": "mg/dL"
+     }
+    },
+    {
+     "resourceType": "Observation",
+     "id": "l2",
+     "status": "final",
+     "category": [
+      {
+       "coding": [
+        {
+         "system": "http://terminology.hl7.org/CodeSystem/observation-category",
+         "code": "laboratory"
+        }
+       ]
+      }
+     ],
+     "subject": {
+      "reference": "Patient/fic-pt-1"
+     },
+     "code": {
+      "coding": [
+       {
+        "system": "http://loinc.org",
+        "code": "fic-2",
+        "display": "Fictional laboratory test 2"
+       }
+      ],
+      "text": "Fictional laboratory test 2"
+     },
+     "effectiveDaysAgo": 2,
+     "valueQuantity": {
+      "value": 2,
+      "unit": "mg/dL"
+     }
+    },
+    {
+     "resourceType": "Observation",
+     "id": "l3",
+     "status": "final",
+     "category": [
+      {
+       "coding": [
+        {
+         "system": "http://terminology.hl7.org/CodeSystem/observation-category",
+         "code": "laboratory"
+        }
+       ]
+      }
+     ],
+     "subject": {
+      "reference": "Patient/fic-pt-1"
+     },
+     "code": {
+      "coding": [
+       {
+        "system": "http://loinc.org",
+        "code": "fic-3",
+        "display": "Fictional laboratory test 3"
+       }
+      ],
+      "text": "Fictional laboratory test 3"
+     },
+     "effectiveDaysAgo": 3,
+     "valueQuantity": {
+      "value": 3,
+      "unit": "mg/dL"
+     }
+    },
+    {
+     "resourceType": "Observation",
+     "id": "l4",
+     "status": "final",
+     "category": [
+      {
+       "coding": [
+        {
+         "system": "http://terminology.hl7.org/CodeSystem/observation-category",
+         "code": "laboratory"
+        }
+       ]
+      }
+     ],
+     "subject": {
+      "reference": "Patient/fic-pt-1"
+     },
+     "code": {
+      "coding": [
+       {
+        "system": "http://loinc.org",
+        "code": "fic-4",
+        "display": "Fictional laboratory test 4"
+       }
+      ],
+      "text": "Fictional laboratory test 4"
+     },
+     "effectiveDaysAgo": 4,
+     "valueQuantity": {
+      "value": 4,
+      "unit": "mg/dL"
+     }
+    },
+    {
+     "resourceType": "Observation",
+     "id": "l5",
+     "status": "final",
+     "category": [
+      {
+       "coding": [
+        {
+         "system": "http://terminology.hl7.org/CodeSystem/observation-category",
+         "code": "laboratory"
+        }
+       ]
+      }
+     ],
+     "subject": {
+      "reference": "Patient/fic-pt-1"
+     },
+     "code": {
+      "coding": [
+       {
+        "system": "http://loinc.org",
+        "code": "fic-5",
+        "display": "Fictional laboratory test 5"
+       }
+      ],
+      "text": "Fictional laboratory test 5"
+     },
+     "effectiveDaysAgo": 0,
+     "valueQuantity": {
+      "value": 5,
+      "unit": "mg/dL"
+     }
+    },
+    {
+     "resourceType": "Observation",
+     "id": "l6",
+     "status": "final",
+     "category": [
+      {
+       "coding": [
+        {
+         "system": "http://terminology.hl7.org/CodeSystem/observation-category",
+         "code": "laboratory"
+        }
+       ]
+      }
+     ],
+     "subject": {
+      "reference": "Patient/fic-pt-1"
+     },
+     "code": {
+      "coding": [
+       {
+        "system": "http://loinc.org",
+        "code": "fic-6",
+        "display": "Fictional laboratory test 6"
+       }
+      ],
+      "text": "Fictional laboratory test 6"
+     },
+     "effectiveDaysAgo": 1,
+     "valueQuantity": {
+      "value": 6,
+      "unit": "mg/dL"
+     }
+    },
+    {
+     "resourceType": "Observation",
+     "id": "l7",
+     "status": "final",
+     "category": [
+      {
+       "coding": [
+        {
+         "system": "http://terminology.hl7.org/CodeSystem/observation-category",
+         "code": "laboratory"
+        }
+       ]
+      }
+     ],
+     "subject": {
+      "reference": "Patient/fic-pt-1"
+     },
+     "code": {
+      "coding": [
+       {
+        "system": "http://loinc.org",
+        "code": "fic-7",
+        "display": "Fictional laboratory test 7"
+       }
+      ],
+      "text": "Fictional laboratory test 7"
+     },
+     "effectiveDaysAgo": 2,
+     "valueQuantity": {
+      "value": 7,
+      "unit": "mg/dL"
+     }
+    },
+    {
+     "resourceType": "Observation",
+     "id": "l8",
+     "status": "final",
+     "category": [
+      {
+       "coding": [
+        {
+         "system": "http://terminology.hl7.org/CodeSystem/observation-category",
+         "code": "laboratory"
+        }
+       ]
+      }
+     ],
+     "subject": {
+      "reference": "Patient/fic-pt-1"
+     },
+     "code": {
+      "coding": [
+       {
+        "system": "http://loinc.org",
+        "code": "fic-8",
+        "display": "Fictional laboratory test 8"
+       }
+      ],
+      "text": "Fictional laboratory test 8"
+     },
+     "effectiveDaysAgo": 3,
+     "valueQuantity": {
+      "value": 8,
+      "unit": "mg/dL"
+     }
+    },
+    {
+     "resourceType": "Observation",
+     "id": "l9",
+     "status": "final",
+     "category": [
+      {
+       "coding": [
+        {
+         "system": "http://terminology.hl7.org/CodeSystem/observation-category",
+         "code": "laboratory"
+        }
+       ]
+      }
+     ],
+     "subject": {
+      "reference": "Patient/fic-pt-1"
+     },
+     "code": {
+      "coding": [
+       {
+        "system": "http://loinc.org",
+        "code": "fic-9",
+        "display": "Fictional laboratory test 9"
+       }
+      ],
+      "text": "Fictional laboratory test 9"
+     },
+     "effectiveDaysAgo": 4,
+     "valueQuantity": {
+      "value": 9,
+      "unit": "mg/dL"
+     }
+    },
+    {
+     "resourceType": "Observation",
+     "id": "l10",
+     "status": "final",
+     "category": [
+      {
+       "coding": [
+        {
+         "system": "http://terminology.hl7.org/CodeSystem/observation-category",
+         "code": "laboratory"
+        }
+       ]
+      }
+     ],
+     "subject": {
+      "reference": "Patient/fic-pt-1"
+     },
+     "code": {
+      "coding": [
+       {
+        "system": "http://loinc.org",
+        "code": "fic-10",
+        "display": "Fictional laboratory test 10"
+       }
+      ],
+      "text": "Fictional laboratory test 10"
+     },
+     "effectiveDaysAgo": 0,
+     "valueQuantity": {
+      "value": 10,
+      "unit": "mg/dL"
+     }
+    },
+    {
+     "resourceType": "Observation",
+     "id": "l11",
+     "status": "final",
+     "category": [
+      {
+       "coding": [
+        {
+         "system": "http://terminology.hl7.org/CodeSystem/observation-category",
+         "code": "laboratory"
+        }
+       ]
+      }
+     ],
+     "subject": {
+      "reference": "Patient/fic-pt-1"
+     },
+     "code": {
+      "coding": [
+       {
+        "system": "http://loinc.org",
+        "code": "fic-11",
+        "display": "Fictional laboratory test 11"
+       }
+      ],
+      "text": "Fictional laboratory test 11"
+     },
+     "effectiveDaysAgo": 1,
+     "valueQuantity": {
+      "value": 11,
+      "unit": "mg/dL"
+     }
+    },
+    {
+     "resourceType": "Observation",
+     "id": "l12",
+     "status": "final",
+     "category": [
+      {
+       "coding": [
+        {
+         "system": "http://terminology.hl7.org/CodeSystem/observation-category",
+         "code": "laboratory"
+        }
+       ]
+      }
+     ],
+     "subject": {
+      "reference": "Patient/fic-pt-1"
+     },
+     "code": {
+      "coding": [
+       {
+        "system": "http://loinc.org",
+        "code": "fic-12",
+        "display": "Fictional laboratory test 12"
+       }
+      ],
+      "text": "Fictional laboratory test 12"
+     },
+     "effectiveDaysAgo": 2,
+     "valueQuantity": {
+      "value": 12,
+      "unit": "mg/dL"
+     }
+    },
+    {
+     "resourceType": "Observation",
+     "id": "l13",
+     "status": "final",
+     "category": [
+      {
+       "coding": [
+        {
+         "system": "http://terminology.hl7.org/CodeSystem/observation-category",
+         "code": "laboratory"
+        }
+       ]
+      }
+     ],
+     "subject": {
+      "reference": "Patient/fic-pt-1"
+     },
+     "code": {
+      "coding": [
+       {
+        "system": "http://loinc.org",
+        "code": "fic-13",
+        "display": "Fictional laboratory test 13"
+       }
+      ],
+      "text": "Fictional laboratory test 13"
+     },
+     "effectiveDaysAgo": 3,
+     "valueQuantity": {
+      "value": 13,
+      "unit": "mg/dL"
+     }
+    },
+    {
+     "resourceType": "Observation",
+     "id": "l14",
+     "status": "final",
+     "category": [
+      {
+       "coding": [
+        {
+         "system": "http://terminology.hl7.org/CodeSystem/observation-category",
+         "code": "laboratory"
+        }
+       ]
+      }
+     ],
+     "subject": {
+      "reference": "Patient/fic-pt-1"
+     },
+     "code": {
+      "coding": [
+       {
+        "system": "http://loinc.org",
+        "code": "fic-14",
+        "display": "Fictional laboratory test 14"
+       }
+      ],
+      "text": "Fictional laboratory test 14"
+     },
+     "effectiveDaysAgo": 4,
+     "valueQuantity": {
+      "value": 14,
+      "unit": "mg/dL"
+     }
+    },
+    {
+     "resourceType": "Observation",
+     "id": "l15",
+     "status": "final",
+     "category": [
+      {
+       "coding": [
+        {
+         "system": "http://terminology.hl7.org/CodeSystem/observation-category",
+         "code": "laboratory"
+        }
+       ]
+      }
+     ],
+     "subject": {
+      "reference": "Patient/fic-pt-1"
+     },
+     "code": {
+      "coding": [
+       {
+        "system": "http://loinc.org",
+        "code": "fic-15",
+        "display": "Fictional laboratory test 15"
+       }
+      ],
+      "text": "Fictional laboratory test 15"
+     },
+     "effectiveDaysAgo": 0,
+     "valueQuantity": {
+      "value": 15,
+      "unit": "mg/dL"
+     }
+    },
+    {
+     "resourceType": "Observation",
+     "id": "l16",
+     "status": "final",
+     "category": [
+      {
+       "coding": [
+        {
+         "system": "http://terminology.hl7.org/CodeSystem/observation-category",
+         "code": "laboratory"
+        }
+       ]
+      }
+     ],
+     "subject": {
+      "reference": "Patient/fic-pt-1"
+     },
+     "code": {
+      "coding": [
+       {
+        "system": "http://loinc.org",
+        "code": "fic-16",
+        "display": "Fictional laboratory test 16"
+       }
+      ],
+      "text": "Fictional laboratory test 16"
+     },
+     "effectiveDaysAgo": 1,
+     "valueQuantity": {
+      "value": 16,
+      "unit": "mg/dL"
+     }
+    },
+    {
+     "resourceType": "Observation",
+     "id": "l17",
+     "status": "final",
+     "category": [
+      {
+       "coding": [
+        {
+         "system": "http://terminology.hl7.org/CodeSystem/observation-category",
+         "code": "laboratory"
+        }
+       ]
+      }
+     ],
+     "subject": {
+      "reference": "Patient/fic-pt-1"
+     },
+     "code": {
+      "coding": [
+       {
+        "system": "http://loinc.org",
+        "code": "fic-17",
+        "display": "Fictional laboratory test 17"
+       }
+      ],
+      "text": "Fictional laboratory test 17"
+     },
+     "effectiveDaysAgo": 2,
+     "valueQuantity": {
+      "value": 17,
+      "unit": "mg/dL"
+     }
+    },
+    {
+     "resourceType": "Observation",
+     "id": "l18",
+     "status": "final",
+     "category": [
+      {
+       "coding": [
+        {
+         "system": "http://terminology.hl7.org/CodeSystem/observation-category",
+         "code": "laboratory"
+        }
+       ]
+      }
+     ],
+     "subject": {
+      "reference": "Patient/fic-pt-1"
+     },
+     "code": {
+      "coding": [
+       {
+        "system": "http://loinc.org",
+        "code": "fic-18",
+        "display": "Fictional laboratory test 18"
+       }
+      ],
+      "text": "Fictional laboratory test 18"
+     },
+     "effectiveDaysAgo": 3,
+     "valueQuantity": {
+      "value": 18,
+      "unit": "mg/dL"
+     }
+    },
+    {
+     "resourceType": "Observation",
+     "id": "l19",
+     "status": "final",
+     "category": [
+      {
+       "coding": [
+        {
+         "system": "http://terminology.hl7.org/CodeSystem/observation-category",
+         "code": "laboratory"
+        }
+       ]
+      }
+     ],
+     "subject": {
+      "reference": "Patient/fic-pt-1"
+     },
+     "code": {
+      "coding": [
+       {
+        "system": "http://loinc.org",
+        "code": "fic-19",
+        "display": "Fictional laboratory test 19"
+       }
+      ],
+      "text": "Fictional laboratory test 19"
+     },
+     "effectiveDaysAgo": 4,
+     "valueQuantity": {
+      "value": 19,
+      "unit": "mg/dL"
+     }
+    },
+    {
+     "resourceType": "Observation",
+     "id": "l20",
+     "status": "final",
+     "category": [
+      {
+       "coding": [
+        {
+         "system": "http://terminology.hl7.org/CodeSystem/observation-category",
+         "code": "laboratory"
+        }
+       ]
+      }
+     ],
+     "subject": {
+      "reference": "Patient/fic-pt-1"
+     },
+     "code": {
+      "coding": [
+       {
+        "system": "http://loinc.org",
+        "code": "fic-20",
+        "display": "Fictional laboratory test 20"
+       }
+      ],
+      "text": "Fictional laboratory test 20"
+     },
+     "effectiveDaysAgo": 0,
+     "valueQuantity": {
+      "value": 20,
+      "unit": "mg/dL"
+     }
+    },
+    {
+     "resourceType": "Observation",
+     "id": "l21",
+     "status": "final",
+     "category": [
+      {
+       "coding": [
+        {
+         "system": "http://terminology.hl7.org/CodeSystem/observation-category",
+         "code": "laboratory"
+        }
+       ]
+      }
+     ],
+     "subject": {
+      "reference": "Patient/fic-pt-1"
+     },
+     "code": {
+      "coding": [
+       {
+        "system": "http://loinc.org",
+        "code": "fic-21",
+        "display": "Fictional laboratory test 21"
+       }
+      ],
+      "text": "Fictional laboratory test 21"
+     },
+     "effectiveDaysAgo": 1,
+     "valueQuantity": {
+      "value": 21,
+      "unit": "mg/dL"
+     }
+    },
+    {
+     "resourceType": "Observation",
+     "id": "l22",
+     "status": "final",
+     "category": [
+      {
+       "coding": [
+        {
+         "system": "http://terminology.hl7.org/CodeSystem/observation-category",
+         "code": "laboratory"
+        }
+       ]
+      }
+     ],
+     "subject": {
+      "reference": "Patient/fic-pt-1"
+     },
+     "code": {
+      "coding": [
+       {
+        "system": "http://loinc.org",
+        "code": "fic-22",
+        "display": "Fictional laboratory test 22"
+       }
+      ],
+      "text": "Fictional laboratory test 22"
+     },
+     "effectiveDaysAgo": 2,
+     "valueQuantity": {
+      "value": 22,
+      "unit": "mg/dL"
+     }
+    },
+    {
+     "resourceType": "Observation",
+     "id": "l23",
+     "status": "final",
+     "category": [
+      {
+       "coding": [
+        {
+         "system": "http://terminology.hl7.org/CodeSystem/observation-category",
+         "code": "laboratory"
+        }
+       ]
+      }
+     ],
+     "subject": {
+      "reference": "Patient/fic-pt-1"
+     },
+     "code": {
+      "coding": [
+       {
+        "system": "http://loinc.org",
+        "code": "fic-23",
+        "display": "Fictional laboratory test 23"
+       }
+      ],
+      "text": "Fictional laboratory test 23"
+     },
+     "effectiveDaysAgo": 3,
+     "valueQuantity": {
+      "value": 23,
+      "unit": "mg/dL"
+     }
+    },
+    {
+     "resourceType": "Observation",
+     "id": "l24",
+     "status": "final",
+     "category": [
+      {
+       "coding": [
+        {
+         "system": "http://terminology.hl7.org/CodeSystem/observation-category",
+         "code": "laboratory"
+        }
+       ]
+      }
+     ],
+     "subject": {
+      "reference": "Patient/fic-pt-1"
+     },
+     "code": {
+      "coding": [
+       {
+        "system": "http://loinc.org",
+        "code": "fic-24",
+        "display": "Fictional laboratory test 24"
+       }
+      ],
+      "text": "Fictional laboratory test 24"
+     },
+     "effectiveDaysAgo": 4,
+     "valueQuantity": {
+      "value": 24,
+      "unit": "mg/dL"
+     }
+    },
+    {
+     "resourceType": "Observation",
+     "id": "l25",
+     "status": "final",
+     "category": [
+      {
+       "coding": [
+        {
+         "system": "http://terminology.hl7.org/CodeSystem/observation-category",
+         "code": "laboratory"
+        }
+       ]
+      }
+     ],
+     "subject": {
+      "reference": "Patient/fic-pt-1"
+     },
+     "code": {
+      "coding": [
+       {
+        "system": "http://loinc.org",
+        "code": "fic-25",
+        "display": "Fictional laboratory test 25"
+       }
+      ],
+      "text": "Fictional laboratory test 25"
+     },
+     "effectiveDaysAgo": 0,
+     "valueQuantity": {
+      "value": 25,
+      "unit": "mg/dL"
+     }
+    },
+    {
+     "resourceType": "Observation",
+     "id": "l26",
+     "status": "final",
+     "category": [
+      {
+       "coding": [
+        {
+         "system": "http://terminology.hl7.org/CodeSystem/observation-category",
+         "code": "laboratory"
+        }
+       ]
+      }
+     ],
+     "subject": {
+      "reference": "Patient/fic-pt-1"
+     },
+     "code": {
+      "coding": [
+       {
+        "system": "http://loinc.org",
+        "code": "fic-26",
+        "display": "Fictional laboratory test 26"
+       }
+      ],
+      "text": "Fictional laboratory test 26"
+     },
+     "effectiveDaysAgo": 1,
+     "valueQuantity": {
+      "value": 26,
+      "unit": "mg/dL"
+     }
+    },
+    {
+     "resourceType": "Observation",
+     "id": "l27",
+     "status": "final",
+     "category": [
+      {
+       "coding": [
+        {
+         "system": "http://terminology.hl7.org/CodeSystem/observation-category",
+         "code": "laboratory"
+        }
+       ]
+      }
+     ],
+     "subject": {
+      "reference": "Patient/fic-pt-1"
+     },
+     "code": {
+      "coding": [
+       {
+        "system": "http://loinc.org",
+        "code": "fic-27",
+        "display": "Fictional laboratory test 27"
+       }
+      ],
+      "text": "Fictional laboratory test 27"
+     },
+     "effectiveDaysAgo": 2,
+     "valueQuantity": {
+      "value": 27,
+      "unit": "mg/dL"
+     }
+    },
+    {
+     "resourceType": "Observation",
+     "id": "l28",
+     "status": "final",
+     "category": [
+      {
+       "coding": [
+        {
+         "system": "http://terminology.hl7.org/CodeSystem/observation-category",
+         "code": "laboratory"
+        }
+       ]
+      }
+     ],
+     "subject": {
+      "reference": "Patient/fic-pt-1"
+     },
+     "code": {
+      "coding": [
+       {
+        "system": "http://loinc.org",
+        "code": "fic-28",
+        "display": "Fictional laboratory test 28"
+       }
+      ],
+      "text": "Fictional laboratory test 28"
+     },
+     "effectiveDaysAgo": 3,
+     "valueQuantity": {
+      "value": 28,
+      "unit": "mg/dL"
+     }
+    },
+    {
+     "resourceType": "Observation",
+     "id": "l29",
+     "status": "final",
+     "category": [
+      {
+       "coding": [
+        {
+         "system": "http://terminology.hl7.org/CodeSystem/observation-category",
+         "code": "laboratory"
+        }
+       ]
+      }
+     ],
+     "subject": {
+      "reference": "Patient/fic-pt-1"
+     },
+     "code": {
+      "coding": [
+       {
+        "system": "http://loinc.org",
+        "code": "fic-29",
+        "display": "Fictional laboratory test 29"
+       }
+      ],
+      "text": "Fictional laboratory test 29"
+     },
+     "effectiveDaysAgo": 4,
+     "valueQuantity": {
+      "value": 29,
+      "unit": "mg/dL"
+     }
+    },
+    {
+     "resourceType": "Observation",
+     "id": "l30",
+     "status": "final",
+     "category": [
+      {
+       "coding": [
+        {
+         "system": "http://terminology.hl7.org/CodeSystem/observation-category",
+         "code": "laboratory"
+        }
+       ]
+      }
+     ],
+     "subject": {
+      "reference": "Patient/fic-pt-1"
+     },
+     "code": {
+      "coding": [
+       {
+        "system": "http://loinc.org",
+        "code": "fic-30",
+        "display": "Fictional laboratory test 30"
+       }
+      ],
+      "text": "Fictional laboratory test 30"
+     },
+     "effectiveDaysAgo": 0,
+     "valueQuantity": {
+      "value": 30,
+      "unit": "mg/dL"
+     }
+    },
+    {
+     "resourceType": "Observation",
+     "id": "l31",
+     "status": "final",
+     "category": [
+      {
+       "coding": [
+        {
+         "system": "http://terminology.hl7.org/CodeSystem/observation-category",
+         "code": "laboratory"
+        }
+       ]
+      }
+     ],
+     "subject": {
+      "reference": "Patient/fic-pt-1"
+     },
+     "code": {
+      "coding": [
+       {
+        "system": "http://loinc.org",
+        "code": "fic-31",
+        "display": "Fictional laboratory test 31"
+       }
+      ],
+      "text": "Fictional laboratory test 31"
+     },
+     "effectiveDaysAgo": 1,
+     "valueQuantity": {
+      "value": 31,
+      "unit": "mg/dL"
+     }
+    },
+    {
+     "resourceType": "Observation",
+     "id": "l32",
+     "status": "final",
+     "category": [
+      {
+       "coding": [
+        {
+         "system": "http://terminology.hl7.org/CodeSystem/observation-category",
+         "code": "laboratory"
+        }
+       ]
+      }
+     ],
+     "subject": {
+      "reference": "Patient/fic-pt-1"
+     },
+     "code": {
+      "coding": [
+       {
+        "system": "http://loinc.org",
+        "code": "fic-32",
+        "display": "Fictional laboratory test 32"
+       }
+      ],
+      "text": "Fictional laboratory test 32"
+     },
+     "effectiveDaysAgo": 2,
+     "valueQuantity": {
+      "value": 32,
+      "unit": "mg/dL"
+     }
+    },
+    {
+     "resourceType": "Observation",
+     "id": "l33",
+     "status": "final",
+     "category": [
+      {
+       "coding": [
+        {
+         "system": "http://terminology.hl7.org/CodeSystem/observation-category",
+         "code": "laboratory"
+        }
+       ]
+      }
+     ],
+     "subject": {
+      "reference": "Patient/fic-pt-1"
+     },
+     "code": {
+      "coding": [
+       {
+        "system": "http://loinc.org",
+        "code": "fic-33",
+        "display": "Fictional laboratory test 33"
+       }
+      ],
+      "text": "Fictional laboratory test 33"
+     },
+     "effectiveDaysAgo": 3,
+     "valueQuantity": {
+      "value": 33,
+      "unit": "mg/dL"
+     }
+    },
+    {
+     "resourceType": "Observation",
+     "id": "l34",
+     "status": "final",
+     "category": [
+      {
+       "coding": [
+        {
+         "system": "http://terminology.hl7.org/CodeSystem/observation-category",
+         "code": "laboratory"
+        }
+       ]
+      }
+     ],
+     "subject": {
+      "reference": "Patient/fic-pt-1"
+     },
+     "code": {
+      "coding": [
+       {
+        "system": "http://loinc.org",
+        "code": "fic-34",
+        "display": "Fictional laboratory test 34"
+       }
+      ],
+      "text": "Fictional laboratory test 34"
+     },
+     "effectiveDaysAgo": 4,
+     "valueQuantity": {
+      "value": 34,
+      "unit": "mg/dL"
+     }
+    },
+    {
+     "resourceType": "Observation",
+     "id": "l35",
+     "status": "final",
+     "category": [
+      {
+       "coding": [
+        {
+         "system": "http://terminology.hl7.org/CodeSystem/observation-category",
+         "code": "laboratory"
+        }
+       ]
+      }
+     ],
+     "subject": {
+      "reference": "Patient/fic-pt-1"
+     },
+     "code": {
+      "coding": [
+       {
+        "system": "http://loinc.org",
+        "code": "fic-35",
+        "display": "Fictional laboratory test 35"
+       }
+      ],
+      "text": "Fictional laboratory test 35"
+     },
+     "effectiveDaysAgo": 0,
+     "valueQuantity": {
+      "value": 35,
+      "unit": "mg/dL"
+     }
+    },
+    {
+     "resourceType": "Observation",
+     "id": "l36",
+     "status": "final",
+     "category": [
+      {
+       "coding": [
+        {
+         "system": "http://terminology.hl7.org/CodeSystem/observation-category",
+         "code": "laboratory"
+        }
+       ]
+      }
+     ],
+     "subject": {
+      "reference": "Patient/fic-pt-1"
+     },
+     "code": {
+      "coding": [
+       {
+        "system": "http://loinc.org",
+        "code": "fic-36",
+        "display": "Fictional laboratory test 36"
+       }
+      ],
+      "text": "Fictional laboratory test 36"
+     },
+     "effectiveDaysAgo": 1,
+     "valueQuantity": {
+      "value": 36,
+      "unit": "mg/dL"
+     }
+    },
+    {
+     "resourceType": "Observation",
+     "id": "l37",
+     "status": "final",
+     "category": [
+      {
+       "coding": [
+        {
+         "system": "http://terminology.hl7.org/CodeSystem/observation-category",
+         "code": "laboratory"
+        }
+       ]
+      }
+     ],
+     "subject": {
+      "reference": "Patient/fic-pt-1"
+     },
+     "code": {
+      "coding": [
+       {
+        "system": "http://loinc.org",
+        "code": "fic-37",
+        "display": "Fictional laboratory test 37"
+       }
+      ],
+      "text": "Fictional laboratory test 37"
+     },
+     "effectiveDaysAgo": 2,
+     "valueQuantity": {
+      "value": 37,
+      "unit": "mg/dL"
+     }
+    },
+    {
+     "resourceType": "Observation",
+     "id": "l38",
+     "status": "final",
+     "category": [
+      {
+       "coding": [
+        {
+         "system": "http://terminology.hl7.org/CodeSystem/observation-category",
+         "code": "laboratory"
+        }
+       ]
+      }
+     ],
+     "subject": {
+      "reference": "Patient/fic-pt-1"
+     },
+     "code": {
+      "coding": [
+       {
+        "system": "http://loinc.org",
+        "code": "fic-38",
+        "display": "Fictional laboratory test 38"
+       }
+      ],
+      "text": "Fictional laboratory test 38"
+     },
+     "effectiveDaysAgo": 3,
+     "valueQuantity": {
+      "value": 38,
+      "unit": "mg/dL"
+     }
+    },
+    {
+     "resourceType": "Observation",
+     "id": "l39",
+     "status": "final",
+     "category": [
+      {
+       "coding": [
+        {
+         "system": "http://terminology.hl7.org/CodeSystem/observation-category",
+         "code": "laboratory"
+        }
+       ]
+      }
+     ],
+     "subject": {
+      "reference": "Patient/fic-pt-1"
+     },
+     "code": {
+      "coding": [
+       {
+        "system": "http://loinc.org",
+        "code": "fic-39",
+        "display": "Fictional laboratory test 39"
+       }
+      ],
+      "text": "Fictional laboratory test 39"
+     },
+     "effectiveDaysAgo": 4,
+     "valueQuantity": {
+      "value": 39,
+      "unit": "mg/dL"
+     }
+    },
+    {
+     "resourceType": "Observation",
+     "id": "l40",
+     "status": "final",
+     "category": [
+      {
+       "coding": [
+        {
+         "system": "http://terminology.hl7.org/CodeSystem/observation-category",
+         "code": "laboratory"
+        }
+       ]
+      }
+     ],
+     "subject": {
+      "reference": "Patient/fic-pt-1"
+     },
+     "code": {
+      "coding": [
+       {
+        "system": "http://loinc.org",
+        "code": "fic-40",
+        "display": "Fictional laboratory test 40"
+       }
+      ],
+      "text": "Fictional laboratory test 40"
+     },
+     "effectiveDaysAgo": 0,
+     "valueQuantity": {
+      "value": 40,
+      "unit": "mg/dL"
+     }
+    },
+    {
+     "resourceType": "Observation",
+     "id": "l41",
+     "status": "final",
+     "category": [
+      {
+       "coding": [
+        {
+         "system": "http://terminology.hl7.org/CodeSystem/observation-category",
+         "code": "laboratory"
+        }
+       ]
+      }
+     ],
+     "subject": {
+      "reference": "Patient/fic-pt-1"
+     },
+     "code": {
+      "coding": [
+       {
+        "system": "http://loinc.org",
+        "code": "fic-41",
+        "display": "Fictional laboratory test 41"
+       }
+      ],
+      "text": "Fictional laboratory test 41"
+     },
+     "effectiveDaysAgo": 1,
+     "valueQuantity": {
+      "value": 41,
+      "unit": "mg/dL"
+     }
+    },
+    {
+     "resourceType": "Observation",
+     "id": "l42",
+     "status": "final",
+     "category": [
+      {
+       "coding": [
+        {
+         "system": "http://terminology.hl7.org/CodeSystem/observation-category",
+         "code": "laboratory"
+        }
+       ]
+      }
+     ],
+     "subject": {
+      "reference": "Patient/fic-pt-1"
+     },
+     "code": {
+      "coding": [
+       {
+        "system": "http://loinc.org",
+        "code": "fic-42",
+        "display": "Fictional laboratory test 42"
+       }
+      ],
+      "text": "Fictional laboratory test 42"
+     },
+     "effectiveDaysAgo": 2,
+     "valueQuantity": {
+      "value": 42,
+      "unit": "mg/dL"
+     }
+    },
+    {
+     "resourceType": "Observation",
+     "id": "l43",
+     "status": "final",
+     "category": [
+      {
+       "coding": [
+        {
+         "system": "http://terminology.hl7.org/CodeSystem/observation-category",
+         "code": "laboratory"
+        }
+       ]
+      }
+     ],
+     "subject": {
+      "reference": "Patient/fic-pt-1"
+     },
+     "code": {
+      "coding": [
+       {
+        "system": "http://loinc.org",
+        "code": "fic-43",
+        "display": "Fictional laboratory test 43"
+       }
+      ],
+      "text": "Fictional laboratory test 43"
+     },
+     "effectiveDaysAgo": 3,
+     "valueQuantity": {
+      "value": 43,
+      "unit": "mg/dL"
+     }
+    },
+    {
+     "resourceType": "Observation",
+     "id": "l44",
+     "status": "final",
+     "category": [
+      {
+       "coding": [
+        {
+         "system": "http://terminology.hl7.org/CodeSystem/observation-category",
+         "code": "laboratory"
+        }
+       ]
+      }
+     ],
+     "subject": {
+      "reference": "Patient/fic-pt-1"
+     },
+     "code": {
+      "coding": [
+       {
+        "system": "http://loinc.org",
+        "code": "fic-44",
+        "display": "Fictional laboratory test 44"
+       }
+      ],
+      "text": "Fictional laboratory test 44"
+     },
+     "effectiveDaysAgo": 4,
+     "valueQuantity": {
+      "value": 44,
+      "unit": "mg/dL"
+     }
+    },
+    {
+     "resourceType": "Observation",
+     "id": "l45",
+     "status": "final",
+     "category": [
+      {
+       "coding": [
+        {
+         "system": "http://terminology.hl7.org/CodeSystem/observation-category",
+         "code": "laboratory"
+        }
+       ]
+      }
+     ],
+     "subject": {
+      "reference": "Patient/fic-pt-1"
+     },
+     "code": {
+      "coding": [
+       {
+        "system": "http://loinc.org",
+        "code": "fic-45",
+        "display": "Fictional laboratory test 45"
+       }
+      ],
+      "text": "Fictional laboratory test 45"
+     },
+     "effectiveDaysAgo": 0,
+     "valueQuantity": {
+      "value": 45,
+      "unit": "mg/dL"
+     }
+    },
+    {
+     "resourceType": "Observation",
+     "id": "l46",
+     "status": "final",
+     "category": [
+      {
+       "coding": [
+        {
+         "system": "http://terminology.hl7.org/CodeSystem/observation-category",
+         "code": "laboratory"
+        }
+       ]
+      }
+     ],
+     "subject": {
+      "reference": "Patient/fic-pt-1"
+     },
+     "code": {
+      "coding": [
+       {
+        "system": "http://loinc.org",
+        "code": "fic-46",
+        "display": "Fictional laboratory test 46"
+       }
+      ],
+      "text": "Fictional laboratory test 46"
+     },
+     "effectiveDaysAgo": 1,
+     "valueQuantity": {
+      "value": 46,
+      "unit": "mg/dL"
+     }
+    },
+    {
+     "resourceType": "Observation",
+     "id": "l47",
+     "status": "final",
+     "category": [
+      {
+       "coding": [
+        {
+         "system": "http://terminology.hl7.org/CodeSystem/observation-category",
+         "code": "laboratory"
+        }
+       ]
+      }
+     ],
+     "subject": {
+      "reference": "Patient/fic-pt-1"
+     },
+     "code": {
+      "coding": [
+       {
+        "system": "http://loinc.org",
+        "code": "fic-47",
+        "display": "Fictional laboratory test 47"
+       }
+      ],
+      "text": "Fictional laboratory test 47"
+     },
+     "effectiveDaysAgo": 2,
+     "valueQuantity": {
+      "value": 47,
+      "unit": "mg/dL"
+     }
+    },
+    {
+     "resourceType": "Observation",
+     "id": "l48",
+     "status": "final",
+     "category": [
+      {
+       "coding": [
+        {
+         "system": "http://terminology.hl7.org/CodeSystem/observation-category",
+         "code": "laboratory"
+        }
+       ]
+      }
+     ],
+     "subject": {
+      "reference": "Patient/fic-pt-1"
+     },
+     "code": {
+      "coding": [
+       {
+        "system": "http://loinc.org",
+        "code": "fic-48",
+        "display": "Fictional laboratory test 48"
+       }
+      ],
+      "text": "Fictional laboratory test 48"
+     },
+     "effectiveDaysAgo": 3,
+     "valueQuantity": {
+      "value": 48,
+      "unit": "mg/dL"
+     }
+    },
+    {
+     "resourceType": "Observation",
+     "id": "l49",
+     "status": "final",
+     "category": [
+      {
+       "coding": [
+        {
+         "system": "http://terminology.hl7.org/CodeSystem/observation-category",
+         "code": "laboratory"
+        }
+       ]
+      }
+     ],
+     "subject": {
+      "reference": "Patient/fic-pt-1"
+     },
+     "code": {
+      "coding": [
+       {
+        "system": "http://loinc.org",
+        "code": "fic-49",
+        "display": "Fictional laboratory test 49"
+       }
+      ],
+      "text": "Fictional laboratory test 49"
+     },
+     "effectiveDaysAgo": 4,
+     "valueQuantity": {
+      "value": 49,
+      "unit": "mg/dL"
+     }
+    },
+    {
+     "resourceType": "Observation",
+     "id": "l50",
+     "status": "final",
+     "category": [
+      {
+       "coding": [
+        {
+         "system": "http://terminology.hl7.org/CodeSystem/observation-category",
+         "code": "laboratory"
+        }
+       ]
+      }
+     ],
+     "subject": {
+      "reference": "Patient/fic-pt-1"
+     },
+     "code": {
+      "coding": [
+       {
+        "system": "http://loinc.org",
+        "code": "fic-50",
+        "display": "Fictional laboratory test 50"
+       }
+      ],
+      "text": "Fictional laboratory test 50"
+     },
+     "effectiveDaysAgo": 0,
+     "valueQuantity": {
+      "value": 50,
+      "unit": "mg/dL"
+     }
+    },
+    {
+     "resourceType": "Observation",
+     "id": "l51",
+     "status": "final",
+     "category": [
+      {
+       "coding": [
+        {
+         "system": "http://terminology.hl7.org/CodeSystem/observation-category",
+         "code": "laboratory"
+        }
+       ]
+      }
+     ],
+     "subject": {
+      "reference": "Patient/fic-pt-1"
+     },
+     "code": {
+      "coding": [
+       {
+        "system": "http://loinc.org",
+        "code": "fic-51",
+        "display": "Fictional laboratory test 51"
+       }
+      ],
+      "text": "Fictional laboratory test 51"
+     },
+     "effectiveDaysAgo": 1,
+     "valueQuantity": {
+      "value": 51,
+      "unit": "mg/dL"
+     }
+    },
+    {
+     "resourceType": "Observation",
+     "id": "l52",
+     "status": "final",
+     "category": [
+      {
+       "coding": [
+        {
+         "system": "http://terminology.hl7.org/CodeSystem/observation-category",
+         "code": "laboratory"
+        }
+       ]
+      }
+     ],
+     "subject": {
+      "reference": "Patient/fic-pt-1"
+     },
+     "code": {
+      "coding": [
+       {
+        "system": "http://loinc.org",
+        "code": "fic-52",
+        "display": "Fictional laboratory test 52"
+       }
+      ],
+      "text": "Fictional laboratory test 52"
+     },
+     "effectiveDaysAgo": 2,
+     "valueQuantity": {
+      "value": 52,
+      "unit": "mg/dL"
+     }
+    },
+    {
+     "resourceType": "Observation",
+     "id": "l53",
+     "status": "final",
+     "category": [
+      {
+       "coding": [
+        {
+         "system": "http://terminology.hl7.org/CodeSystem/observation-category",
+         "code": "laboratory"
+        }
+       ]
+      }
+     ],
+     "subject": {
+      "reference": "Patient/fic-pt-1"
+     },
+     "code": {
+      "coding": [
+       {
+        "system": "http://loinc.org",
+        "code": "fic-53",
+        "display": "Fictional laboratory test 53"
+       }
+      ],
+      "text": "Fictional laboratory test 53"
+     },
+     "effectiveDaysAgo": 3,
+     "valueQuantity": {
+      "value": 53,
+      "unit": "mg/dL"
+     }
+    },
+    {
+     "resourceType": "Observation",
+     "id": "l54",
+     "status": "final",
+     "category": [
+      {
+       "coding": [
+        {
+         "system": "http://terminology.hl7.org/CodeSystem/observation-category",
+         "code": "laboratory"
+        }
+       ]
+      }
+     ],
+     "subject": {
+      "reference": "Patient/fic-pt-1"
+     },
+     "code": {
+      "coding": [
+       {
+        "system": "http://loinc.org",
+        "code": "fic-54",
+        "display": "Fictional laboratory test 54"
+       }
+      ],
+      "text": "Fictional laboratory test 54"
+     },
+     "effectiveDaysAgo": 4,
+     "valueQuantity": {
+      "value": 54,
+      "unit": "mg/dL"
+     }
+    },
+    {
+     "resourceType": "Observation",
+     "id": "l55",
+     "status": "final",
+     "category": [
+      {
+       "coding": [
+        {
+         "system": "http://terminology.hl7.org/CodeSystem/observation-category",
+         "code": "laboratory"
+        }
+       ]
+      }
+     ],
+     "subject": {
+      "reference": "Patient/fic-pt-1"
+     },
+     "code": {
+      "coding": [
+       {
+        "system": "http://loinc.org",
+        "code": "fic-55",
+        "display": "Fictional laboratory test 55"
+       }
+      ],
+      "text": "Fictional laboratory test 55"
+     },
+     "effectiveDaysAgo": 0,
+     "valueQuantity": {
+      "value": 55,
+      "unit": "mg/dL"
+     }
+    },
+    {
+     "resourceType": "Observation",
+     "id": "l56",
+     "status": "final",
+     "category": [
+      {
+       "coding": [
+        {
+         "system": "http://terminology.hl7.org/CodeSystem/observation-category",
+         "code": "laboratory"
+        }
+       ]
+      }
+     ],
+     "subject": {
+      "reference": "Patient/fic-pt-1"
+     },
+     "code": {
+      "coding": [
+       {
+        "system": "http://loinc.org",
+        "code": "fic-56",
+        "display": "Fictional laboratory test 56"
+       }
+      ],
+      "text": "Fictional laboratory test 56"
+     },
+     "effectiveDaysAgo": 1,
+     "valueQuantity": {
+      "value": 56,
+      "unit": "mg/dL"
+     }
+    },
+    {
+     "resourceType": "Observation",
+     "id": "l57",
+     "status": "final",
+     "category": [
+      {
+       "coding": [
+        {
+         "system": "http://terminology.hl7.org/CodeSystem/observation-category",
+         "code": "laboratory"
+        }
+       ]
+      }
+     ],
+     "subject": {
+      "reference": "Patient/fic-pt-1"
+     },
+     "code": {
+      "coding": [
+       {
+        "system": "http://loinc.org",
+        "code": "fic-57",
+        "display": "Fictional laboratory test 57"
+       }
+      ],
+      "text": "Fictional laboratory test 57"
+     },
+     "effectiveDaysAgo": 2,
+     "valueQuantity": {
+      "value": 57,
+      "unit": "mg/dL"
+     }
+    },
+    {
+     "resourceType": "Observation",
+     "id": "l58",
+     "status": "final",
+     "category": [
+      {
+       "coding": [
+        {
+         "system": "http://terminology.hl7.org/CodeSystem/observation-category",
+         "code": "laboratory"
+        }
+       ]
+      }
+     ],
+     "subject": {
+      "reference": "Patient/fic-pt-1"
+     },
+     "code": {
+      "coding": [
+       {
+        "system": "http://loinc.org",
+        "code": "fic-58",
+        "display": "Fictional laboratory test 58"
+       }
+      ],
+      "text": "Fictional laboratory test 58"
+     },
+     "effectiveDaysAgo": 3,
+     "valueQuantity": {
+      "value": 58,
+      "unit": "mg/dL"
+     }
+    },
+    {
+     "resourceType": "Observation",
+     "id": "l59",
+     "status": "final",
+     "category": [
+      {
+       "coding": [
+        {
+         "system": "http://terminology.hl7.org/CodeSystem/observation-category",
+         "code": "laboratory"
+        }
+       ]
+      }
+     ],
+     "subject": {
+      "reference": "Patient/fic-pt-1"
+     },
+     "code": {
+      "coding": [
+       {
+        "system": "http://loinc.org",
+        "code": "fic-59",
+        "display": "Fictional laboratory test 59"
+       }
+      ],
+      "text": "Fictional laboratory test 59"
+     },
+     "effectiveDaysAgo": 4,
+     "valueQuantity": {
+      "value": 59,
+      "unit": "mg/dL"
+     }
+    },
+    {
+     "resourceType": "Observation",
+     "id": "l60",
+     "status": "final",
+     "category": [
+      {
+       "coding": [
+        {
+         "system": "http://terminology.hl7.org/CodeSystem/observation-category",
+         "code": "laboratory"
+        }
+       ]
+      }
+     ],
+     "subject": {
+      "reference": "Patient/fic-pt-1"
+     },
+     "code": {
+      "coding": [
+       {
+        "system": "http://loinc.org",
+        "code": "fic-60",
+        "display": "Fictional laboratory test 60"
+       }
+      ],
+      "text": "Fictional laboratory test 60"
+     },
+     "effectiveDaysAgo": 0,
+     "valueQuantity": {
+      "value": 60,
+      "unit": "mg/dL"
+     }
+    },
+    {
+     "resourceType": "AllergyIntolerance",
+     "id": "a1",
+     "patient": {
+      "reference": "Patient/fic-pt-1"
+     },
+     "code": {
+      "text": "Vancomycin"
+     },
+     "clinicalStatus": {
+      "coding": [
+       {
+        "system": "http://terminology.hl7.org/CodeSystem/allergyintolerance-clinical",
+        "code": "active"
+       }
+      ]
+     },
+     "verificationStatus": {
+      "coding": [
+       {
+        "system": "http://terminology.hl7.org/CodeSystem/allergyintolerance-verification",
+        "code": "confirmed"
+       }
+      ]
+     },
+     "recordedDaysAgo": 900,
+     "reaction": [
+      {
+       "manifestation": [
+        {
+         "text": "Red man syndrome"
+        }
+       ]
+      }
+     ],
+     "criticality": "high"
+    },
+    {
+     "resourceType": "Observation",
+     "id": "o1",
+     "status": "final",
+     "category": [
+      {
+       "coding": [
+        {
+         "system": "http://terminology.hl7.org/CodeSystem/observation-category",
+         "code": "vital-signs"
+        }
+       ]
+      }
+     ],
+     "subject": {
+      "reference": "Patient/fic-pt-1"
+     },
+     "code": {
+      "coding": [
+       {
+        "system": "http://loinc.org",
+        "code": "8310-5",
+        "display": "Body temperature"
+       }
+      ],
+      "text": "Body temperature"
+     },
+     "effectiveDaysAgo": 0,
+     "valueQuantity": {
+      "value": 38.9,
+      "unit": "Cel"
+     }
+    }
+   ],
+   "expected": {
+    "outcome": "draft",
+    "specialty": "Infectious diseases",
+    "mustMention": [
+     "Vancomycin",
+     "38.9"
+    ],
+    "mustNotMention": [],
+    "properties": [
+     "stays inside the fact limits",
+     "says how many results were left out"
+    ],
+    "notes": [
+     "most recent laboratory results are included here"
+    ]
+   }
+  }
+ ]
+}

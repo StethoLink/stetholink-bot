@@ -1,6 +1,8 @@
 # Connecting a real consultation provider
 
-**No real provider is integrated.** The only providers are the built-in simulated ones, and the interface labels them and their responses as simulated. This page describes what exists and what a real integration still needs. It names no provider, price, turnaround time or API, because none has been agreed.
+**The first real destination is a specialist service inside the same hospital**, reached through the `portal` transport: the request waits in that service's inbox inside StethoLink (`/inbox`), and the specialist's reply returns through the same callback contract. It is configured with `PROVIDER_DIRECTORY`, `PROVIDER_ALLOWLIST` and `SPECIALIST_MAP` ([go-live runbook](../go-live.md)). The envelope carries the approved text with age and sex and the cited facts under opaque ids; it never carries a name, birth date, chart identifier or EHR record reference.
+
+The rest of this page is about connecting a provider **outside** the hospital through an API, which is not done yet. **No external provider is integrated.** The only providers are the built-in simulated ones, and the interface labels them and their responses as simulated. This page describes what exists and what a real integration still needs. It names no provider, price, turnaround time or API, because none has been agreed.
 
 ## What exists
 

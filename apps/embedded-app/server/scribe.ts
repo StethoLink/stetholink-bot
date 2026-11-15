@@ -1,8 +1,6 @@
 import "server-only";
 import { mockProvider } from "@/core/agent/providers/mock-provider";
 import { createOpenAIProvider } from "@/core/agent/providers/openai-provider";
-import { createSpendingLimiter } from "@/core/agent/providers/spending";
-import type { SpendingLimiter } from "@/core/agent/providers/types";
 import { clinicalSafetyGuard } from "@/core/agent/safety/guard";
 import { RouteError } from "@/core/errors";
 import { createScribeService, type ScribeConfig } from "@/core/scribe/service";
@@ -15,16 +13,17 @@ import type { VerifiedLaunch } from "@/platform/auth/identity";
 import { createChartWriteLedger, createScribeRepository } from "@/platform/persistence/scribe";
 import { getTenant } from "@/platform/tenants";
 import { getEnv, scribeProblems } from "@/platform/tenants/env";
+import { spendingLimiter } from "@/platform/tenants/model-provider";
 import { getChartWriter } from "./chart-writer";
 import { getClinicalServices, requireAssistantData } from "./index";
 
-const globals = globalThis as typeof globalThis & { stetholinkSpeechBudget?: SpendingLimiter; stetholinkScribeHints?: Map<string, readonly string[]> };
+const globals = globalThis as typeof globalThis & { stetholinkScribeHints?: Map<string, readonly string[]> };
 /** Metrics only. Audio, transcript text, note text and credentials are never logged. */
 const observe = (event: TranscriptionEvent) => console.info(JSON.stringify({ action: "transcription.call", ...event, at: new Date().toISOString() }));
 
 export function getTranscriptionProvider(): TranscriptionProvider {
   const env = getEnv();
-  const budget = globals.stetholinkSpeechBudget ??= createSpendingLimiter(env.AI_DAILY_BUDGET_USD);
+  const budget = spendingLimiter("transcription");
   const shared = { model: env.TRANSCRIPTION_MODEL, usdPerMinute: env.TRANSCRIPTION_USD_PER_MINUTE, liveDataApproved: env.TRANSCRIPTION_LIVE_DATA_APPROVED === "true" };
   switch (env.TRANSCRIPTION_PROVIDER) {
     case "openai": return createOpenAITranscription({ ...shared, apiKey: env.OPENAI_API_KEY, baseUrl: env.TRANSCRIPTION_BASE_URL ?? env.OPENAI_BASE_URL, allowLoopbackHttp: env.NODE_ENV !== "production" }, fetch, { budget, observe });
@@ -43,7 +42,7 @@ function getNoteProvider() {
     reasoningEffort: env.SCRIBE_NOTE_REASONING_EFFORT,
     inputUsdPerMillion: env.SCRIBE_NOTE_INPUT_USD_PER_MILLION ?? env.OPENAI_INPUT_USD_PER_MILLION, outputUsdPerMillion: env.SCRIBE_NOTE_OUTPUT_USD_PER_MILLION ?? env.OPENAI_OUTPUT_USD_PER_MILLION,
     liveDataApproved: env.MODEL_LIVE_DATA_APPROVED === "true",
-  }, fetch, { observe: (event) => console.info(JSON.stringify({ action: "model.call", ...event, at: new Date().toISOString() })) });
+  }, fetch, { budget: spendingLimiter("model"), observe: (event) => console.info(JSON.stringify({ action: "model.call", ...event, at: new Date().toISOString() })) });
 }
 
 export function scribeConfig(): ScribeConfig {
