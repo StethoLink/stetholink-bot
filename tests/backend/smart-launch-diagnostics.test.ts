@@ -116,7 +116,9 @@ const callbackCases: Case[] = [
   { reason: "binding_failed", detail: "check:at_hash", status: 403, ehr: { idToken: { claims: { at_hash: "fictional-other-hash" } } } },
   { reason: "missing_patient", status: 403, ehr: { token: without("patient") } },
   { reason: "clinician_unmapped", detail: "subject:fhir_user_relative", status: 403, ehr: { idToken: { subject: "fictional-other-subject" } } },
-  { reason: "clinician_unmapped", detail: "fhir_user:absolute_on_issuer", status: 403, ehr: { idToken: { claims: { fhirUser: `${FAKE_EHR.fhir}/${FAKE_EHR.fhirUser}` } } } },
+  { reason: "clinician_unmapped", detail: "fhir_user:absolute_on_issuer", status: 403, ehr: { idToken: { claims: { fhirUser: `${FAKE_EHR.fhir}/Practitioner/fic-another-doctor` } } } },
+  // OpenEMR signs Person/<uuid> for a mapped user who has no NPI.
+  { reason: "clinician_not_practitioner", status: 403, ehr: { idToken: { claims: { fhirUser: `${FAKE_EHR.fhir}/Person/fic-doctor` } } } },
   { reason: "clinician_unmapped", detail: "fhir_user:absolute_elsewhere", status: 403, ehr: { idToken: { claims: { fhirUser: `https://other.example.test/${FAKE_EHR.fhirUser}` } } } },
   { reason: "clinician_reference_invalid", status: 403, env: { SMART_CLINICIAN_MAP: mapOf("Patient/fic-doctor") }, ehr: { idToken: { claims: { fhirUser: "Patient/fic-doctor" } } } },
   { reason: "missing_encounter", status: 422, message: "Open a visit in the patient's chart, then launch StethoLink again.", ehr: { token: without("encounter") } },
@@ -230,6 +232,42 @@ describe("SMART launch diagnostics", () => {
       return page.replace(id, "");
     }));
     expect(pages[0]).toBe(pages[1]);
+  });
+
+  // OpenEMR signs the absolute form with a UUID id; other EHRs sign the relative one. The map may hold either.
+  const uuid = "a33befbc-75b6-4434-8ece-e0c1762888a0";
+  it.each([
+    ["absolute", "relative", `${FAKE_EHR.fhir}/${FAKE_EHR.fhirUser}`, FAKE_EHR.fhirUser],
+    ["relative", "absolute", FAKE_EHR.fhirUser, `${FAKE_EHR.fhir}/${FAKE_EHR.fhirUser}`],
+    ["absolute UUID", "relative UUID", `${FAKE_EHR.fhir}/Practitioner/${uuid}`, `Practitioner/${uuid}`],
+    ["absolute UUID", "absolute UUID", `${FAKE_EHR.fhir}/Practitioner/${uuid}`, `${FAKE_EHR.fhir}/Practitioner/${uuid}`],
+  ])("accepts a signed %s fhirUser for a %s map entry of the same clinician", async (_signed, _mapped, signed, mapped) => {
+    const { response, output } = await run({ reason: "unexpected", status: 303, env: { SMART_CLINICIAN_MAP: mapOf(mapped) }, ehr: { idToken: { claims: { fhirUser: signed } } } }, "callback");
+    expect(response.status).toBe(303);
+    expect(response.headers.get("location")).toBe("/embed");
+    expect(output).toEqual([]);
+  });
+
+  it.each([
+    ["another id", `${FAKE_EHR.fhir}/Practitioner/fic-doctor-2`],
+    ["an id in another letter case", `${FAKE_EHR.fhir}/Practitioner/FIC-DOCTOR`],
+    ["another resource type", `${FAKE_EHR.fhir}/PractitionerRole/fic-doctor`],
+    ["another host", `https://ehr.example.test.attacker.example/fhir/${FAKE_EHR.fhirUser}`],
+    ["another path on the host", `${FAKE_EHR.fhir}-other/${FAKE_EHR.fhirUser}`],
+    ["a deeper path", `${FAKE_EHR.fhir}/tenant-2/${FAKE_EHR.fhirUser}`],
+    ["http instead of https", `${FAKE_EHR.fhir.replace("https:", "http:")}/${FAKE_EHR.fhirUser}`],
+    ["a trailing path", `${FAKE_EHR.fhir}/${FAKE_EHR.fhirUser}/_history/1`],
+    ["a query", `${FAKE_EHR.fhir}/${FAKE_EHR.fhirUser}?x=1`],
+  ])("still refuses a signed fhirUser with %s", async (_name, signed) => {
+    const { response } = await run({ reason: "clinician_unmapped", status: 403, ehr: { idToken: { claims: { fhirUser: signed } } } }, "callback");
+    expect(response.status).toBe(403);
+    expect((await session()).status).toBe(401);
+  });
+
+  it("still needs the signed subject to equal the mapped one, whatever the fhirUser form", async () => {
+    const { response } = await run({ reason: "clinician_unmapped", status: 403,
+      ehr: { idToken: { subject: FAKE_EHR.subject.toUpperCase(), claims: { fhirUser: `${FAKE_EHR.fhir}/${FAKE_EHR.fhirUser}` } } } }, "callback");
+    expect(response.status).toBe(403);
   });
 
   it("gives every failed request its own correlation ID", async () => {

@@ -3,8 +3,8 @@ import { createHash } from "node:crypto";
 import { cookies } from "next/headers";
 import { createRemoteJWKSet, errors, jwtVerify } from "jose";
 import { z } from "zod";
-import { beginSmartLaunch, exchangeSmartCode, secureEndpoint, SmartExchangeError, type SmartRegistration } from "@/integrations/fhir/smart";
-import { createFhirConnector, FhirReadError, isFhirId } from "@/integrations/fhir/connector";
+import { beginSmartLaunch, checkSmartDiscovery, clinicianReference, ehrLaunchScope, parseClinicianMap, exchangeSmartCode, sameFhirUser, secureEndpoint, SmartDiscoveryError, SmartExchangeError, type SmartRegistration } from "@/integrations/fhir/smart";
+import { createFhirConnector, FhirReadError } from "@/integrations/fhir/connector";
 import { getEnv, specialistMap } from "@/platform/tenants/env";
 import { saveSpecialistSession } from "./specialist-session";
 import { RouteError } from "@/core/errors";
@@ -12,29 +12,14 @@ import { ChartUnavailableError } from "@/core/tools/connector";
 import { AuthError, cookieOptions, saveSession } from "./session";
 import { launchCookie, readHandle, sessionCookie, storeHandle } from "./session-store";
 import type { IdentityAdapter } from "./identity";
-import { observeSmartLaunch, SmartLaunchFailure, type SmartLaunchReason } from "./smart-launch-failure";
+import { observeSmartLaunch, SmartLaunchFailure } from "./smart-launch-failure";
 
 const TOKEN_CLAIMS = ["iss", "sub", "aud", "exp", "iat", "nbf", "nonce", "fhirUser"];
 
 const pendingSchema = z.object({ state: z.string(), verifier: z.string(), nonce: z.string(), issuer: z.string(), expiresAt: z.number() });
-const mappingSchema = z.array(z.object({
-  subject: z.string().min(1),
-  fhirUser: z.string().min(1),
-  clinicianId: z.uuid(),
-  role: z.enum(["clinician", "physician"]),
-})).min(1);
-
 const MISSING_ENCOUNTER_MESSAGE = "Open a visit in the patient's chart, then launch StethoLink again.";
 
-/**
- * Scopes sent on an EHR launch. `launch/patient` asks for standalone patient context; requested together
- * with `launch`, OpenEMR treats the launch as standalone and leaves the encounter out of the token, so
- * every launch from a chart failed. An EHR launch takes its patient and encounter from `launch` alone,
- * so the standalone scope is never sent, whatever `SMART_SCOPE` holds.
- */
-export function ehrLaunchScope(configured: string) {
-  return configured.split(/\s+/).filter((scope) => scope && scope !== "launch/patient").join(" ");
-}
+export { ehrLaunchScope };
 
 function registration() {
   const env = getEnv();
@@ -44,9 +29,9 @@ function registration() {
     throw new SmartLaunchFailure("not_configured", undefined, new RouteError("not_implemented", "SMART launch is not configured"));
   }
   const invalid = (detail: string) => new SmartLaunchFailure("registration_invalid", detail, new RouteError("provider_unavailable", "SMART registration is invalid"));
-  let mapping: z.infer<typeof mappingSchema>;
-  try { mapping = mappingSchema.parse(JSON.parse(env.SMART_CLINICIAN_MAP)); }
-  catch { throw invalid("clinician_map"); }
+  const parsed = parseClinicianMap(env.SMART_CLINICIAN_MAP);
+  if ("problem" in parsed) throw invalid(parsed.problem);
+  const mapping = parsed.mapping;
   const reg = {
     issuer: env.FHIR_BASE_URL, authorizationEndpoint: env.SMART_AUTHORIZATION_URL, tokenEndpoint: env.SMART_TOKEN_URL,
     clientId: env.SMART_CLIENT_ID, redirectUri: env.SMART_REDIRECT_URI, scope: ehrLaunchScope(env.SMART_SCOPE),
@@ -58,8 +43,6 @@ function registration() {
     secureEndpoint(reg.oidcIssuer);
     secureEndpoint(reg.jwksUrl);
   } catch { throw invalid("endpoint"); }
-  if (new Set(reg.mapping.map((entry) => entry.subject)).size !== reg.mapping.length ||
-      new Set(reg.mapping.map((entry) => entry.clinicianId)).size !== reg.mapping.length) throw invalid("clinician_map_duplicate");
   if (!["launch", "openid", "fhirUser"].every((scope) => reg.scope.split(/\s+/).includes(scope))) throw invalid("scope");
   return reg;
 }
@@ -114,27 +97,25 @@ function smartIdentityAdapter(reg: Registration): { verify(launch: { pending: z.
       // A specialist opening the inbox: the launch has no patient, and the signed identity is in the tenant's specialist map.
       // The EHR token is not kept: an inbox session reads no chart.
       if (!result.hasPatient) {
-        const specialist = specialistMap(getEnv()).find((entry) => entry.subject === payload.sub && entry.fhirUser === payload.fhirUser);
+        const specialist = specialistMap(getEnv()).find((entry) => entry.subject === payload.sub && entry.fhirUser !== undefined && sameFhirUser(reg.issuer, payload.fhirUser, entry.fhirUser));
         // A clinician launch without a patient and an unregistered specialist look the same here.
         if (!specialist) throw new SmartLaunchFailure("missing_patient");
         return { specialist };
       }
       // The clinician is identified before anything about the visit is said to the browser.
-      const mapped = reg.mapping.find((entry) => entry.subject === payload.sub && entry.fhirUser === payload.fhirUser);
-      const root = reg.issuer.replace(/\/$/, "");
+      // The signed subject must equal the mapped one exactly. The signed fhirUser must be the mapped clinician
+      // resource on the pinned FHIR base, written relative or absolute (OpenEMR signs the absolute form).
+      const mapped = reg.mapping.find((entry) => entry.subject === payload.sub && sameFhirUser(reg.issuer, payload.fhirUser, entry.fhirUser));
       if (!mapped) {
         // Which half of the pair did not match, and the form of the signed fhirUser. Neither value is logged.
-        const signed = typeof payload.fhirUser === "string" ? payload.fhirUser : "";
-        const form = signed.startsWith(root + "/") ? "absolute_on_issuer" : /^https?:\/\//i.test(signed) ? "absolute_elsewhere"
-          : /^[A-Za-z]+\/[^/]+$/.test(signed) ? "relative" : "other";
-        throw new SmartLaunchFailure("clinician_unmapped",
-          reg.mapping.some((entry) => entry.subject === payload.sub) ? `fhir_user:${form}` : `subject:fhir_user_${form}`);
+        const signed = clinicianReference(reg.issuer, payload.fhirUser);
+        const subjectMapped = reg.mapping.some((entry) => entry.subject === payload.sub);
+        // A mapped user whom the EHR signs as a Person, not a Practitioner (in OpenEMR: the user has no NPI).
+        if (subjectMapped && signed.person) throw new SmartLaunchFailure("clinician_not_practitioner");
+        throw new SmartLaunchFailure("clinician_unmapped", subjectMapped ? `fhir_user:${signed.form}` : `subject:fhir_user_${signed.form}`);
       }
-      const reference = mapped.fhirUser.startsWith(root + "/") ? mapped.fhirUser.slice(root.length + 1) : mapped.fhirUser;
-      const [type, id, extra] = reference.split("/");
-      if (!["Practitioner", "PractitionerRole"].includes(type) || !id || !isFhirId(id) || extra !== undefined) {
-        throw new SmartLaunchFailure("clinician_reference_invalid");
-      }
+      const ehrUser = clinicianReference(reg.issuer, mapped.fhirUser).reference;
+      if (!ehrUser) throw new SmartLaunchFailure("clinician_reference_invalid");
       // OpenEMR sends an encounter only while a visit is open in the chart. The clinician can fix this; it is not a refusal.
       if (!result.grant.encounterId) {
         throw new SmartLaunchFailure("missing_encounter", undefined, new ChartUnavailableError("unsupported_encounter", MISSING_ENCOUNTER_MESSAGE));
@@ -157,7 +138,7 @@ function smartIdentityAdapter(reg: Registration): { verify(launch: { pending: z.
       return {
         source: "smart",
         ehrAccessToken: result.grant.accessToken,
-        ehrUser: `${type}/${id}`,
+        ehrUser,
         context: {
           clinicianId: mapped.clinicianId, tenantId: reg.tenantId, roles: [mapped.role],
           // StethoLink permissions come from the tenant's clinician mapping, never from the EHR token:
@@ -173,25 +154,12 @@ function smartIdentityAdapter(reg: Registration): { verify(launch: { pending: z.
 }
 
 async function discover(reg: SmartRegistration) {
-  const unavailable = new RouteError("provider_unavailable", "SMART discovery could not be verified");
-  const fail = (reason: SmartLaunchReason, detail?: string) => new SmartLaunchFailure(reason, detail, unavailable);
-  let url: string;
-  try {
-    const issuer = secureEndpoint(reg.issuer);
-    if (issuer.search) throw new Error("Invalid SMART FHIR base");
-    url = issuer.href.replace(/\/$/, "") + "/.well-known/smart-configuration";
-  } catch { throw fail("registration_invalid", "fhir_base"); }
-  // Unreachable covers DNS, a certificate the server does not trust, a redirect and a timeout.
-  const response = await fetch(url, { redirect: "error", cache: "no-store", signal: AbortSignal.timeout(5000) })
-    .catch(() => { throw fail("discovery_unreachable"); });
-  if (!response.ok) throw fail("discovery_rejected", `http:${response.status}`);
-  const metadata = z.object({
-    authorization_endpoint: z.url(), token_endpoint: z.url(), code_challenge_methods_supported: z.array(z.string()),
-  }).safeParse(await response.json().catch(() => null));
-  if (!metadata.success) throw fail("discovery_invalid");
-  if (metadata.data.authorization_endpoint !== reg.authorizationEndpoint) throw fail("discovery_endpoint_mismatch", "endpoint:authorization");
-  if (metadata.data.token_endpoint !== reg.tokenEndpoint) throw fail("discovery_endpoint_mismatch", "endpoint:token");
-  if (!metadata.data.code_challenge_methods_supported.includes("S256")) throw fail("pkce_s256_unsupported");
+  await checkSmartDiscovery(reg).catch((error: unknown) => {
+    if (error instanceof SmartDiscoveryError) {
+      throw new SmartLaunchFailure(error.reason, error.detail, new RouteError("provider_unavailable", "SMART discovery could not be verified"));
+    }
+    throw error;
+  });
 }
 
 export function openSmartLaunch(issuer: string, launch: string, correlationId: string) {

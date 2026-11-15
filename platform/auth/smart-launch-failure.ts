@@ -16,7 +16,7 @@ export const SMART_LAUNCH_REASONS = [
   "callback_invalid", "token_endpoint_unreachable", "token_exchange_rejected", "grant_invalid",
   "id_token_missing", "identity_scopes_missing",
   "jwks_unavailable", "jwks_no_matching_key", "id_token_invalid", "binding_failed",
-  "missing_patient", "clinician_unmapped", "clinician_reference_invalid", "missing_encounter",
+  "missing_patient", "clinician_unmapped", "clinician_not_practitioner", "clinician_reference_invalid", "missing_encounter",
   "fhir_patient_unreadable", "fhir_encounter_unreadable", "encounter_unsupported", "grant_expired",
   "unexpected",
 ] as const;
