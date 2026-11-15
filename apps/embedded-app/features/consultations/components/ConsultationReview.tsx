@@ -35,18 +35,18 @@ export function ConsultationReview({ draftId, client, canReview = false, canRout
   }, [canReview, pending, draftId]);
 
   return (
-    <section aria-label="Consultation review" className="rounded-lg border border-slate-200 bg-white p-4">
+    <section aria-label="Consultation review" className="card card-pad">
       {(state.status === "idle" || state.status === "loading") && (
         <div role="status" aria-busy="true" aria-label="Loading consultation draft" className="space-y-3">
-          <div className="h-5 w-1/3 animate-pulse rounded bg-slate-200" />
-          <div className="h-16 animate-pulse rounded bg-slate-200" />
-          <div className="h-16 animate-pulse rounded bg-slate-200" />
+          <div className="skeleton h-5 w-1/3" />
+          <div className="skeleton h-16" />
+          <div className="skeleton h-16" />
         </div>
       )}
       {state.status === "error" && (
         <div role="alert" className="space-y-2">
           <p className="text-sm text-red-800">{state.error}</p>
-          <button type="button" onClick={reload} className="rounded border border-slate-700 px-2 py-1 text-sm">
+          <button type="button" onClick={reload} className="btn btn-secondary btn-sm">
             Retry
           </button>
         </div>

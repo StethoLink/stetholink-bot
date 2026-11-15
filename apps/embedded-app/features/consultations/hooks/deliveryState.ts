@@ -34,17 +34,33 @@ export function awaitingProvider(view: ConsultationDeliveryView | null | undefin
 }
 
 export class DeliveryError extends Error {}
+/** A failure in words a clinician can act on: what happened and what to do next. */
+export function describeFailure(status: number, error?: { code: string; message: string }): string {
+  if (status === 401) return "Your session has ended. Reopen StethoLink from the patient's chart in the EHR.";
+  if (status === 503) return "The assistant is not available right now. Nothing was saved or sent. Wait a minute and try again; if it keeps failing, tell your StethoLink administrator.";
+  if (status === 501) return error?.message && !/not configured|not implemented/i.test(error.message) ? error.message : "This is not set up for your hospital yet. Ask your StethoLink administrator.";
+  if (status === 409) return "This consultation changed while you were working. Reload it and try again.";
+  if (status === 403) return error?.message ?? "You do not have permission for this action.";
+  if (status === 422 && error?.code === "safety_blocked") return "The result did not pass the safety checks and was not shown. Try again, or reword your request.";
+  if (status >= 500) return "Something went wrong on the server. Nothing was changed. Try again.";
+  return error?.message ?? "The request failed. Try again.";
+}
 
-async function call<T>(schema: z.ZodType<T>, url: string, body?: unknown, method?: string): Promise<T> {
-  const response = await fetch(url, {
+/** Thrown when the clinician stops waiting. The server may still finish; the same idempotency key then returns its result. */
+export class CancelledError extends DeliveryError {}
+async function call<T>(schema: z.ZodType<T>, url: string, body?: unknown, method?: string, signal?: AbortSignal): Promise<T> {
+  const response = await fetch(url, { signal,
     method: method ?? (body === undefined ? "GET" : "POST"), cache: "no-store", credentials: "same-origin",
     headers: body === undefined ? undefined : { "Content-Type": "application/json" },
     body: body === undefined ? undefined : JSON.stringify(body),
-  }).catch(() => { throw new DeliveryError("The server could not be reached. Check your connection and try again."); });
+  }).catch(() => {
+    if (signal?.aborted) throw new CancelledError("Stopped. Nothing was changed on this screen.");
+    throw new DeliveryError("The server could not be reached. Check your connection and try again.");
+  });
   const json: unknown = await response.json().catch(() => null);
   if (!response.ok) {
     const error = apiErrorSchema.safeParse(json);
-    throw new DeliveryError(error.success ? error.data.error.message : "The request failed. Try again.");
+    throw new DeliveryError(describeFailure(response.status, error.success ? error.data.error : undefined));
   }
   const parsed = schema.safeParse(json);
   if (!parsed.success) throw new DeliveryError("The server returned an unexpected response.");
@@ -63,11 +79,11 @@ export const deliveryApi = {
   revise: (draftId: string, body: { expectedVersion: number; idempotencyKey: string; summary: string; assessment: string; plan: string[] }) =>
     call(consultationDraftSchema, draftUrl(draftId), body, "PATCH"),
   /** Asks the model to reword the draft. The server validates the result and returns it to physician review. */
-  reviseWithModel: (draftId: string, body: { instruction: string; expectedVersion: number; idempotencyKey: string }) =>
-    call(consultationDraftSchema, `${draftUrl(draftId)}/ai-revision`, body),
+  reviseWithModel: (draftId: string, body: { instruction: string; expectedVersion: number; idempotencyKey: string }, signal?: AbortSignal) =>
+    call(consultationDraftSchema, `${draftUrl(draftId)}/ai-revision`, body, undefined, signal),
   /** A draft, or the assistant's questions about the request; answer them or proceed by calling again. */
-  create: (body: { patientId: string; encounterId?: string; request: string; idempotencyKey: string; clarifications?: ConsultationClarification[]; proceed?: boolean }) =>
-    call(createConsultationResultSchema, "/api/consultations/drafts", body),
+  create: (body: { patientId: string; encounterId?: string; request: string; idempotencyKey: string; clarifications?: ConsultationClarification[]; proceed?: boolean }, signal?: AbortSignal) =>
+    call(createConsultationResultSchema, "/api/consultations/drafts", body, undefined, signal),
   submit: (draftId: string, body: { expectedVersion: number; idempotencyKey: string }) =>
     call(consultationDraftSchema, `${draftUrl(draftId)}/transitions`, { ...body, action: "submit" }),
 };

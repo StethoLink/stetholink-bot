@@ -100,7 +100,7 @@ describe("consultation components", () => {
   it("labels the draft as AI-generated and shows the reviewer", () => {
     const html = renderToStaticMarkup(createElement(ConsultationDraftView, { draft }));
     expect(html).toContain("AI-generated");
-    expect(html).toContain("Status: Approved");
+    expect(html).toMatch(/Status: <\/span>Approved/);
     expect(html).toContain("Reviewed by dr-x");
   });
 

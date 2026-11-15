@@ -18,7 +18,7 @@ const SEX: Record<PatientContext["sex"], string> = { male: "Male", female: "Fema
 function List({ items, empty }: { items: string[]; empty: string }) {
   if (!items.length) return <p className="text-sm text-slate-700">{empty}</p>;
   return (
-    <ul className="list-disc space-y-0.5 pl-5 text-sm">
+    <ul className="list-disc space-y-0.5 ps-5 text-sm">
       {items.map((x) => (
         <li key={x} className="break-words">
           {x}
@@ -47,16 +47,15 @@ export function PatientContextView({ patient, compact = false }: { patient: Pati
       <div
         role="note"
         aria-label="Allergies"
-        className={`mt-3 rounded border-2 p-2 ${hasAllergies ? "border-red-700 bg-red-50 text-red-900" : "border-slate-500 bg-slate-50 text-slate-900"}`}
+        className={`alert mt-3 ${hasAllergies ? "alert-danger" : "alert-info"}`}
       >
-        <p className="text-sm font-bold">
-          <span aria-hidden="true">{hasAllergies ? "⚠ " : "ⓘ "}</span>
+        <p className="text-sm font-semibold">
           {hasAllergies ? `Allergies (${p.allergies.length})` : "Allergies"}
         </p>
         {hasAllergies ? (
           <ul className="mt-1 flex flex-wrap gap-1">
             {p.allergies.map((a) => (
-              <li key={a} className="rounded bg-white px-1.5 py-0.5 text-sm font-semibold break-words">
+              <li key={a} className="badge badge-danger bg-white font-semibold break-words whitespace-normal">
                 {a}
               </li>
             ))}
@@ -78,9 +77,9 @@ export function PatientContextView({ patient, compact = false }: { patient: Pati
       </div>
       {p.clinicalFacts && <ChartFacts facts={p.clinicalFacts} />}
       {!!p.chartNotes?.length && (
-        <div role="note" aria-label="What was not loaded from the chart" className="mt-3 rounded border border-amber-700 bg-amber-50 p-2 text-sm text-amber-950">
+        <div role="note" aria-label="What was not loaded from the chart" className="alert alert-warning mt-3">
           <p className="font-semibold">Not everything in the chart is shown here</p>
-          <ul className="mt-1 list-disc space-y-0.5 pl-5">
+          <ul className="mt-1 list-disc space-y-0.5 ps-5">
             {p.chartNotes.map((note) => <li key={note} className="break-words">{note}</li>)}
           </ul>
         </div>

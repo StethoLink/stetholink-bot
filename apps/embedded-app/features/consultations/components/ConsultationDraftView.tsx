@@ -1,6 +1,9 @@
+"use client";
+
 import type { ClinicalFact, ConsultationDraft } from "@/shared/contracts";
 import { MISSING_INFORMATION_TITLE, SUGGESTION_PREFIX, citedEvidenceIds, parseReferralText, parseStatement } from "@/shared/utils/referral-text";
 import { CONCERN_LABELS } from "../concern-labels";
+import { AiBadge, Badge, DataBadge } from "@/apps/embedded-app/components/ui";
 import { DraftStatusBadge } from "./DraftStatusBadge";
 
 function formatDate(iso: string) {
@@ -14,14 +17,14 @@ function factValue(fact: ClinicalFact) {
   return `${String(fact.value)}${fact.unit ? ` ${fact.unit}` : ""}`;
 }
 const anchor = (draftId: string, factId: string) => `source-${draftId}-${factId}`;
-const tag = "rounded border px-1.5 py-0.5 text-xs font-medium";
+const tag = "rounded-full border px-2 py-px text-xs font-medium";
 
 function SourceLinks({ draftId, ids, facts }: { draftId: string; ids: string[]; facts: Map<string, ClinicalFact> }) {
   if (!ids.length) return <span className={`${tag} border-amber-700 bg-amber-50 text-amber-900`}>No chart source</span>;
   return (
     <>
       {ids.map((id) => facts.has(id) ? (
-        <a key={id} href={`#${anchor(draftId, id)}`} title={`${facts.get(id)!.label}: ${factValue(facts.get(id)!)}`}
+        <a key={id} href={`#${anchor(draftId, id)}`} onClick={() => document.getElementById(anchor(draftId, id))?.closest("details")?.setAttribute("open", "")} title={`${facts.get(id)!.label}: ${factValue(facts.get(id)!)}`}
           className={`${tag} border-sky-800 bg-sky-50 text-sky-900 underline-offset-2 hover:underline`}>
           Source: {facts.get(id)!.label}
         </a>
@@ -38,7 +41,7 @@ function Provenance({ draft }: { draft: ConsultationDraft }) {
   if (!grounding || !authoring) return <p className="text-xs text-slate-700">AI-generated content. A clinician must review it before it is used in care.</p>;
   if (!authoring.liveInference) {
     return (
-      <p role="note" className="rounded border border-amber-700 bg-amber-50 p-2 text-xs text-amber-900">
+      <p role="note" className="alert alert-warning">
         <span className="font-semibold">Demo fallback, not AI.</span> No language model is configured, so the chart record was copied into the
         sections without any model inference. Revision instructions are not interpreted in this mode.
       </p>
@@ -70,8 +73,8 @@ function ReferralView({ draft }: { draft: ConsultationDraft }) {
 
   return (
     <>
-      <section aria-label="Your request" className="rounded border border-slate-300 bg-slate-50 p-2">
-        <h3 className="text-xs font-semibold tracking-wide text-slate-700 uppercase">Your request</h3>
+      <section aria-label="Your request" className="rounded-md border border-slate-200 bg-slate-50 p-2.5">
+        <h3 className="section-title">Your request</h3>
         <p className="text-sm break-words">{authoring.physicianRequest}</p>
         {!!authoring.clarifications?.length && (
           <ul className="mt-1 space-y-1 text-sm">
@@ -83,7 +86,7 @@ function ReferralView({ draft }: { draft: ConsultationDraft }) {
       </section>
 
       {!!authoring.overriddenConcerns?.length && (
-        <section aria-label="Concerns you chose to proceed past" className="rounded-lg border-2 border-amber-700 bg-amber-50 p-2">
+        <section aria-label="Concerns you chose to proceed past" className="alert alert-warning">
           <h3 className="text-sm font-semibold text-amber-950">The assistant questioned this request, and you chose to prepare it anyway</h3>
           <ul className="mt-1 space-y-1 text-sm text-amber-950">
             {authoring.overriddenConcerns.map((entry, index) => (
@@ -109,7 +112,7 @@ function ReferralView({ draft }: { draft: ConsultationDraft }) {
       </section>
 
       {authoring.rejectedStatements > 0 && (
-        <p role="note" className="rounded border border-amber-700 bg-amber-50 p-2 text-sm text-amber-900">
+        <p role="note" className="alert alert-warning">
           {authoring.rejectedStatements} statement{authoring.rejectedStatements === 1 ? " was" : "s were"} removed from the original draft
           because {authoring.rejectedStatements === 1 ? "it was" : "they were"} not supported by the chart facts cited.
         </p>
@@ -119,7 +122,7 @@ function ReferralView({ draft }: { draft: ConsultationDraft }) {
         <h3 className="text-sm font-semibold">Documented findings <span className="font-normal text-slate-700">(from the chart, with sources)</span></h3>
         {parsed.sections.filter((section) => section.title !== MISSING_INFORMATION_TITLE).map((section) => (
           <div key={section.title}>
-            <h4 className="text-xs font-semibold tracking-wide text-slate-700 uppercase">{section.title}</h4>
+            <h4 className="section-title">{section.title}</h4>
             {section.statements.length ? (
               <ul className="space-y-1">
                 {section.statements.map((statement, index) => (
@@ -134,26 +137,26 @@ function ReferralView({ draft }: { draft: ConsultationDraft }) {
         ))}
         {parsed.other.length > 0 && (
           <div>
-            <h4 className="text-xs font-semibold tracking-wide text-slate-700 uppercase">Other text</h4>
+            <h4 className="section-title">Other text</h4>
             <ul className="text-sm">{parsed.other.map((line, index) => <li key={index} className="break-words">{line}</li>)}</ul>
           </div>
         )}
       </section>
 
-      <section aria-label="Missing information" className="rounded border border-amber-700 bg-amber-50 p-2">
+      <section aria-label="Missing information" className="alert alert-warning">
         <h3 className="text-sm font-semibold text-amber-950">Missing information <span className="font-normal">(recorded in the chart as not available)</span></h3>
         {missing.length ? (
-          <ul className="list-disc pl-5 text-sm text-amber-950">
+          <ul className="list-disc ps-5 text-sm text-amber-950">
             {missing.map((item, index) => <li key={index} className="break-words">{item.text}</li>)}
           </ul>
         ) : <p className="text-sm">None recorded.</p>}
         <p className="mt-1 text-xs text-amber-950">Not available does not mean normal or not done.</p>
       </section>
 
-      <section aria-label="AI suggestions" className="rounded border border-violet-800 bg-violet-50 p-2">
+      <section aria-label="AI suggestions" className="alert alert-ai">
         <h3 className="text-sm font-semibold text-violet-950">AI suggestions <span className="font-normal">(not from the chart; for your judgement)</span></h3>
         {suggestions.length ? (
-          <ul className="list-disc pl-5 text-sm text-violet-950">
+          <ul className="list-disc ps-5 text-sm text-violet-950">
             {suggestions.map((item, index) => <li key={index} className="break-words">{item}</li>)}
           </ul>
         ) : <p className="text-sm text-violet-950">No additional information was suggested.</p>}
@@ -161,13 +164,13 @@ function ReferralView({ draft }: { draft: ConsultationDraft }) {
 
       {notes.length > 0 && <ul className="text-xs text-slate-700">{notes.map((note, index) => <li key={index}>{note}</li>)}</ul>}
 
-      <details className="rounded border border-slate-300 p-2" open>
+      <details className="rounded-md border border-slate-200 p-2.5">
         <summary className="cursor-pointer text-sm font-semibold">
           Source evidence ({known.length} documented fact{known.length === 1 ? "" : "s"}, {uncited.length} not used in this draft)
         </summary>
         <ul className="mt-2 space-y-1">
           {[...facts.values()].map((fact) => (
-            <li key={fact.id} id={anchor(draft.id, fact.id)} className="scroll-mt-4 rounded px-1 text-sm target:bg-sky-100">
+            <li key={fact.id} id={anchor(draft.id, fact.id)} className="rounded px-1 py-0.5 text-sm target:bg-sky-100 target:outline target:outline-sky-600">
               <span className="font-medium">{fact.label}:</span>{" "}
               <span className={fact.status === "unknown" ? "text-amber-900 italic" : undefined}>{factValue(fact)}</span>{" "}
               {fact.status === "known" && !cited.has(fact.id) && <span className={`${tag} border-slate-500 text-slate-700`}>Not used in this draft</span>}
@@ -186,18 +189,16 @@ export function ConsultationDraftView({ draft }: { draft: ConsultationDraft }) {
   return (
     <article aria-labelledby={`draft-${draft.id}-title`} className="space-y-3">
       <header className="space-y-2">
-        <h2 id={`draft-${draft.id}-title`} className="text-lg font-semibold">
+        <h2 id={`draft-${draft.id}-title`} className="text-base font-semibold">
           {authoring && draft.grounding?.specialty ? `${draft.grounding.specialty} consultation request` : "Consultation draft"}
         </h2>
         <div className="flex flex-wrap gap-2">
           {authoring && !authoring.liveInference ? (
-            <span className="rounded border border-amber-800 bg-amber-50 px-1.5 py-0.5 text-xs font-medium text-amber-900">Demo fallback (no AI inference)</span>
+            <Badge tone="warning">Demo fallback (no AI inference)</Badge>
           ) : (
-            <span className="rounded border border-sky-800 bg-sky-50 px-1.5 py-0.5 text-xs font-medium text-sky-900">AI-generated</span>
+            <AiBadge />
           )}
-          {draft.grounding?.provenance.dataClassification === "synthetic" && (
-            <span className="rounded border border-amber-800 bg-amber-50 px-1.5 py-0.5 text-xs font-medium text-amber-900">Synthetic patient data</span>
-          )}
+          {draft.grounding && <DataBadge classification={draft.grounding.provenance.dataClassification} />}
           <DraftStatusBadge status={draft.status} />
         </div>
         <Provenance draft={draft} />
@@ -216,7 +217,7 @@ export function ConsultationDraftView({ draft }: { draft: ConsultationDraft }) {
           <section>
             <h3 className="text-sm font-semibold">Plan</h3>
             {draft.plan.length ? (
-              <ol className="list-decimal pl-5 text-sm">
+              <ol className="list-decimal ps-5 text-sm">
                 {draft.plan.map((item, i) => (
                   <li key={i}>{item}</li>
                 ))}

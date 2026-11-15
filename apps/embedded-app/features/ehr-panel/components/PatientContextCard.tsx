@@ -17,7 +17,7 @@ export function PatientContextCard({
   const { state, reload } = usePatientContext(patientId, client);
   if (state.status === "ready") return <PatientContextView patient={state.data} compact={compact} />;
   return (
-    <section aria-label="Patient context" className="rounded-lg border border-slate-200 bg-white p-4">
+    <section aria-label="Patient context" className="card card-pad">
       {state.status === "loading" ? (
         <SkeletonBlock label="Loading patient context…" lines={4} />
       ) : (

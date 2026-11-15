@@ -30,7 +30,7 @@ async function shot(page, name) {
   await page.screenshot({ path: `${shots}/${String(++step).padStart(2, "0")}-${name}.png`, fullPage: true });
 }
 async function launch(profile) {
-  const context = await browser.newContext({ viewport: { width: 900, height: 1100 }, deviceScaleFactor: 2 });
+  const context = await browser.newContext({ viewport: { width: Number(process.env.BROWSER_WIDTH ?? 900), height: 1100 }, deviceScaleFactor: Number(process.env.BROWSER_SCALE ?? 2) });
   const page = await context.newPage();
   const errors = [];
   page.on("pageerror", (error) => errors.push(String(error)));
@@ -48,15 +48,22 @@ try {
   const { page, errors } = await launch("chest-pain-demo");
   await page.getByRole("heading", { name: "Omar (fictional chest-pain case)" }).waitFor();
   await page.getByText("Synthetic data").first().waitFor();
+  // The chart record opens under the patient bar without leaving the current tab.
+  await page.getByRole("button", { name: "Chart", exact: true }).click();
   const record = page.locator("details", { hasText: "Chart record" });
   await record.getByText("ST depression of 1 mm in leads V4 to V6").waitFor();
   assert.match(await record.innerText(), /Echocardiogram:\s*not performed/);
   await page.getByText("Emergency encounter").waitFor();
   await shot(page, "chart");
+  await page.getByRole("button", { name: "Hide chart" }).click();
+  // History is its own tab; Alt+2 returns to Consultations.
+  await page.getByRole("tab", { name: "History" }).click();
+  await page.getByRole("region", { name: "Consultations for this chart" }).getByText("None yet.").waitFor();
+  await page.keyboard.press("Alt+2");
+  assert.equal(await page.getByRole("tab", { name: "Consultations" }).getAttribute("aria-selected"), "true");
 
   // --- 2-3. Natural-language request and draft ----------------------------------------
   const assistant = page.getByRole("region", { name: "Consultation assistant" });
-  await assistant.getByText("None yet.").waitFor();
   await assistant.getByLabel("What consultation do you need?").fill(REQUEST);
   await assistant.getByRole("button", { name: "Prepare consultation" }).click();
   await assistant.getByText("Reading the chart and drafting").waitFor();
@@ -70,7 +77,6 @@ try {
   const live = !draftText.includes("Demo fallback");
   if (expectLive) assert.ok(live && /Drafted by \w+ model/.test(draftText), "Expected a draft from live model inference");
   else assert.ok(draftText.includes("Demo fallback, not AI"), "The deterministic fallback must be labelled as not AI");
-  assert.equal((await current(page).innerText()).trim().startsWith("●"), true);
   assert.match(await current(page).innerText(), /Prepared/);
   // Missing information comes from the chart.
   const missing = review.getByRole("region", { name: "Missing information" });
@@ -124,6 +130,10 @@ try {
   await routing.getByText("Simulated provider", { exact: true }).waitFor();
   assert.equal(await review.getByRole("form", { name: "Ask the assistant to revise" }).count(), 0, "An approved consultation cannot be revised");
   await routing.getByRole("button", { name: "Send approved consultation" }).click();
+  // Sending is confirmed in a dialog that says what the specialist does and does not receive.
+  await routing.getByText("The patient's name, birth date and record numbers.").waitFor();
+  await shot(page, "send-confirm");
+  await routing.getByRole("button", { name: "Send now" }).click();
   await routing.getByText("Delivered to the provider. Waiting for it to accept.").waitFor();
   await page.waitForFunction(() => document.querySelector('[aria-label="Consultation progress"] [aria-current="step"]')?.textContent?.includes("Delivered"));
   await shot(page, "delivered");
@@ -147,7 +157,8 @@ try {
 
   // --- 9. History after a full reload -----------------------------------------------------
   await page.reload();
-  const history = page.getByRole("region", { name: "Consultation assistant" });
+  await page.getByRole("tab", { name: "History" }).click();
+  const history = page.getByRole("region", { name: "Consultations for this chart" });
   const entry = history.getByRole("button", { name: /Cardiology.*Specialist responded/s });
   await entry.waitFor();
   await shot(page, "history");

@@ -19,3 +19,4 @@ export { ConsultationDelivery } from "./components/ConsultationDelivery";
 export { StatusTracker } from "./components/StatusTracker";
 export { consultationTracker } from "./hooks/statusTracker";
 export type { AssistantInfo } from "./components/ConsultationComposer";
+export { ConsultationHistory } from "./components/ConsultationHistory";

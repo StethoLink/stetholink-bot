@@ -25,7 +25,7 @@ export function EncounterSummaryView({ encounter }: { encounter: EncounterContex
   const e = encounter;
   const started = new Date(e.startedAt);
   return (
-    <section aria-label="Encounter" className="rounded-lg border border-slate-200 bg-white p-3 text-sm">
+    <section aria-label="Encounter" className="card card-pad text-sm">
       <h2 className="font-semibold">
         {TYPE[e.type]} encounter · {STATUS[e.status]}
       </h2>
@@ -59,7 +59,7 @@ export function EncounterSummary({ encounterId, client }: { encounterId: string;
   const { state, reload } = useEncounterContext(encounterId, client);
   if (state.status === "ready") return <EncounterSummaryView encounter={state.data} />;
   return (
-    <section aria-label="Encounter" className="rounded-lg border border-slate-200 bg-white p-3">
+    <section aria-label="Encounter" className="card card-pad">
       {state.status === "loading" ? (
         <SkeletonBlock label="Loading encounter…" lines={2} />
       ) : (

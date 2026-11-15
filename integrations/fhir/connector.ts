@@ -151,7 +151,7 @@ export function createFhirConnector(grant: FhirLaunchGrant, request: typeof fetc
         patientId: id,
         displayName: name?.text || [...(name?.given ?? []), name?.family].filter(Boolean).join(" ") || "Patient",
         birthDate: /^\d{4}-\d{2}-\d{2}$/.test(patient.birthDate ?? "") ? patient.birthDate : undefined,
-        sex, allergies: known("allergy"), activeProblems: known("problem"), medications: known("medication"), source: "fhir",
+        sex, allergies: chart.namedAllergies, activeProblems: known("problem"), medications: known("medication"), source: "fhir",
         clinicalFacts: chart.facts,
         ...(chart.notes.length ? { chartNotes: chart.notes } : {}),
       };

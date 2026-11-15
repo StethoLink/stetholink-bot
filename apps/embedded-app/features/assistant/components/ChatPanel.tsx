@@ -61,7 +61,7 @@ export function ChatPanel({ patientId, encounterId, client }: ChatPanelProps) {
       </div>
 
       {error && (
-        <div role="alert" className="mt-2 flex flex-wrap items-center gap-2 rounded border border-red-700 bg-red-50 p-2 text-sm text-red-800">
+        <div role="alert" className="alert alert-danger mt-2 flex flex-wrap items-center gap-2">
           <span>{error}</span>
           {canRetry && (
             <button type="button" onClick={() => void retry()} disabled={sending} className={styles.secondaryButton}>

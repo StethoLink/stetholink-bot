@@ -22,7 +22,7 @@ export function ChartFacts({ facts }: { facts: ClinicalFact[] }) {
   if (!facts.length) return null;
   const unavailable = facts.filter((fact) => fact.status === "unknown").length;
   return (
-    <details className="mt-3 rounded border border-slate-300 p-2" open>
+    <details className="mt-3 rounded-md border border-slate-200 p-2.5" open>
       <summary className="cursor-pointer text-sm font-semibold">
         Chart record ({facts.length - unavailable} documented{unavailable ? `, ${unavailable} not available` : ""})
       </summary>
@@ -32,7 +32,7 @@ export function ChartFacts({ facts }: { facts: ClinicalFact[] }) {
           if (!items.length) return null;
           return (
             <section key={group.title}>
-              <h3 className="text-xs font-semibold tracking-wide text-slate-700 uppercase">{group.title}</h3>
+              <h3 className="section-title">{group.title}</h3>
               <ul className="text-sm">
                 {items.map((fact) => (
                   <li key={fact.id} className="break-words">

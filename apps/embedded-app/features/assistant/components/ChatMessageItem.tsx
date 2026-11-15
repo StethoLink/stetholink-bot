@@ -18,7 +18,7 @@ export function ChatMessageItem({ entry }: { entry: ChatEntry }) {
       </div>
       <p className={styles.content}>{message.content}</p>
       {safety && safety.reasons.length > 0 && (
-        <ul className="mt-1 list-disc pl-5 text-xs text-slate-700">
+        <ul className="mt-1 list-disc ps-5 text-xs text-slate-700">
           {safety.reasons.map((r) => (
             <li key={r}>{r}</li>
           ))}

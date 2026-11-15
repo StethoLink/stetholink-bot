@@ -116,7 +116,8 @@ interface Candidate { fact: ClinicalFact; time: number }
  * reported as not recorded, an empty allergy list as not recorded (never as "no allergies"),
  * and whatever is left out for size or could not be loaded is listed in `notes` for the physician.
  */
-export function normalizeChart(input: ChartInput, options: NormalizeOptions): { facts: ClinicalFact[]; notes: string[] } {
+export function normalizeChart(input: ChartInput, options: NormalizeOptions): { facts: ClinicalFact[]; notes: string[]; namedAllergies: string[] } {
+  const namedAllergies: string[] = [];
   const notes: string[] = [];
   const loadedAt = new Date(Date.UTC(options.now.getUTCFullYear(), options.now.getUTCMonth(), options.now.getUTCDate())).toISOString();
   let undated = 0;
@@ -162,6 +163,7 @@ export function normalizeChart(input: ChartInput, options: NormalizeOptions): { 
         const severity = clean(reaction.severity, 20);
         return shown ? [`${shown}${severity ? ` (${severity})` : ""}`] : severity ? [`severity ${severity}`] : [];
       });
+      if (!absence) namedAllergies.push(label);
       const details = absence ? [] : [
         ...(reactions.length ? [`Reaction: ${reactions.join("; ")}`] : []),
         ...(clean(resource.criticality, 30) ? [`criticality: ${clean(resource.criticality, 30)}`] : []),
@@ -275,7 +277,7 @@ export function normalizeChart(input: ChartInput, options: NormalizeOptions): { 
     if (omitted > 0) notes.push(`Only the ${take.get(category)} most recent ${CATEGORY_NAME[category]} are included here; ${omitted} more ${omitted === 1 ? "is" : "are"} in the chart.`);
   }
   if (undated) notes.push(`${undated} chart item${undated === 1 ? " has" : "s have"} no recorded date in the EHR; the date shown for ${undated === 1 ? "it" : "them"} is the day the chart was loaded.`);
-  return { facts: selected(), notes };
+  return { facts: selected(), notes, namedAllergies };
 }
 
 function extras(value: ObservationValue) {

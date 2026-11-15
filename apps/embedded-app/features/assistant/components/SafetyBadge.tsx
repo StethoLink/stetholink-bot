@@ -10,7 +10,7 @@ const LABELS: Record<SafetyLevel, { icon: string; text: string; className: strin
 export function SafetyBadge({ level }: { level: SafetyLevel }) {
   const l = LABELS[level];
   return (
-    <span className={`inline-flex items-center gap-1 rounded border px-1.5 py-0.5 text-xs font-medium ${l.className}`}>
+    <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-px text-xs font-medium ${l.className}`}>
       <span aria-hidden="true">{l.icon}</span>
       {l.text}
     </span>

@@ -45,21 +45,21 @@ export function StagingLaunch() {
   }
 
   return (
-    <form className="space-y-3 rounded-lg border border-slate-200 bg-white p-4" onSubmit={(event) => { event.preventDefault(); void launch(); }}>
+    <form className="card card-pad space-y-3" onSubmit={(event) => { event.preventDefault(); void launch(); }}>
       <h1 className="text-lg font-semibold">Synthetic staging launch</h1>
       <p className="text-sm text-slate-700">Opens a fictional chart with a short-lived session. No real patient, clinician or hospital is involved.</p>
       <label className="block text-sm font-medium">Synthetic chart and role
         <select value={profile} onChange={(event) => setProfile(event.target.value)} disabled={busy}
-          className="mt-1 block w-full rounded border border-slate-400 px-2 py-1 font-normal">
+          className="field mt-1 font-normal">
           {PROFILES.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
         </select>
       </label>
       <label className="block text-sm font-medium">Launch secret
         <input type="password" autoComplete="off" value={secret} onChange={(event) => setSecret(event.target.value)} disabled={busy}
-          className="mt-1 block w-full rounded border border-slate-400 px-2 py-1 font-normal" />
+          className="field mt-1 font-normal" />
       </label>
       <button type="submit" disabled={busy || secret.length < 32}
-        className="rounded border border-sky-900 bg-sky-800 px-3 py-2 text-sm font-medium text-white disabled:opacity-50">
+        className="btn btn-primary">
         {busy ? "Opening…" : "Open synthetic chart"}
       </button>
       {error && <p role="alert" className="text-sm text-red-800">{error}</p>}
