@@ -4,7 +4,7 @@ Written at the end of each working session so the next one starts from this file
 
 ## Where things stand (2026-11-15)
 
-- **Branch:** all work is on `claude/new-session-xgixce` (the session may not push to `main`). `main` is still at `7b0ffc9`. The branch is pushed; nothing is uncommitted.
+- **Branch:** the owner asked on 2026-11-15 for the work to go to `main`; `main` was fast-forwarded from `7b0ffc9` to `0ac3c10` (no merge commit, no conflicts). `main` and `claude/new-session-xgixce` are identical.
 - **Brief:** "live MVP as an EHR plugin" (scribe, EHR write-back, specialist inbox, redesign, operations), five phases. **Phases 0 to 5 are implemented and every workboard task (T5 to T19) is `done`.** Read the newest five *Log* entries on the workboard for what each phase did, how it was verified and which decisions were taken.
 - **Checks at the last commit, all passing:** `npm run check` (461 passed, 30 skipped opt-in), `npm run build`, `node --test tests/smoke/*.test.mts`, `bash tests/e2e/run-ci.sh` (Docker, PostgreSQL 17). The production image builds and runs healthy.
 
@@ -13,7 +13,7 @@ Written at the end of each working session so the next one starts from this file
 1. **The final report to the owner** (Arabic, plain language, seven points) is delivered as the last message of the session of 2026-11-15 that also did the follow-ups below. If it must be written again, everything it needs is in the workboard log, `docs/ai/scribe-benchmark.md`, `docs/sandbox.md`, `docs/go-live.md` (sections 1, 4, 10) and `docs/ui/README.md`. Commit links: `https://github.com/StethoLink/stetholink-bot/commit/<sha>`.
 2. Follow-ups done on 2026-11-15 after Phase 5: `tests/e2e/README.md` describes every script and SQL suite; both Chromium walkthroughs were re-run and pass (`consultation-flow.mjs` at 360 and 1280 px, `scribe-flow.mjs` at 360 px), and `live-ehr-flow.mts` passes with `LIVE_E2E_BROWSER=1`; scribe, inbox and live-workspace screenshots are in `docs/ui/after/`. No product code changed. Nothing is open here.
 3. **Not implemented, by decision or for lack of access** (do not start them without the owner): EHR refresh token; a real email sender for specialist codes; registering `http-partner`; the Q6 "stated by the physician" source (design only, `docs/decisions/0003-physician-stated-source.md`); a check against a public SMART sandbox, OpenEMR or a hospital EHR; a transcription benchmark on human speech.
-4. **Merging to `main`** is the owner's decision; this session may not push there.
+4. Merged to `main` on 2026-11-15 at the owner's request (fast-forward to `0ac3c10`).
 
 ## Commits of this brief
 
