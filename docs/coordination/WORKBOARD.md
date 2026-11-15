@@ -55,7 +55,7 @@ Brief: [fable-openemr-privacy-orders.md](../agent-handoffs/fable-openemr-privacy
 | O-T1 | SMART launch failures diagnosable: reason codes logged with a correlation ID, "open a visit" message, correlation ID on the error page, `launch/patient` out of the EHR-launch scope | done (claude) |
 | O-T2 | Real OpenEMR launch end to end: preflight script, clinician mapping forms, ACL bug research, `docs/openemr.md` runbook | done (claude) |
 | O-T3 | Remove synthetic and mock behaviour from the product | done (claude) |
-| O-T4 | Pseudonymize patient data before the model provider | open |
+| O-T4 | Pseudonymize patient data before the model provider | claimed (claude) |
 | O-T5 | Embedded UI inside the hospital system | open |
 | O-T6 | Order drafting | open |
 | O-T7 | Verify the whole flow on real systems | open |
