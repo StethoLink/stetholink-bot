@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { createFhirConnector } from "../../integrations/fhir/connector.ts";
+import { createFhirWriter } from "../../integrations/fhir/writer.ts";
 import { fictionalChart, FICTIONAL_ENCOUNTER_ID, FICTIONAL_PATIENT_ID } from "../fixtures/fhir-chart.ts";
 import { ensureTrustedLocalhost, startTlsProxy } from "./fakes/tls.mts";
 
@@ -71,7 +72,40 @@ try {
 
   const encounter = await connector.getEncounter(FICTIONAL_ENCOUNTER_ID);
   assert.deepEqual({ type: encounter?.type, status: encounter?.status, reason: encounter?.reasonForVisit }, { type: "outpatient", status: "in_progress", reason: "Chest pain on exertion" });
-  console.log(`real-fhir-check: passed against a real HAPI FHIR server (${facts.length} facts, ${requests.length} requests, ${paged.length} paging links followed)`);
+
+  // --- Writes: conditional create only, checked by reading the server back -------------------
+  const run = crypto.randomUUID().replaceAll("-", "");
+  const methods: string[] = [];
+  const recording: typeof fetch = (target, init) => { methods.push(init?.method ?? "GET"); return fetch(target, init); };
+  const writer = createFhirWriter({ baseUrl: base, accessToken: "not-checked-by-hapi", patientId: FICTIONAL_PATIENT_ID, encounterId: FICTIONAL_ENCOUNTER_ID, practitionerReference: undefined,
+    grantedScopes: ["patient/DocumentReference.c", "patient/AllergyIntolerance.c", "patient/Condition.c", "patient/MedicationStatement.c"] }, recording);
+  const items = [
+    { kind: "document", itemKey: `sl-${run}-note`, documentType: "soap_note", title: "Visit note (SOAP)", text: "Subjective:\n- Fictional statement for a write check.", language: "en" },
+    { kind: "allergy", itemKey: `sl-${run}-u1`, substance: "Sulfa (fictional)", reaction: "skin rash", intolerance: false, confirmedByPhysician: false },
+    { kind: "condition", itemKey: `sl-${run}-u2`, name: "Fictional asthma" },
+    { kind: "medication", itemKey: `sl-${run}-u3`, name: "Fictional ibuprofen", dosageText: "400 mg three times daily" },
+  ] as const;
+  const created: Record<string, string> = {};
+  for (const item of items) {
+    const first = await writer.create(item);
+    assert.equal(first.status, "created", `${item.kind}: ${first.failure ?? ""}`);
+    // The same item again: the server reports the existing record and creates nothing.
+    const second = await writer.create(item);
+    assert.deepEqual([second.status, second.resourceId], ["existing", first.resourceId], `${item.kind} is not created twice`);
+    created[first.resourceType] = first.resourceId!;
+    const found = await (await fetch(`${base}/${first.resourceType}?identifier=${encodeURIComponent(`urn:stetholink:chart-write|${item.itemKey}`)}`, { headers: { "cache-control": "no-cache" } })).json() as { total?: number; entry?: unknown[] };
+    assert.equal(found.entry?.length ?? found.total, 1, `${first.resourceType} exists exactly once on the server`);
+  }
+  const stored = await (await fetch(`${base}/AllergyIntolerance/${created.AllergyIntolerance}`)).json() as { patient: { reference: string }; verificationStatus: { coding: { code: string }[] }; encounter: { reference: string } };
+  assert.deepEqual([stored.patient.reference, stored.encounter.reference, stored.verificationStatus.coding[0].code], [`Patient/${FICTIONAL_PATIENT_ID}`, `Encounter/${FICTIONAL_ENCOUNTER_ID}`, "unconfirmed"]);
+  const noteStored = await (await fetch(`${base}/DocumentReference/${created.DocumentReference}`)).json() as { docStatus: string; content: { attachment: { data: string } }[] };
+  assert.equal(noteStored.docStatus, "preliminary");
+  assert.ok(Buffer.from(noteStored.content[0].attachment.data, "base64").toString("utf8").includes("Fictional statement"));
+  assert.ok(methods.every((method) => method === "GET" || method === "POST"), "The writer issues no update or delete");
+  // The new allergy is read back by the connector on the next chart load.
+  const reread = await createFhirConnector({ baseUrl: base, accessToken: "not-checked-by-hapi", patientId: FICTIONAL_PATIENT_ID, encounterId: FICTIONAL_ENCOUNTER_ID }).getPatient(FICTIONAL_PATIENT_ID);
+  assert.ok(reread?.allergies.includes("Sulfa (fictional)"));
+  console.log(`real-fhir-check: passed against a real HAPI FHIR server (${facts.length} facts, ${requests.length} requests, ${paged.length} paging links followed; 4 resources created once each by conditional create and read back)`);
 } finally {
   proxy.close();
 }

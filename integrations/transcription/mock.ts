@@ -4,8 +4,8 @@ import type { TranscriptionProvider } from "@/core/scribe/ports";
 /** A FICTIONAL visit in Saudi Arabic with English clinical terms. Nobody said this; no recording exists. */
 export const MOCK_VISIT = [
   "هلا بك. كيف السكر معك هالفترة؟ والله يا دكتور القراءات الصبح بين مية وستين ومية وثمانين.",
-  "تاخذ metformin بانتظام؟ إيه، خمسمية ملي مرتين في اليوم مع الأكل.",
   "عندك حساسية من أدوية؟ الشهر اللي فات أخذت مضاد حيوي فيه sulfa وطلع لي طفح جلدي قوي وحكة، والطوارئ قالوا لي عندك حساسية منه.",
+  "تاخذ metformin بانتظام؟ إيه، خمسمية ملي مرتين في اليوم مع الأكل.",
   "مهم هذا، بسجله. وآخر HbA1c كان ثمانية فاصلة واحد. بزيد لك metformin إلى ألف ملي مرتين في اليوم، وبنعيد HbA1c بعد ثلاث شهور.",
 ];
 

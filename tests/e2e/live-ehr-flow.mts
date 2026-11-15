@@ -20,7 +20,7 @@ const clientId = "fictional-smart-client";
 const modelKey = "fictional-model-key";
 const physician = { subject: "fic-sub-physician", fhirUser: "Practitioner/fic-dr-1", clinicianId: "66666666-6666-4666-8666-666666666661" };
 const nurse = { subject: "fic-sub-nurse", fhirUser: "Practitioner/fic-rn-1", clinicianId: "66666666-6666-4666-8666-666666666662" };
-const scope = "launch openid fhirUser patient/Patient.rs patient/Encounter.rs patient/Condition.rs patient/MedicationRequest.rs patient/AllergyIntolerance.rs patient/Observation.rs";
+const scope = "launch openid fhirUser patient/Patient.rs patient/Encounter.rs patient/Condition.rs patient/MedicationRequest.rs patient/AllergyIntolerance.rs patient/Observation.rs patient/DocumentReference.c patient/AllergyIntolerance.c patient/Condition.c";
 process.env.SMART_SCOPE = scope;
 
 const ehr = await startFakeEhr({
@@ -38,6 +38,10 @@ const liveEnv: Record<string, string> = {
   AI_PROVIDER: "openai", OPENAI_API_KEY: modelKey, OPENAI_BASE_URL: ehr.modelBase, OPENAI_MODEL: "fictional-model-1",
   OPENAI_INPUT_USD_PER_MILLION: "1", OPENAI_OUTPUT_USD_PER_MILLION: "1", MODEL_LIVE_DATA_APPROVED: "true",
   MOCK_RECIPIENT_IDS: "fictional-cardiology-service",
+  // Scribe and EHR write-back, against the fake transcription endpoint and the fake FHIR server.
+  SCRIBE_ENABLED: "true", TRANSCRIPTION_PROVIDER: "openai", TRANSCRIPTION_MODEL: "fictional-transcribe-1", TRANSCRIPTION_USD_PER_MINUTE: "0.0045",
+  TRANSCRIPTION_LIVE_DATA_APPROVED: "true", SCRIBE_NOTE_MODEL: "fictional-model-1", SCRIBE_NOTE_INPUT_USD_PER_MILLION: "0.25", SCRIBE_NOTE_OUTPUT_USD_PER_MILLION: "2",
+  EHR_WRITE_ENABLED: "true",
 };
 
 async function start(extra: Record<string, string> = {}) {
@@ -175,6 +179,81 @@ try {
   assert.ok(ehr.state.fhirRequests.length > 0);
   assert.ok(ehr.state.fhirRequests.every((entry) => entry.method === "GET"));
 
+  // === Scribe: consent -> parts -> sourced note -> physician approval -> FHIR creates ===========
+  const scribe = "/api/scribe/sessions";
+  const capabilities = (await call("/api/scribe", 200, { cookie: doctor })).json;
+  assert.deepEqual({ enabled: capabilities.enabled, live: capabilities.liveTranscription, canApprove: capabilities.canApprove }, { enabled: true, live: true, canApprove: true });
+  assert.equal((await call("/api/scribe", 200, { cookie: observer })).json.canApprove, false);
+  const visit = crypto.randomUUID();
+  // No recording without the clinician's statement that the patient agreed.
+  await call(scribe, 400, { cookie: doctor, body: { idempotencyKey: visit } });
+  await call(scribe, 400, { cookie: doctor, body: { patientConsentConfirmed: false, idempotencyKey: visit } });
+  await call(`${scribe}/${visit}`, 404, { cookie: doctor });
+  const started = (await call(scribe, 201, { cookie: doctor, body: { patientConsentConfirmed: true, idempotencyKey: visit } })).json;
+  assert.equal(started.status, "recording");
+  assert.ok(Date.parse(started.consentConfirmedAt) > Date.now() - 60_000);
+  const part = (index: number, bytes = 6000, type = "audio/webm;codecs=opus") => fetch(`${base}${scribe}/${visit}/chunks?index=${index}&durationMs=25000`,
+    { method: "POST", headers: { cookie: doctor, "content-type": type }, body: new Uint8Array(bytes) });
+  for (const index of [0, 1, 2, 3]) assert.deepEqual(await (await part(index)).json(), { index, added: true, sentences: index === 0 || index === 3 ? 2 : 2 }, `part ${index}`);
+  // A repeated part is acknowledged and not transcribed twice into the transcript.
+  assert.equal((await (await part(2)).json()).added, false);
+  assert.equal((await part(4, 2_100_000)).status, 400, "An oversize part is refused");
+  assert.equal((await part(4, 6000, "application/json")).status, 400, "Only audio is accepted");
+  assert.equal((await fetch(`${base}${scribe}/${visit}/chunks?index=4&durationMs=25000`, { method: "POST", headers: { "content-type": "audio/webm" }, body: new Uint8Array(6000) })).status, 401);
+  // The speech provider received audio, the language and chart terms as hints, never who the patient is.
+  assert.ok(ehr.state.transcriptionRequests.length >= 4);
+  const heard = ehr.state.transcriptionRequests[0];
+  assert.deepEqual({ model: heard.model, language: heard.language, bytes: heard.bytes }, { model: "fictional-transcribe-1", language: "ar", bytes: 6000 });
+  assert.ok(heard.prompt.includes("Metformin") && heard.prompt.includes("Penicillin"));
+  for (const secret of ["Faisal", "Fictional-Example", "fic-pt-1", "1970"]) assert.equal(heard.prompt.includes(secret), false);
+
+  // Another clinician cannot see or approve this visit.
+  await call(`${scribe}/${visit}`, 404, { cookie: observer });
+  const drafted = (await call(`${scribe}/${visit}/note`, 200, { cookie: doctor, method: "POST", body: {} })).json;
+  assert.equal(drafted.status, "note_ready");
+  assert.equal(drafted.segments.length, 8);
+  assert.equal(drafted.note.provenance.dataClassification, "live");
+  assert.ok(drafted.note.sections.subjective.every((statement: { sources: { kind: string; quote: string }[] }) => statement.sources[0].kind === "transcript" && statement.sources[0].quote));
+  const proposals = Object.fromEntries(drafted.note.proposedUpdates.map((update: { name: string; relation: string; id: string }) => [update.name, update]));
+  assert.equal(proposals.Sulfa.relation, "new");
+  // Metformin is already an order in the chart: it is recognised as documented and cannot be written again.
+  assert.equal(proposals.Metformin.relation, "already_in_chart");
+  const scribeModel = ehr.state.modelRequests.filter((entry) => entry.task === "scribe_soap_note");
+  assert.equal(scribeModel.length, 1, "One model call per visit");
+  for (const secret of ["Faisal", "Fictional-Example", "1970-01-01", "fic-pt-1", "fic-enc-1", "alg-penicillin", "Practitioner"]) assert.equal(scribeModel[0].body.includes(secret), false, `The note model must not see ${secret}`);
+  assert.equal(ehr.state.created.length, 0, "Nothing is written before the physician approves");
+
+  // Approval: refused for an item that is already in the chart; nothing recorded, nothing written.
+  const approve = (selection: object, cookie = doctor, version = drafted.noteVersion) => fetch(`${base}${scribe}/${visit}/approval`, { method: "POST", headers: { cookie, "content-type": "application/json" }, body: JSON.stringify({ expectedVersion: version, selection }) });
+  assert.equal((await approve({ note: true, updates: [proposals.Metformin.id] })).status, 403);
+  assert.equal((await approve({ note: true, updates: [proposals.Sulfa.id] }, doctor, drafted.noteVersion + 1)).status, 409);
+  assert.equal(ehr.state.created.length, 0);
+  const approvedVisit = await (await approve({ note: true, updates: [proposals.Sulfa.id], confirmedAllergies: [] })).json();
+  assert.equal(approvedVisit.status, "written");
+  assert.deepEqual(approvedVisit.writes.map((write: { resourceType: string; status: string }) => [write.resourceType, write.status]), [["DocumentReference", "created"], ["AllergyIntolerance", "created"]]);
+  // The note is in the chart, so the transcript is gone. The audio was never stored.
+  assert.equal(approvedVisit.transcriptDeleted, true);
+  assert.equal(approvedVisit.segments.length, 0);
+
+  // What reached the EHR: exactly two conditional creates, for the launched patient and visit, by the clinician.
+  assert.equal(ehr.state.created.length, 2);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [document, allergy] = ehr.state.created as Array<Record<string, any>>;
+  assert.equal(document.resourceType, "DocumentReference");
+  assert.equal(document.docStatus, "preliminary");
+  assert.deepEqual([document.subject.reference, document.context.encounter[0].reference, document.author[0].reference], ["Patient/fic-pt-1", "Encounter/fic-enc-1", physician.fhirUser]);
+  assert.ok(Buffer.from(document.content[0].attachment.data, "base64").toString("utf8").startsWith("Subjective:"));
+  assert.equal(allergy.resourceType, "AllergyIntolerance");
+  assert.deepEqual([allergy.code.text, allergy.patient.reference, allergy.verificationStatus.coding[0].code], ["Sulfa", "Patient/fic-pt-1", "unconfirmed"]);
+  const writes = ehr.state.fhirRequests.filter((entry) => entry.method !== "GET");
+  assert.equal(writes.length, 2);
+  assert.ok(writes.every((entry) => entry.method === "POST" && entry.ifNoneExist?.startsWith("identifier=")), "Create only, always conditional");
+  // Approving again resumes and creates nothing more; a different selection is refused.
+  assert.equal((await approve({ note: true, updates: [proposals.Sulfa.id], confirmedAllergies: [] })).status, 200);
+  assert.equal((await approve({ note: false, updates: [proposals.Sulfa.id] })).status, 409);
+  assert.equal(ehr.state.created.length, 2);
+  assert.equal(ehr.state.fhirRequests.filter((entry) => !["GET", "POST"].includes(entry.method)).length, 0, "No update or delete was ever issued");
+
   // --- A visit the product cannot use is refused with its reason ---------------------------
   ehr.state.fhirOverride = (path) => path.startsWith("/Encounter/") ? { resourceType: "Encounter", id: "fic-enc-1", status: "entered-in-error", subject: { reference: "Patient/fic-pt-1" }, class: { code: "AMB" }, period: { start: new Date().toISOString() } } : undefined;
   const refused = await smartLaunch(physician.subject, 422);
@@ -185,7 +264,7 @@ try {
   assert.equal((await call("/api/encounters/fic-enc-1", 200, { cookie: emergency })).json.status, "triaged");
   ehr.state.fhirOverride = undefined;
 
-  console.log("live-ehr-flow: passed (fake SMART issuer, fake FHIR server, fake model, PostgreSQL)");
+  console.log("live-ehr-flow: passed (fake SMART issuer, fake FHIR server with conditional create, fake transcription, fake model, PostgreSQL): launch, facts, cited draft, approval, scribe consent, note, physician-approved chart writes");
 } finally {
   await stop();
   proxy.close();

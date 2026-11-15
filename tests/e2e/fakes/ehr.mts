@@ -57,6 +57,29 @@ function fakeReferral(input: AuthoringInput) {
   };
 }
 
+/** FICTIONAL visit that the fake transcription endpoint "hears", one part per call, whatever audio it is sent. */
+const FAKE_VISIT = [
+  "هلا بك. كيف السكر معك هالفترة؟ والله يا دكتور القراءات الصبح بين مية وستين ومية وثمانين.",
+  "عندك حساسية من أدوية؟ الشهر اللي فات أخذت مضاد حيوي فيه sulfa وطلع لي طفح جلدي قوي وحكة، والطوارئ قالوا لي عندك حساسية منه.",
+  "تاخذ metformin بانتظام؟ إيه، خمسمية ملي مرتين في اليوم مع الأكل.",
+  "وآخر HbA1c كان ثمانية فاصلة واحد. بنعيد HbA1c بعد ثلاث شهور.",
+];
+interface ScribeInput { transcript: { segments: { id: string; text: string }[] }; chart: { facts: { id: string; category: string; label: string }[] } }
+/** Deterministic "scribe model": lists each sentence with its own words as the quote, and proposes allergies and medicines named in Latin letters. */
+function fakeScribeNote(input: ScribeInput) {
+  const proposedUpdates: Record<string, string>[] = [];
+  for (const segment of input.transcript.segments) {
+    const term = /\b[A-Za-z][A-Za-z0-9-]{3,}\b/.exec(segment.text)?.[0];
+    const kind = !term ? undefined : segment.text.includes("حساسي") ? "allergy" : /(?:^|\s)(?:آخذ|تاخذ)\s/.test(segment.text) ? "medication" : undefined;
+    if (!term || !kind || proposedUpdates.some((update) => update.name.toLowerCase() === term.toLowerCase())) continue;
+    const match = input.chart.facts.find((fact) => fact.category === kind && fact.label.toLowerCase().includes(term.toLowerCase()));
+    proposedUpdates.push({ kind, name: term[0].toUpperCase() + term.slice(1), detail: "", relation: match ? "already_in_chart" : "new", chartFactId: match?.id ?? "", explanation: "", segmentId: segment.id, quote: segment.text });
+  }
+  return { subjective: input.transcript.segments.map((segment) => ({ text: segment.text, sources: [{ id: segment.id, quote: segment.text }] })),
+    objective: [], assessment: [], plan: [], clinicianSegments: [], patientSegments: [], proposedUpdates };
+}
+const WRITABLE = ["DocumentReference", "AllergyIntolerance", "Condition", "MedicationStatement"];
+
 export async function startFakeEhr(options: FakeEhrOptions) {
   const origin = `https://localhost:${options.port}`;
   const { privateKey, publicKey } = generateKeyPairSync("ec", { namedCurve: "P-256" });
@@ -69,7 +92,11 @@ export async function startFakeEhr(options: FakeEhrOptions) {
     /** Launch context handed out at the next authorization; a standalone launch has no patient. */
     context: { patient: FICTIONAL_PATIENT_ID as string | undefined, encounter: FICTIONAL_ENCOUNTER_ID as string | undefined },
     modelRequests: [] as Array<{ task: string; body: string }>,
-    fhirRequests: [] as Array<{ method: string; path: string }>,
+    fhirRequests: [] as Array<{ method: string; path: string; ifNoneExist?: string }>,
+    /** Resources the application created, by resource type. */
+    created: [] as Array<Record<string, unknown> & { resourceType: string; id: string }>,
+    transcriptionRequests: [] as Array<{ model: string; language: string; prompt: string; bytes: number }>,
+    transcriptionCalls: 0,
     /** Replace one FHIR answer, e.g. to return an unsupported encounter. */
     fhirOverride: undefined as undefined | ((path: string, query: URLSearchParams) => unknown),
   };
@@ -117,6 +144,15 @@ export async function startFakeEhr(options: FakeEhrOptions) {
           scope: process.env.SMART_SCOPE ?? "launch openid fhirUser", ...(grant.patient ? { patient: grant.patient } : {}), ...(grant.encounter ? { encounter: grant.encounter } : {}),
         });
       }
+      if (path === "/model/v1/audio/transcriptions" && req.method === "POST") {
+        if (req.headers.authorization !== `Bearer ${options.modelKey}`) return json(res, 401, { error: "unauthorized" });
+        const chunks: Buffer[] = [];
+        for await (const chunk of req) chunks.push(chunk as Buffer);
+        const form = await new Response(Buffer.concat(chunks), { headers: { "content-type": req.headers["content-type"] ?? "" } }).formData();
+        const file = form.get("file") as File;
+        state.transcriptionRequests.push({ model: String(form.get("model")), language: String(form.get("language")), prompt: String(form.get("prompt") ?? ""), bytes: file.size });
+        return json(res, 200, { text: FAKE_VISIT[state.transcriptionCalls++ % FAKE_VISIT.length] });
+      }
       if (path === "/model/v1/responses" && req.method === "POST") {
         if (req.headers.authorization !== `Bearer ${options.modelKey}`) return json(res, 401, { error: "unauthorized" });
         const raw = await body(req);
@@ -124,7 +160,8 @@ export async function startFakeEhr(options: FakeEhrOptions) {
         const task = request.text.format.name;
         state.modelRequests.push({ task, body: raw });
         const input = JSON.parse(request.input.at(-1)!.content);
-        const text = JSON.stringify(task === "consultation_referral" ? fakeReferral(input) : task === "consultation_evidence_selection" ? { evidenceIds: input.eligibleEvidenceIds } : {});
+        const text = JSON.stringify(task === "consultation_referral" ? fakeReferral(input) : task === "consultation_evidence_selection" ? { evidenceIds: input.eligibleEvidenceIds }
+          : task === "scribe_soap_note" ? fakeScribeNote(input) : {});
         return json(res, 200, {
           status: "completed", model: "fictional-model-1", usage: { input_tokens: Math.ceil(raw.length / 4), output_tokens: Math.ceil(text.length / 4) },
           output: [{ type: "message", role: "assistant", status: "completed", content: [{ type: "output_text", text }] }],
@@ -137,7 +174,22 @@ export async function startFakeEhr(options: FakeEhrOptions) {
           capabilities: ["launch-ehr", "launch-standalone", "client-public", "context-ehr-patient", "context-ehr-encounter", "sso-openid-connect", "permission-v2"],
         });
         if (!tokens.has((req.headers.authorization ?? "").replace(/^Bearer /, ""))) return json(res, 401, { resourceType: "OperationOutcome" });
-        state.fhirRequests.push({ method: req.method ?? "GET", path: resource });
+        const ifNoneExist = typeof req.headers["if-none-exist"] === "string" ? req.headers["if-none-exist"] : undefined;
+        state.fhirRequests.push({ method: req.method ?? "GET", path: resource, ifNoneExist });
+        if (resource === "/metadata") return json(res, 200, { resourceType: "CapabilityStatement", fhirVersion: "4.0.1",
+          rest: [{ mode: "server", resource: WRITABLE.map((type) => ({ type, interaction: [{ code: "read" }, { code: "create" }], conditionalCreate: true })) }] });
+        if (req.method === "POST" && WRITABLE.includes(resource.slice(1))) {
+          // Conditional create (FHIR R4): the identifier in If-None-Exist decides between 201 and 200.
+          const incoming = JSON.parse(await body(req)) as Record<string, unknown> & { resourceType: string; identifier?: Array<{ system: string; value: string }> };
+          if (incoming.resourceType !== resource.slice(1) || !ifNoneExist) return json(res, 400, { resourceType: "OperationOutcome" });
+          const wanted = decodeURIComponent(new URLSearchParams(ifNoneExist).get("identifier") ?? "");
+          const existing = state.created.find((entry) => entry.resourceType === incoming.resourceType && (entry.identifier as Array<{ system: string; value: string }> | undefined)?.some((id) => `${id.system}|${id.value}` === wanted));
+          if (existing) return json(res, 200, existing);
+          const stored = { ...incoming, id: `fic-created-${state.created.length + 1}` };
+          state.created.push(stored);
+          res.setHeader("location", `${origin}/fhir/${stored.resourceType}/${stored.id}/_history/1`);
+          return json(res, 201, stored);
+        }
         if (req.method !== "GET") return json(res, 405, { resourceType: "OperationOutcome" });
         const answer = state.fhirOverride?.(resource, url.searchParams) ?? fictionalFhirResponse(resource, url.searchParams);
         return answer === undefined ? json(res, 404, { resourceType: "OperationOutcome" }) : json(res, 200, answer);

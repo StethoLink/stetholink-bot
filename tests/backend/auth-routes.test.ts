@@ -164,8 +164,8 @@ describe("SMART launch", () => {
 describe("SMART session permissions", () => {
   const routes = { launch: smartLaunch, callback: smartCallback };
   it.each([
-    ["physician", ["chart:read", "consultation:draft", "consultation:approve", "consultation:route"]],
-    ["clinician", ["chart:read", "consultation:draft"]],
+    ["physician", ["chart:read", "consultation:draft", "scribe:record", "consultation:approve", "consultation:route", "chart:write"]],
+    ["clinician", ["chart:read", "consultation:draft", "scribe:record"]],
   ] as const)("come from the tenant's clinician mapping after the signed launch (%s)", async (role, expected) => {
     Object.assign(env, smartEnv(role), { CLINICAL_DATA_MODE: "live" });
     // A token that claims StethoLink permissions in its scope gains nothing by it.
