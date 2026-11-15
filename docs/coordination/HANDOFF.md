@@ -2,30 +2,31 @@
 
 Written at the end of each working session so the next one starts from this file instead of re-reading the whole history. Update it, commit it and push it before handing off. Newest state only; the detail is in [WORKBOARD.md](WORKBOARD.md).
 
-## Where things stand (2026-11-15)
+## Where things stand (2026-11-15, after T1 of the OpenEMR brief)
 
-- **Branch:** the owner asked on 2026-11-15 for the work to go to `main`; `main` was fast-forwarded from `7b0ffc9` to `0ac3c10` (no merge commit, no conflicts). `main` and `claude/new-session-xgixce` are identical.
-- **Brief:** "live MVP as an EHR plugin" (scribe, EHR write-back, specialist inbox, redesign, operations), five phases. **Phases 0 to 5 are implemented and every workboard task (T5 to T19) is `done`.** Read the newest five *Log* entries on the workboard for what each phase did, how it was verified and which decisions were taken.
-- **Checks at the last commit, all passing:** `npm run check` (461 passed, 30 skipped opt-in), `npm run build`, `node --test tests/smoke/*.test.mts`, `bash tests/e2e/run-ci.sh` (Docker, PostgreSQL 17). The production image builds and runs healthy.
+- **Brief in progress:** [fable-openemr-privacy-orders.md](../agent-handoffs/fable-openemr-privacy-orders.md), tasks T1 to T9, one per conversation (its "Rule zero"). On the workboard they are `O-T1` to `O-T9`.
+- **Branch:** all work of this brief is on `claude/wizardly-ptolemy-wyp0dh`, which is `main` (`6e0afdc`) plus the brief and T1. **It is not on `main`.** `AGENTS.md` says to push to `main`; the session that did T1 was started on this branch and pushed there only. Keep working on this branch; T9 merges it. If the owner says otherwise, fast-forward `main` to it (no conflicts: `main` has not moved).
+- **The earlier brief** (live MVP, workboard T1 to T19) is complete and on `main`; its details are in the workboard log.
 
-## What is left
+## T1 done: SMART launch failures are diagnosable
 
-1. **The final report to the owner** (Arabic, plain language, seven points) is delivered as the last message of the session of 2026-11-15 that also did the follow-ups below. If it must be written again, everything it needs is in the workboard log, `docs/ai/scribe-benchmark.md`, `docs/sandbox.md`, `docs/go-live.md` (sections 1, 4, 10) and `docs/ui/README.md`. Commit links: `https://github.com/StethoLink/stetholink-bot/commit/<sha>`.
-2. Follow-ups done on 2026-11-15 after Phase 5: `tests/e2e/README.md` describes every script and SQL suite; both Chromium walkthroughs were re-run and pass (`consultation-flow.mjs` at 360 and 1280 px, `scribe-flow.mjs` at 360 px), and `live-ehr-flow.mts` passes with `LIVE_E2E_BROWSER=1`; scribe, inbox and live-workspace screenshots are in `docs/ui/after/`. No product code changed. Nothing is open here.
-3. **Not implemented, by decision or for lack of access** (do not start them without the owner): EHR refresh token; a real email sender for specialist codes; registering `http-partner`; the Q6 "stated by the physician" source (design only, `docs/decisions/0003-physician-stated-source.md`); a check against a public SMART sandbox, OpenEMR or a hospital EHR; a transcription benchmark on human speech.
-4. Merged to `main` on 2026-11-15 at the owner's request (fast-forward to `0ac3c10`).
+- **Commits:** `90d2a95` (claim), `88ae344` (code, tests, docs), and the commit that wrote this section.
+- **What changed:** `platform/auth/smart-launch-failure.ts` (reason list, `SmartLaunchFailure`, the one log line, correlation ID), `platform/auth/smart-session.ts` (every branch throws a reason; mapping is checked before the visit; `ehrLaunchScope` drops `launch/patient`), `integrations/fhir/smart.ts` (`SmartExchangeError`), `integrations/fhir/connector.ts` (`FhirReadError`), `apps/embedded-app/server/http/launch-error.ts` (error page with the correlation ID; JSON for non-browser clients), both SMART routes, `docs/openemr.md` (section "When a launch fails": every reason and what to check), `.env.example`.
+- **Behaviour:** a failed launch writes one line, `{"action":"smart.launch_failed","stage","reason","detail"?,"correlationId","at"}`. A token without an encounter answers 422 with "Open a visit in the patient's chart, then launch StethoLink again."; every security failure keeps the generic message. The page and the `X-Correlation-Id` header show the ID.
+- **Verified:** `npm run check` (514 passed, 30 skipped opt-in), `npm run build`, `node --test tests/smoke/*.test.mts`. `tests/backend/smart-launch-diagnostics.test.ts` has a case for each of the 30 reasons (the suite fails if one has none) and checks in each that no console stream holds a token, code, state, nonce, verifier, subject, `fhirUser`, clinician or chart ID, client ID, host name or the EHR's error text.
+- **Not verified:** nothing was run against OpenEMR or any real EHR. `tests/e2e/run-ci.sh` (Docker) was not re-run. The error page is plain English HTML; Arabic, RTL and the design system are T5.
 
-## Commits of this brief
+## Next: T2 (real OpenEMR launch end to end)
 
-| Phase | Commit |
-| --- | --- |
-| 0 claims | `32d37ac` |
-| 1 real chart in, cited draft out | `83e5996`, `eb3d5dc`, `1eb398a`, `ab8b1af` |
-| 2 design system and UI | `f5d8fbd`, `dfa43d4` |
-| 3 scribe and EHR write-back | `4ee45c7`, `5bc29fa` |
-| 4 specialist inbox | `96e6d4e` |
-| 5 operations and docs | `fdc951b`, `9197fe9` |
-| Follow-ups (test guide, screenshots) | `15726c2`, and the commit that added this row |
+Do the brief's T2 as written. What T1 leaves for it:
+
+- The mapping still needs the signed `sub` and `fhirUser` to equal the map entry exactly (a relative entry does not match an absolute signed value, or the reverse). T2 makes both forms match. On a real attempt, the `clinician_unmapped` detail says which half failed and the form OpenEMR signed.
+- The preflight script can reuse the checks behind `discovery_*`, `pkce_s256_unsupported`, `jwks_unavailable` and `registration_invalid` in `platform/auth/smart-session.ts` (`discover`, `registration`); they import `server-only`, so a script needs the logic moved to a plain module or repeated.
+- This cloud environment has no OpenEMR. Check whether Docker can pull and run one before writing "unverified".
+
+## What is left from the earlier brief
+
+Not implemented, by decision or for lack of access (do not start them without the owner): EHR refresh token; a real email sender for specialist codes; registering `http-partner`; the Q6 "stated by the physician" source (design only, `docs/decisions/0003-physician-stated-source.md`); a transcription benchmark on human speech. The check against OpenEMR is now T2 and T7 of the current brief.
 
 ## Facts worth not re-deriving
 
