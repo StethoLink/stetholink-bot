@@ -46,6 +46,22 @@ Status: `open`, `claimed (<agent>)`, `done (<agent>)`. Suggested first owner is 
 | T18 | Operations and data map: production Dockerfile, encrypted EHR token at rest with key rotation, retention job (sessions, transcripts, drafts, audit), session expiry message and server-side refresh, optional iframe cookie mode (`SameSite=None; Secure; Partitioned`), clinical evaluation cases in `core/agent/evaluations`. | T5, T15 | Claude | done (claude) | `20261114160000_retention.sql` |
 | T19 | Design only (product decision Q6, not implemented this round): a "stated by the physician" source for consultations, kept apart from chart facts. Proposal to be written to `docs/decisions/`. | T6 | either | done (claude) | |
 
+## Tasks of the OpenEMR brief (2026-11-15)
+
+Brief: [fable-openemr-privacy-orders.md](../agent-handoffs/fable-openemr-privacy-orders.md). Its tasks are numbered T1 to T9 there; they are written `O-T1` to `O-T9` here so they do not collide with the table above. One task per conversation, in order.
+
+| ID | Task | Status |
+| --- | --- | --- |
+| O-T1 | SMART launch failures diagnosable: reason codes logged with a correlation ID, "open a visit" message, correlation ID on the error page, `launch/patient` out of the EHR-launch scope | claimed (claude) |
+| O-T2 | Real OpenEMR launch end to end: preflight script, clinician mapping forms, ACL bug research, `docs/openemr.md` runbook | open |
+| O-T3 | Remove synthetic and mock behaviour from the product | open |
+| O-T4 | Pseudonymize patient data before the model provider | open |
+| O-T5 | Embedded UI inside the hospital system | open |
+| O-T6 | Order drafting | open |
+| O-T7 | Verify the whole flow on real systems | open |
+| O-T8 | Final report to the owner | open |
+| O-T9 | Merge branches into `main`, delete merged ones after owner confirmation | open |
+
 ## Interface changes
 
 Newest first. Format: `date · agent · what changed · who must react`.
