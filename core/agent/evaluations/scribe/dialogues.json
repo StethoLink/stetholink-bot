@@ -1,0 +1,1263 @@
+{
+ "note": "FICTIONAL visits written for testing. No real patient, clinician or recording. Saudi Arabic with English clinical terms.",
+ "language": "ar-SA",
+ "dialogues": [
+  {
+   "id": "scribe-01-chest-pain",
+   "title": "Exertional chest pain; patient denies allergies while the chart records penicillin",
+   "chart": [
+    {
+     "category": "allergy",
+     "label": "Penicillin",
+     "value": "Reaction: Urticaria (severe)"
+    },
+    {
+     "category": "problem",
+     "label": "Essential hypertension",
+     "value": true
+    },
+    {
+     "category": "medication",
+     "label": "Amlodipine 5 mg oral tablet",
+     "value": "5 mg once daily"
+    }
+   ],
+   "turns": [
+    {
+     "speaker": "clinician",
+     "text": "السلام عليكم، حياك الله. وش اللي جابك اليوم؟"
+    },
+    {
+     "speaker": "patient",
+     "text": "وعليكم السلام دكتور. والله من ثلاث أيام أحس بألم في صدري إذا مشيت أو طلعت الدرج."
+    },
+    {
+     "speaker": "clinician",
+     "text": "الألم يروح إذا ارتحت؟ ويمتد لذراعك أو فكك؟"
+    },
+    {
+     "speaker": "patient",
+     "text": "إيه يروح إذا جلست، وأحيانا يروح لذراعي اليسار. وما فيه تعرق ولا ضيق نفس."
+    },
+    {
+     "speaker": "clinician",
+     "text": "طيب. تاخذ أدوية حاليا؟"
+    },
+    {
+     "speaker": "patient",
+     "text": "آخذ amlodipine خمسة ملي مرة في اليوم للضغط، وبس."
+    },
+    {
+     "speaker": "clinician",
+     "text": "عندك حساسية من أي دواء؟"
+    },
+    {
+     "speaker": "patient",
+     "text": "لا، ما عندي حساسية من شي."
+    },
+    {
+     "speaker": "clinician",
+     "text": "تدخن؟"
+    },
+    {
+     "speaker": "patient",
+     "text": "إيه أدخن بكت في اليوم من عشرين سنة."
+    },
+    {
+     "speaker": "clinician",
+     "text": "قست لك الضغط الحين مية وخمسين على خمسة وتسعين، والنبض ثمانية وثمانين. بنسوي لك ECG و troponin الحين، وبحولك على cardiology. وأشتبه في stable angina بس ما نقدر نأكد قبل الفحوصات."
+    },
+    {
+     "speaker": "patient",
+     "text": "تمام دكتور، الله يعطيك العافية."
+    }
+   ],
+   "keyTerms": [
+    {
+     "kind": "medication",
+     "term": "amlodipine",
+     "variants": [
+      "amlodipine",
+      "أملوديبين",
+      "املوديبين",
+      "أملودبين"
+     ]
+    },
+    {
+     "kind": "dose",
+     "term": "خمسة ملي",
+     "variants": [
+      "خمسة ملي",
+      "5 ملي",
+      "5 mg",
+      "خمسه ملي",
+      "٥ ملي"
+     ]
+    },
+    {
+     "kind": "vital",
+     "term": "مية وخمسين على خمسة وتسعين",
+     "variants": [
+      "مية وخمسين على خمسة وتسعين",
+      "150/95",
+      "150 على 95",
+      "١٥٠ على ٩٥",
+      "ميه وخمسين على خمسه وتسعين"
+     ]
+    },
+    {
+     "kind": "investigation",
+     "term": "ECG",
+     "variants": [
+      "ECG",
+      "إي سي جي",
+      "تخطيط"
+     ]
+    },
+    {
+     "kind": "investigation",
+     "term": "troponin",
+     "variants": [
+      "troponin",
+      "تروبونين"
+     ]
+    },
+    {
+     "kind": "condition",
+     "term": "stable angina",
+     "variants": [
+      "stable angina",
+      "ستيبل أنجاينا",
+      "أنجاينا",
+      "انجاينا"
+     ]
+    },
+    {
+     "kind": "allergy",
+     "term": "ما عندي حساسية",
+     "variants": [
+      "ما عندي حساسية",
+      "ماعندي حساسية",
+      "ما عندي حساسيه"
+     ]
+    }
+   ],
+   "expected": {
+    "chartConflicts": [
+     {
+      "kind": "allergy",
+      "about": "Penicillin",
+      "reason": "Patient states no drug allergy; chart records penicillin allergy"
+     }
+    ],
+    "newUpdates": [],
+    "assessmentKeepsUncertainty": "stable angina is suspected, not confirmed",
+    "planFromClinicianOnly": [
+     "ECG",
+     "troponin",
+     "cardiology referral"
+    ],
+    "mustNotInvent": [
+     "aspirin",
+     "nitroglycerin",
+     "dose of any drug not stated",
+     "diagnosis stated as confirmed"
+    ],
+    "spokenVitals": [
+     "blood pressure 150/95",
+     "pulse 88"
+    ]
+   }
+  },
+  {
+   "id": "scribe-02-diabetes-new-allergy",
+   "title": "Diabetes follow-up; a new sulfa allergy is mentioned",
+   "chart": [
+    {
+     "category": "problem",
+     "label": "Type 2 diabetes mellitus",
+     "value": true
+    },
+    {
+     "category": "medication",
+     "label": "Metformin 500 mg oral tablet",
+     "value": "500 mg twice daily"
+    }
+   ],
+   "turns": [
+    {
+     "speaker": "clinician",
+     "text": "هلا بك. كيف السكر معك هالفترة؟"
+    },
+    {
+     "speaker": "patient",
+     "text": "والله يا دكتور القراءات الصبح بين مية وستين ومية وثمانين."
+    },
+    {
+     "speaker": "clinician",
+     "text": "تاخذ metformin بانتظام؟"
+    },
+    {
+     "speaker": "patient",
+     "text": "إيه، خمسمية ملي مرتين في اليوم مع الأكل."
+    },
+    {
+     "speaker": "clinician",
+     "text": "فيه أعراض جانبية؟ إسهال أو ألم بطن؟"
+    },
+    {
+     "speaker": "patient",
+     "text": "لا الحمد لله. بس الشهر اللي فات أخذت مضاد حيوي فيه sulfa وطلع لي طفح جلدي قوي وحكة، والطوارئ قالوا لي عندك حساسية منه."
+    },
+    {
+     "speaker": "clinician",
+     "text": "مهم هذا، بسجله. وآخر HbA1c كان ثمانية فاصلة واحد. بزيد لك metformin إلى ألف ملي مرتين في اليوم، وبنعيد HbA1c بعد ثلاث شهور."
+    },
+    {
+     "speaker": "patient",
+     "text": "إن شاء الله. وأكمل على نفس الحمية؟"
+    },
+    {
+     "speaker": "clinician",
+     "text": "إيه كمل، وامش نص ساعة يوميا."
+    }
+   ],
+   "keyTerms": [
+    {
+     "kind": "medication",
+     "term": "metformin",
+     "variants": [
+      "metformin",
+      "ميتفورمين",
+      "متفورمين",
+      "ميتفورمن"
+     ]
+    },
+    {
+     "kind": "dose",
+     "term": "خمسمية ملي",
+     "variants": [
+      "خمسمية ملي",
+      "500 ملي",
+      "500 mg",
+      "خمسميه ملي",
+      "٥٠٠ ملي"
+     ]
+    },
+    {
+     "kind": "dose",
+     "term": "ألف ملي",
+     "variants": [
+      "ألف ملي",
+      "1000 ملي",
+      "1000 mg",
+      "الف ملي",
+      "١٠٠٠ ملي"
+     ]
+    },
+    {
+     "kind": "allergy",
+     "term": "sulfa",
+     "variants": [
+      "sulfa",
+      "سلفا",
+      "السلفا",
+      "سولفا"
+     ]
+    },
+    {
+     "kind": "allergy",
+     "term": "طفح جلدي",
+     "variants": [
+      "طفح جلدي",
+      "طفح"
+     ]
+    },
+    {
+     "kind": "investigation",
+     "term": "HbA1c",
+     "variants": [
+      "HbA1c",
+      "إتش بي إيه ون سي",
+      "السكر التراكمي",
+      "A1c",
+      "ايه ون سي"
+     ]
+    },
+    {
+     "kind": "vital",
+     "term": "ثمانية فاصلة واحد",
+     "variants": [
+      "ثمانية فاصلة واحد",
+      "8.1",
+      "٨٫١",
+      "ثمانيه فاصله واحد",
+      "٨.١"
+     ]
+    }
+   ],
+   "expected": {
+    "chartConflicts": [],
+    "newUpdates": [
+     {
+      "kind": "allergy",
+      "substance": "sulfa antibiotic",
+      "reaction": "skin rash and itching",
+      "status": "new"
+     }
+    ],
+    "alreadyInChart": [
+     "metformin 500 mg twice daily",
+     "type 2 diabetes"
+    ],
+    "planFromClinicianOnly": [
+     "increase metformin to 1000 mg twice daily",
+     "repeat HbA1c in three months",
+     "walk half an hour daily"
+    ],
+    "mustNotInvent": [
+     "insulin",
+     "a second diabetes drug",
+     "HbA1c target value"
+    ]
+   }
+  },
+  {
+   "id": "scribe-03-child-asthma",
+   "title": "Child with cough and wheeze; mother reports salbutamol use",
+   "chart": [
+    {
+     "category": "problem",
+     "label": "Asthma",
+     "value": true
+    }
+   ],
+   "turns": [
+    {
+     "speaker": "clinician",
+     "text": "أهلا أم خالد. وش فيه خالد؟"
+    },
+    {
+     "speaker": "patient",
+     "text": "يا دكتورة من يومين يكح بالليل ويصفر صدره، وعطيته بخاخ salbutamol بختين كل أربع ساعات."
+    },
+    {
+     "speaker": "clinician",
+     "text": "فيه حرارة؟"
+    },
+    {
+     "speaker": "patient",
+     "text": "أمس كانت ثمانية وثلاثين، واليوم ما قستها."
+    },
+    {
+     "speaker": "clinician",
+     "text": "ياكل ويشرب زين؟"
+    },
+    {
+     "speaker": "patient",
+     "text": "أكله قليل بس يشرب."
+    },
+    {
+     "speaker": "clinician",
+     "text": "عنده حساسية من أدوية أو أكل؟"
+    },
+    {
+     "speaker": "patient",
+     "text": "عنده حساسية من الفول السوداني، يطلع له ورم في الشفايف."
+    },
+    {
+     "speaker": "clinician",
+     "text": "سمعت صدره وفيه wheeze خفيف على الجهتين، والأكسجين ستة وتسعين بالمية. بنكمل salbutamol، وبضيف له prednisolone شراب لثلاث أيام. وإذا زاد ضيق النفس تجيبينه الطوارئ على طول."
+    },
+    {
+     "speaker": "patient",
+     "text": "تمام، جزاك الله خير."
+    }
+   ],
+   "keyTerms": [
+    {
+     "kind": "medication",
+     "term": "salbutamol",
+     "variants": [
+      "salbutamol",
+      "سالبوتامول",
+      "سلبوتامول",
+      "السالبوتامول"
+     ]
+    },
+    {
+     "kind": "dose",
+     "term": "بختين كل أربع ساعات",
+     "variants": [
+      "بختين كل أربع ساعات",
+      "بختين كل اربع ساعات",
+      "بخّتين كل أربع ساعات",
+      "بختين كل 4 ساعات"
+     ]
+    },
+    {
+     "kind": "vital",
+     "term": "ثمانية وثلاثين",
+     "variants": [
+      "ثمانية وثلاثين",
+      "38",
+      "٣٨",
+      "ثمانيه وثلاثين"
+     ]
+    },
+    {
+     "kind": "allergy",
+     "term": "الفول السوداني",
+     "variants": [
+      "الفول السوداني",
+      "فول سوداني"
+     ]
+    },
+    {
+     "kind": "investigation",
+     "term": "wheeze",
+     "variants": [
+      "wheeze",
+      "ويز",
+      "صفير",
+      "أزيز"
+     ]
+    },
+    {
+     "kind": "vital",
+     "term": "ستة وتسعين",
+     "variants": [
+      "ستة وتسعين",
+      "96",
+      "٩٦",
+      "سته وتسعين"
+     ]
+    },
+    {
+     "kind": "medication",
+     "term": "prednisolone",
+     "variants": [
+      "prednisolone",
+      "بريدنيزولون",
+      "بردنيزولون",
+      "بريدنيزلون",
+      "بريدنيسولون",
+      "بردنيسولون"
+     ]
+    }
+   ],
+   "expected": {
+    "chartConflicts": [],
+    "newUpdates": [
+     {
+      "kind": "allergy",
+      "substance": "peanut",
+      "reaction": "lip swelling",
+      "status": "new"
+     },
+     {
+      "kind": "medication",
+      "name": "salbutamol inhaler",
+      "detail": "two puffs every four hours, given by the mother",
+      "status": "new"
+     }
+    ],
+    "spokenVitals": [
+     "oxygen saturation 96%",
+     "temperature 38 yesterday (reported by mother, not measured today)"
+    ],
+    "planFromClinicianOnly": [
+     "continue salbutamol",
+     "prednisolone syrup for three days",
+     "return to emergency if breathing worsens"
+    ],
+    "mustNotInvent": [
+     "prednisolone dose in mg",
+     "antibiotic",
+     "diagnosis of pneumonia"
+    ]
+   }
+  },
+  {
+   "id": "scribe-04-back-pain",
+   "title": "Low back pain; ibuprofen and omeprazole reported by the patient",
+   "chart": [],
+   "turns": [
+    {
+     "speaker": "clinician",
+     "text": "تفضل، وش تشتكي منه؟"
+    },
+    {
+     "speaker": "patient",
+     "text": "ألم أسفل الظهر من أسبوع بعد ما شلت شي ثقيل."
+    },
+    {
+     "speaker": "clinician",
+     "text": "الألم ينزل للرجل؟ فيه تنميل أو ضعف؟"
+    },
+    {
+     "speaker": "patient",
+     "text": "لا ما ينزل، ولا فيه تنميل."
+    },
+    {
+     "speaker": "clinician",
+     "text": "تتحكم في البول والبراز طبيعي؟"
+    },
+    {
+     "speaker": "patient",
+     "text": "إيه طبيعي."
+    },
+    {
+     "speaker": "clinician",
+     "text": "وش أخذت له؟"
+    },
+    {
+     "speaker": "patient",
+     "text": "آخذ ibuprofen أربعمية ملي ثلاث مرات في اليوم، ومعه omeprazole عشرين ملي الصبح عشان معدتي."
+    },
+    {
+     "speaker": "clinician",
+     "text": "عندك أمراض مزمنة أو حساسية؟"
+    },
+    {
+     "speaker": "patient",
+     "text": "لا ولله الحمد، ما عندي أمراض ولا حساسية."
+    },
+    {
+     "speaker": "clinician",
+     "text": "الفحص ما فيه علامات خطر. هذا غالبا شد عضلي. كمل ibuprofen خمس أيام بس، واستخدم كمادات دافية، وبحولك physiotherapy. وإذا صار تنميل أو ضعف ارجع لنا."
+    }
+   ],
+   "keyTerms": [
+    {
+     "kind": "medication",
+     "term": "ibuprofen",
+     "variants": [
+      "ibuprofen",
+      "إيبوبروفين",
+      "ايبوبروفين",
+      "بروفين"
+     ]
+    },
+    {
+     "kind": "dose",
+     "term": "أربعمية ملي",
+     "variants": [
+      "أربعمية ملي",
+      "400 ملي",
+      "400 mg",
+      "اربعميه ملي",
+      "٤٠٠ ملي"
+     ]
+    },
+    {
+     "kind": "medication",
+     "term": "omeprazole",
+     "variants": [
+      "omeprazole",
+      "أوميبرازول",
+      "اوميبرازول"
+     ]
+    },
+    {
+     "kind": "dose",
+     "term": "عشرين ملي",
+     "variants": [
+      "عشرين ملي",
+      "20 ملي",
+      "20 mg",
+      "٢٠ ملي"
+     ]
+    },
+    {
+     "kind": "condition",
+     "term": "شد عضلي",
+     "variants": [
+      "شد عضلي"
+     ]
+    },
+    {
+     "kind": "investigation",
+     "term": "physiotherapy",
+     "variants": [
+      "physiotherapy",
+      "علاج طبيعي",
+      "فيزيوثيرابي",
+      "العلاج الطبيعي"
+     ]
+    }
+   ],
+   "expected": {
+    "chartConflicts": [],
+    "newUpdates": [
+     {
+      "kind": "medication",
+      "name": "ibuprofen",
+      "detail": "400 mg three times daily",
+      "status": "new"
+     },
+     {
+      "kind": "medication",
+      "name": "omeprazole",
+      "detail": "20 mg in the morning",
+      "status": "new"
+     }
+    ],
+    "negativesStatedByPatient": [
+     "no radiation to the leg",
+     "no numbness",
+     "no chronic disease",
+     "no allergy"
+    ],
+    "assessmentKeepsUncertainty": "probably muscle strain",
+    "planFromClinicianOnly": [
+     "ibuprofen for five days only",
+     "warm compresses",
+     "physiotherapy referral",
+     "return if numbness or weakness"
+    ],
+    "mustNotInvent": [
+     "imaging",
+     "muscle relaxant",
+     "an allergy record"
+    ]
+   }
+  },
+  {
+   "id": "scribe-05-anticoagulant-conflict",
+   "title": "Patient says warfarin was stopped while the chart lists it as active",
+   "chart": [
+    {
+     "category": "problem",
+     "label": "Atrial fibrillation",
+     "value": true
+    },
+    {
+     "category": "medication",
+     "label": "Warfarin 5 mg oral tablet",
+     "value": "5 mg once daily"
+    }
+   ],
+   "turns": [
+    {
+     "speaker": "clinician",
+     "text": "أهلا يا عم. كيف الخفقان؟"
+    },
+    {
+     "speaker": "patient",
+     "text": "أحسن الحمد لله."
+    },
+    {
+     "speaker": "clinician",
+     "text": "لسا تاخذ warfarin؟"
+    },
+    {
+     "speaker": "patient",
+     "text": "لا يا دكتور، وقفته من شهرين. دكتور القلب بدله لي بـ apixaban خمسة ملي مرتين في اليوم."
+    },
+    {
+     "speaker": "clinician",
+     "text": "زين. فيه نزيف من اللثة أو كدمات؟"
+    },
+    {
+     "speaker": "patient",
+     "text": "لا."
+    },
+    {
+     "speaker": "clinician",
+     "text": "النبض اليوم اثنين وسبعين وغير منتظم. بنكمل apixaban على نفس الجرعة، وبنسوي وظائف الكلى."
+    }
+   ],
+   "keyTerms": [
+    {
+     "kind": "medication",
+     "term": "warfarin",
+     "variants": [
+      "warfarin",
+      "وارفارين",
+      "الوارفارين"
+     ]
+    },
+    {
+     "kind": "medication",
+     "term": "apixaban",
+     "variants": [
+      "apixaban",
+      "أبيكسابان",
+      "ابيكسابان",
+      "أبكسبان"
+     ]
+    },
+    {
+     "kind": "dose",
+     "term": "خمسة ملي مرتين",
+     "variants": [
+      "خمسة ملي مرتين",
+      "5 ملي مرتين",
+      "خمسه ملي مرتين",
+      "5 mg مرتين"
+     ]
+    },
+    {
+     "kind": "vital",
+     "term": "اثنين وسبعين",
+     "variants": [
+      "اثنين وسبعين",
+      "72",
+      "٧٢"
+     ]
+    }
+   ],
+   "expected": {
+    "chartConflicts": [
+     {
+      "kind": "medication",
+      "about": "Warfarin",
+      "reason": "Patient says warfarin was stopped two months ago; chart lists it as active"
+     }
+    ],
+    "newUpdates": [
+     {
+      "kind": "medication",
+      "name": "apixaban",
+      "detail": "5 mg twice daily",
+      "status": "new"
+     }
+    ],
+    "planFromClinicianOnly": [
+     "continue apixaban at the same dose",
+     "renal function tests"
+    ],
+    "mustNotInvent": [
+     "INR value",
+     "stopping warfarin in the chart automatically"
+    ]
+   }
+  },
+  {
+   "id": "scribe-06-uti",
+   "title": "Urinary symptoms; nitrofurantoin prescribed; known penicillin allergy confirmed",
+   "chart": [
+    {
+     "category": "allergy",
+     "label": "Penicillin",
+     "value": "Reaction: rash"
+    }
+   ],
+   "turns": [
+    {
+     "speaker": "clinician",
+     "text": "وش الأعراض؟"
+    },
+    {
+     "speaker": "patient",
+     "text": "حرقان في البول وكثرة تبول من ثلاث أيام، وما فيه حرارة ولا ألم في الخاصرة."
+    },
+    {
+     "speaker": "clinician",
+     "text": "فيه احتمال حمل؟"
+    },
+    {
+     "speaker": "patient",
+     "text": "لا."
+    },
+    {
+     "speaker": "clinician",
+     "text": "عندك حساسية من أدوية؟"
+    },
+    {
+     "speaker": "patient",
+     "text": "إيه، من penicillin، يطلع لي طفح."
+    },
+    {
+     "speaker": "clinician",
+     "text": "تحليل البول فيه nitrite إيجابي و leukocytes. هذا التهاب مسالك بسيط. بكتب لك nitrofurantoin مية ملي مرتين في اليوم لخمس أيام، واشربي موية كثير."
+    }
+   ],
+   "keyTerms": [
+    {
+     "kind": "allergy",
+     "term": "penicillin",
+     "variants": [
+      "penicillin",
+      "بنسلين",
+      "البنسلين"
+     ]
+    },
+    {
+     "kind": "investigation",
+     "term": "nitrite",
+     "variants": [
+      "nitrite",
+      "نيتريت",
+      "نايترايت"
+     ]
+    },
+    {
+     "kind": "investigation",
+     "term": "leukocytes",
+     "variants": [
+      "leukocytes",
+      "ليوكوسايت",
+      "كريات بيضاء",
+      "ليكوسايتس"
+     ]
+    },
+    {
+     "kind": "medication",
+     "term": "nitrofurantoin",
+     "variants": [
+      "nitrofurantoin",
+      "نيتروفورانتوين",
+      "نايتروفيورانتوين"
+     ]
+    },
+    {
+     "kind": "dose",
+     "term": "مية ملي مرتين",
+     "variants": [
+      "مية ملي مرتين",
+      "100 ملي مرتين",
+      "ميه ملي مرتين",
+      "100 mg مرتين"
+     ]
+    }
+   ],
+   "expected": {
+    "chartConflicts": [],
+    "newUpdates": [],
+    "alreadyInChart": [
+     "penicillin allergy"
+    ],
+    "planFromClinicianOnly": [
+     "nitrofurantoin 100 mg twice daily for five days",
+     "drink plenty of water"
+    ],
+    "mustNotInvent": [
+     "urine culture result",
+     "a second antibiotic"
+    ]
+   }
+  },
+  {
+   "id": "scribe-07-headache",
+   "title": "Headache with a spoken blood pressure and no medicines",
+   "chart": [],
+   "turns": [
+    {
+     "speaker": "clinician",
+     "text": "من متى الصداع؟"
+    },
+    {
+     "speaker": "patient",
+     "text": "من أسبوعين، في مقدمة الراس، ويزيد آخر اليوم."
+    },
+    {
+     "speaker": "clinician",
+     "text": "فيه زغللة أو استفراغ؟"
+    },
+    {
+     "speaker": "patient",
+     "text": "لا."
+    },
+    {
+     "speaker": "clinician",
+     "text": "تاخذ له شي؟"
+    },
+    {
+     "speaker": "patient",
+     "text": "paracetamol حبتين إذا زاد، يعني ألف ملي."
+    },
+    {
+     "speaker": "clinician",
+     "text": "الضغط مية وثلاثين على ثمانين. ما فيه علامات خطر. هذا يشبه tension headache. قلل الكافيين ونم زين، وإذا استمر أكثر من شهر نسوي فحوصات."
+    }
+   ],
+   "keyTerms": [
+    {
+     "kind": "medication",
+     "term": "paracetamol",
+     "variants": [
+      "paracetamol",
+      "باراسيتامول",
+      "بنادول",
+      "باراسيتمول"
+     ]
+    },
+    {
+     "kind": "dose",
+     "term": "ألف ملي",
+     "variants": [
+      "ألف ملي",
+      "1000 ملي",
+      "الف ملي",
+      "1000 mg"
+     ]
+    },
+    {
+     "kind": "vital",
+     "term": "مية وثلاثين على ثمانين",
+     "variants": [
+      "مية وثلاثين على ثمانين",
+      "130/80",
+      "130 على 80",
+      "ميه وثلاثين على ثمانين"
+     ]
+    },
+    {
+     "kind": "condition",
+     "term": "tension headache",
+     "variants": [
+      "tension headache",
+      "صداع توتري",
+      "تنشن"
+     ]
+    }
+   ],
+   "expected": {
+    "chartConflicts": [],
+    "newUpdates": [
+     {
+      "kind": "medication",
+      "name": "paracetamol",
+      "detail": "1000 mg when needed",
+      "status": "new"
+     }
+    ],
+    "spokenVitals": [
+     "blood pressure 130/80"
+    ],
+    "assessmentKeepsUncertainty": "resembles tension headache",
+    "mustNotInvent": [
+     "migraine diagnosis",
+     "triptan",
+     "imaging ordered now"
+    ]
+   }
+  },
+  {
+   "id": "scribe-08-thyroid",
+   "title": "Hypothyroidism follow-up; dose in micrograms",
+   "chart": [
+    {
+     "category": "problem",
+     "label": "Hypothyroidism",
+     "value": true
+    },
+    {
+     "category": "medication",
+     "label": "Levothyroxine 50 mcg oral tablet",
+     "value": "50 mcg once daily"
+    }
+   ],
+   "turns": [
+    {
+     "speaker": "clinician",
+     "text": "كيف الخمول؟"
+    },
+    {
+     "speaker": "patient",
+     "text": "لسا أحس بتعب وزاد وزني ثلاث كيلو."
+    },
+    {
+     "speaker": "clinician",
+     "text": "تاخذين levothyroxine على الريق؟"
+    },
+    {
+     "speaker": "patient",
+     "text": "إيه، خمسين ميكروجرام كل صباح قبل الفطور بنص ساعة."
+    },
+    {
+     "speaker": "clinician",
+     "text": "TSH طلع ثمانية فاصلة خمسة، يعني مرتفع. بنرفع الجرعة إلى خمسة وسبعين ميكروجرام، ونعيد TSH بعد ستة أسابيع."
+    }
+   ],
+   "keyTerms": [
+    {
+     "kind": "medication",
+     "term": "levothyroxine",
+     "variants": [
+      "levothyroxine",
+      "ليفوثيروكسين",
+      "ليفوثايروكسين",
+      "ثيروكسين"
+     ]
+    },
+    {
+     "kind": "dose",
+     "term": "خمسين ميكروجرام",
+     "variants": [
+      "خمسين ميكروجرام",
+      "50 ميكروجرام",
+      "50 mcg",
+      "خمسين مايكروجرام",
+      "50 ميكروغرام",
+      "50 مايكروجرام",
+      "خمسين ميكروغرام"
+     ]
+    },
+    {
+     "kind": "dose",
+     "term": "خمسة وسبعين ميكروجرام",
+     "variants": [
+      "خمسة وسبعين ميكروجرام",
+      "75 ميكروجرام",
+      "75 mcg",
+      "خمسه وسبعين ميكروجرام",
+      "خمسة وسبعين مايكروجرام",
+      "75 ميكروغرام",
+      "75 مايكروجرام",
+      "خمسة وسبعين ميكروغرام"
+     ]
+    },
+    {
+     "kind": "investigation",
+     "term": "TSH",
+     "variants": [
+      "TSH",
+      "تي إس إتش",
+      "تي اس اتش"
+     ]
+    },
+    {
+     "kind": "vital",
+     "term": "ثمانية فاصلة خمسة",
+     "variants": [
+      "ثمانية فاصلة خمسة",
+      "8.5",
+      "٨٫٥",
+      "ثمانيه فاصله خمسه"
+     ]
+    }
+   ],
+   "expected": {
+    "chartConflicts": [],
+    "newUpdates": [],
+    "alreadyInChart": [
+     "levothyroxine 50 mcg daily",
+     "hypothyroidism"
+    ],
+    "planFromClinicianOnly": [
+     "increase levothyroxine to 75 mcg",
+     "repeat TSH in six weeks"
+    ],
+    "mustNotInvent": [
+     "milligram dose (the unit is micrograms)",
+     "free T4 value"
+    ]
+   }
+  },
+  {
+   "id": "scribe-09-gastro",
+   "title": "Gastroenteritis; patient reports an NSAID intolerance",
+   "chart": [],
+   "turns": [
+    {
+     "speaker": "clinician",
+     "text": "من متى الإسهال؟"
+    },
+    {
+     "speaker": "patient",
+     "text": "من أمس، خمس مرات، مع استفراغ مرتين. وما فيه دم."
+    },
+    {
+     "speaker": "clinician",
+     "text": "أكلت شي من برا؟"
+    },
+    {
+     "speaker": "patient",
+     "text": "إيه، شاورما أول أمس."
+    },
+    {
+     "speaker": "clinician",
+     "text": "تحس بدوخة؟ البول قليل؟"
+    },
+    {
+     "speaker": "patient",
+     "text": "شوي دوخة."
+    },
+    {
+     "speaker": "clinician",
+     "text": "عندك حساسية؟"
+    },
+    {
+     "speaker": "patient",
+     "text": "الـ diclofenac يسوي لي ألم معدة قوي، ما أدري هي حساسية ولا لا."
+    },
+    {
+     "speaker": "clinician",
+     "text": "هذا تحسس معدة مو حساسية دوائية، بس بسجله. اشرب ORS بعد كل إسهال، وإذا ما قدرت تشرب أو صار فيه دم ترجع."
+    }
+   ],
+   "keyTerms": [
+    {
+     "kind": "medication",
+     "term": "diclofenac",
+     "variants": [
+      "diclofenac",
+      "ديكلوفيناك",
+      "دكلوفيناك",
+      "فولتارين"
+     ]
+    },
+    {
+     "kind": "medication",
+     "term": "ORS",
+     "variants": [
+      "ORS",
+      "أو آر إس",
+      "محلول الجفاف",
+      "او ار اس"
+     ]
+    },
+    {
+     "kind": "condition",
+     "term": "إسهال",
+     "variants": [
+      "إسهال",
+      "اسهال"
+     ]
+    }
+   ],
+   "expected": {
+    "chartConflicts": [],
+    "newUpdates": [
+     {
+      "kind": "intolerance",
+      "substance": "diclofenac",
+      "reaction": "severe stomach pain",
+      "status": "new",
+      "note": "clinician says intolerance, not allergy: must not be recorded as an allergy"
+     }
+    ],
+    "planFromClinicianOnly": [
+     "oral rehydration solution after each stool",
+     "return if unable to drink or blood appears"
+    ],
+    "mustNotInvent": [
+     "antibiotic",
+     "antiemetic",
+     "allergy to diclofenac stated as confirmed"
+    ]
+   }
+  },
+  {
+   "id": "scribe-10-hypertension-refill",
+   "title": "Blood pressure review; patient takes a different dose than the chart",
+   "chart": [
+    {
+     "category": "problem",
+     "label": "Essential hypertension",
+     "value": true
+    },
+    {
+     "category": "medication",
+     "label": "Lisinopril 10 mg oral tablet",
+     "value": "10 mg once daily"
+    }
+   ],
+   "turns": [
+    {
+     "speaker": "clinician",
+     "text": "كيف الضغط في البيت؟"
+    },
+    {
+     "speaker": "patient",
+     "text": "حول مية وأربعين على تسعين."
+    },
+    {
+     "speaker": "clinician",
+     "text": "تاخذ lisinopril عشرة ملي؟"
+    },
+    {
+     "speaker": "patient",
+     "text": "لا، آخذ عشرين ملي، الصيدلي قال لي آخذ حبتين."
+    },
+    {
+     "speaker": "clinician",
+     "text": "طيب. فيه كحة ناشفة؟"
+    },
+    {
+     "speaker": "patient",
+     "text": "إيه شوي بالليل."
+    },
+    {
+     "speaker": "clinician",
+     "text": "الضغط اليوم مية وثمانية وثلاثين على ثمانية وثمانين. الكحة ممكن من lisinopril. بنبدله بـ losartan خمسين ملي مرة في اليوم، ونشوفك بعد شهر."
+    }
+   ],
+   "keyTerms": [
+    {
+     "kind": "medication",
+     "term": "lisinopril",
+     "variants": [
+      "lisinopril",
+      "ليزينوبريل",
+      "لسينوبريل",
+      "ليسينوبريل"
+     ]
+    },
+    {
+     "kind": "dose",
+     "term": "عشرين ملي",
+     "variants": [
+      "عشرين ملي",
+      "20 ملي",
+      "20 mg"
+     ]
+    },
+    {
+     "kind": "medication",
+     "term": "losartan",
+     "variants": [
+      "losartan",
+      "لوسارتان",
+      "لوزارتان"
+     ]
+    },
+    {
+     "kind": "dose",
+     "term": "خمسين ملي",
+     "variants": [
+      "خمسين ملي",
+      "50 ملي",
+      "50 mg"
+     ]
+    },
+    {
+     "kind": "vital",
+     "term": "مية وثمانية وثلاثين على ثمانية وثمانين",
+     "variants": [
+      "مية وثمانية وثلاثين على ثمانية وثمانين",
+      "138/88",
+      "138 على 88",
+      "ميه وثمانيه وثلاثين على ثمانيه وثمانين"
+     ]
+    }
+   ],
+   "expected": {
+    "chartConflicts": [
+     {
+      "kind": "medication",
+      "about": "Lisinopril",
+      "reason": "Patient takes 20 mg; chart records 10 mg"
+     }
+    ],
+    "newUpdates": [],
+    "spokenVitals": [
+     "blood pressure 138/88",
+     "home readings about 140/90 (reported)"
+    ],
+    "assessmentKeepsUncertainty": "cough may be from lisinopril",
+    "planFromClinicianOnly": [
+     "replace lisinopril with losartan 50 mg once daily",
+     "review in one month"
+    ],
+    "mustNotInvent": [
+     "ACE inhibitor allergy",
+     "a diuretic"
+    ]
+   }
+  }
+ ]
+}

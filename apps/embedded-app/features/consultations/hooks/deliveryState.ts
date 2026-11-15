@@ -48,7 +48,7 @@ export function describeFailure(status: number, error?: { code: string; message:
 
 /** Thrown when the clinician stops waiting. The server may still finish; the same idempotency key then returns its result. */
 export class CancelledError extends DeliveryError {}
-async function call<T>(schema: z.ZodType<T>, url: string, body?: unknown, method?: string, signal?: AbortSignal): Promise<T> {
+export async function call<T>(schema: z.ZodType<T>, url: string, body?: unknown, method?: string, signal?: AbortSignal): Promise<T> {
   const response = await fetch(url, { signal,
     method: method ?? (body === undefined ? "GET" : "POST"), cache: "no-store", credentials: "same-origin",
     headers: body === undefined ? undefined : { "Content-Type": "application/json" },

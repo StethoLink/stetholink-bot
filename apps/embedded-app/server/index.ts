@@ -33,7 +33,7 @@ export function getClinicalServices(session: VerifiedLaunch) {
  * tenant, EHR data for a tenant configured for live clinical data. An EHR launch on a tenant
  * that is not configured for live data stays read-only.
  */
-function requireAssistantData(session: VerifiedLaunch, adapter: { source: DataSource }) {
+export function requireAssistantData(session: VerifiedLaunch, adapter: { source: DataSource }) {
   const tenant = getTenant();
   if (session.context.tenantId !== tenant.id || session.context.dataClassification !== tenant.dataClassification) {
     throw new RouteError("forbidden", "The session does not belong to this tenant's data classification");

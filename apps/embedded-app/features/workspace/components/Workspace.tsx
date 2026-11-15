@@ -1,8 +1,9 @@
 "use client";
 import { useEffect, useState } from "react";
 import type { DataClassification } from "@/shared/contracts";
-import { Alert, Button, Dialog, EmptyState, Tabs, ToastProvider } from "@/apps/embedded-app/components/ui";
+import { Alert, Button, Dialog, Tabs, ToastProvider } from "@/apps/embedded-app/components/ui";
 import { ConsultationComposer, ConsultationHistory, type AssistantInfo } from "@/apps/embedded-app/features/consultations";
+import { ScribeHistory, ScribePanel } from "@/apps/embedded-app/features/scribe";
 import { PatientBar } from "./PatientBar";
 
 type TabKey = "scribe" | "consultations" | "history";
@@ -29,7 +30,6 @@ export interface WorkspaceProps {
   assistant: AssistantInfo;
   /** When the server session ends (epoch milliseconds). */
   expiresAt: number;
-  scribe?: React.ReactNode;
   initialTab?: TabKey;
 }
 
@@ -38,7 +38,8 @@ export interface WorkspaceProps {
  * inside the EHR and widens to a readable column in a full window.
  */
 export function Workspace(props: WorkspaceProps) {
-  const [tab, setTab] = useState<TabKey>(props.initialTab ?? (props.scribe ? "scribe" : "consultations"));
+  const [tab, setTab] = useState<TabKey>(props.initialTab ?? "consultations");
+  const [visitId, setVisitId] = useState<string>();
   const [draftId, setDraftId] = useState<string>();
   const [help, setHelp] = useState(false);
   const [expired, setExpired] = useState(false);
@@ -84,7 +85,7 @@ export function Workspace(props: WorkspaceProps) {
                   The chart is shown for reading. Writing notes and consultations from EHR data is not switched on for this hospital yet. Ask your StethoLink administrator.
                 </Alert>
               ) : tab === "scribe" ? (
-                props.scribe ?? <EmptyState title="Scribe is not switched on">Recording a visit and writing the note is not set up for this hospital yet.</EmptyState>
+                <ScribePanel openSessionId={visitId} onOpenSession={setVisitId} />
               ) : tab === "consultations" ? (
                 <>
                   <ConsultationComposer patientId={props.patientId} encounterId={props.encounterId} canReview={props.canReview} canRoute={props.canRoute}
@@ -92,7 +93,10 @@ export function Workspace(props: WorkspaceProps) {
                   {!props.canReview && <p className="text-xs text-slate-700">This session can prepare drafts only. Approving and sending need a verified physician session.</p>}
                 </>
               ) : (
-                <ConsultationHistory onOpen={(id) => { setDraftId(id); setTab("consultations"); }} />
+                <>
+                  <ScribeHistory onOpen={(id) => { setVisitId(id); setTab("scribe"); }} />
+                  <ConsultationHistory onOpen={(id) => { setDraftId(id); setTab("consultations"); }} />
+                </>
               )}
             </div>
           </Tabs>

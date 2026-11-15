@@ -31,6 +31,7 @@ import { attachmentReferenceSchema, clinicalFactSchema, missingInformationSchema
 export * from "./classification";
 export * from "./clinical-data";
 export * from "./provider";
+export * from "./scribe";
 
 const id = z.string().min(1).max(128);
 const isoDateTime = z.string().datetime({ offset: true });

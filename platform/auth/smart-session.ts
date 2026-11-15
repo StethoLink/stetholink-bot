@@ -85,11 +85,13 @@ function smartIdentityAdapter(reg: Registration): IdentityAdapter<{ pending: z.i
       return {
         source: "smart",
         ehrAccessToken: result.grant.accessToken,
+        ehrUser: `${type}/${id}`,
         context: {
           clinicianId: mapped.clinicianId, tenantId: reg.tenantId, roles: [mapped.role],
           // StethoLink permissions come from the tenant's clinician mapping, never from the EHR token:
           // every mapped clinician may draft; only a mapped physician may approve and send.
-          scopes: ["chart:read", "consultation:draft", ...(mapped.role === "physician" ? ["consultation:approve", "consultation:route"] : []),
+          // Recording a visit is open to every mapped clinician; approving a note and writing to the chart are the physician's.
+          scopes: ["chart:read", "consultation:draft", "scribe:record", ...(mapped.role === "physician" ? ["consultation:approve", "consultation:route", "chart:write"] : []),
             ...scopes.map((scope) => "smart:" + scope)], patientId: patient.patientId, encounterId: encounter.encounterId,
           expiresAt, authorization: "active", dataClassification: reg.dataClassification,
         },

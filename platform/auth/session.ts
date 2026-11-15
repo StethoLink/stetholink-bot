@@ -26,6 +26,7 @@ const launchSchema = z.object({
   }),
   source: z.enum(["smart", "synthetic"]),
   ehrAccessToken: z.string().min(1).optional(),
+  ehrUser: z.string().min(1).max(200).optional(),
 });
 
 export function cookieOptions(maxAge: number) {
@@ -86,7 +87,7 @@ export async function requireClinician(options: { navigation?: boolean } = {}): 
       source: "synthetic",
       context: {
         clinicianId: "11111111-1111-4111-8111-111111111111", tenantId: env.TENANT_ID,
-        roles: ["clinician"], scopes: ["chart:read", "consultation:draft"],
+        roles: ["clinician"], scopes: ["chart:read", "consultation:draft", "scribe:record"],
         patientId: chart[0], encounterId: chart[1],
         expiresAt: Date.now() + 60_000, authorization: "active", dataClassification: "synthetic",
       },

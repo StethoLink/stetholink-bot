@@ -2,7 +2,7 @@ import "server-only";
 
 /** Structured operational events. Identifiers only: never clinical content, secrets or callback bodies. */
 export function auditConsultation(event: {
-  action: "consultation.dispatched" | "consultation.dispatch_failed" | "consultation.model_revised" | "provider.callback_recorded" | "provider.callback_refused";
+  action: "scribe.chart_write" | "chart.write" | "consultation.dispatched" | "consultation.dispatch_failed" | "consultation.model_revised" | "provider.callback_recorded" | "provider.callback_refused";
   tenantId: string;
   clinicianId?: string;
   draftId?: string;
@@ -11,6 +11,11 @@ export function auditConsultation(event: {
   failureCode?: string;
   disposition?: string;
   reason?: string;
+  sessionId?: string;
+  itemKey?: string;
+  resourceType?: string;
+  status?: string;
+  resourceId?: string;
 }) {
   console.info(JSON.stringify({ ...event, at: new Date().toISOString() }));
 }

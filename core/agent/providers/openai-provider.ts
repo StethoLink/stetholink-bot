@@ -10,7 +10,8 @@ const configSchema = z.object({
   allowLoopbackHttp: z.boolean().default(false),
   timeoutMs: z.number().int().min(1).max(120_000).default(90_000),
   maxRetries: z.number().int().min(0).max(2).default(1),
-  maxInputTokens: z.number().int().min(1).max(32_000).default(16_000),
+  // A visit transcript is larger than a consultation request; the scribe configures its own bound.
+  maxInputTokens: z.number().int().min(1).max(200_000).default(16_000),
   maxOutputTokens: z.number().int().min(1).max(16_000).default(8000),
   // Sent only when set; reasoning models spend output tokens on reasoning.
   reasoningEffort: z.enum(["minimal", "low", "medium", "high"]).optional(),
@@ -44,7 +45,7 @@ export interface OpenAIProviderOptions {
   observe?(event: ModelCallEvent): void;
 }
 /** The only structured tasks this provider will run. Free-form chat is never sent. */
-export const OPENAI_STRUCTURED_TASKS = ["consultation_evidence_selection", "consultation_referral"] as const;
+export const OPENAI_STRUCTURED_TASKS = ["consultation_evidence_selection", "consultation_referral", "scribe_soap_note"] as const;
 class CallFailure extends Error {
   constructor(readonly reason: NonNullable<ModelCallEvent["reason"]>, readonly httpStatus?: number) { super(reason); }
 }

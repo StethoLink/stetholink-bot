@@ -21,7 +21,7 @@ const adapter: IdentityAdapter<Profile> = {
           profile === "observer" ? "33333333-3333-4333-8333-333333333333" : "11111111-1111-4111-8111-111111111111",
         tenantId: env.TENANT_ID,
         roles: [physician ? "physician" : "clinician"],
-        scopes: physician ? ["chart:read", "consultation:draft", "consultation:approve", "consultation:route"] : ["chart:read", "consultation:draft"],
+        scopes: physician ? ["chart:read", "consultation:draft", "scribe:record", "consultation:approve", "consultation:route", "chart:write"] : ["chart:read", "consultation:draft", "scribe:record"],
         patientId: profile === "chest-pain-demo" ? "syn-pt-omar" : otherChart || profile === "cardiology-demo" ? "syn-pt-ahmed" : "syn-pt-001",
         encounterId: profile === "chest-pain-demo" ? "syn-enc-omar" : otherChart || profile === "cardiology-demo" ? "syn-enc-ahmed" : "syn-enc-001",
         expiresAt: Date.now() + env.STAGING_SESSION_SECONDS * 1000,

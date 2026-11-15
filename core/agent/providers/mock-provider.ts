@@ -54,6 +54,30 @@ function mockReferral(input: AuthoringInput) {
   };
 }
 
+interface ScribeInput { transcript: { segments: { id: string; text: string }[] }; chart: { facts: { id: string; category: string; label: string }[] } }
+/**
+ * Deterministic stand-in for the scribe model. It does not understand the visit: it lists each
+ * sentence as a subjective statement in its own words, and proposes a chart item only where a
+ * sentence mentions an allergy or a medicine being taken next to a term in Latin letters.
+ * The interface labels its output as a demo fallback, never as AI.
+ */
+function mockScribeNote(input: ScribeInput) {
+  const proposedUpdates: Record<string, string>[] = [];
+  const latin = (text: string) => /\b[A-Za-z][A-Za-z0-9-]{3,}\b/.exec(text)?.[0];
+  for (const segment of input.transcript.segments) {
+    const term = latin(segment.text);
+    if (!term) continue;
+    const kind = segment.text.includes("حساسي") ? "allergy" : /(?:^|\s)(?:آخذ|اخذ|تاخذ|تأخذ)\s/.test(segment.text) ? "medication" : undefined;
+    if (!kind || proposedUpdates.some((update) => update.name.toLowerCase() === term.toLowerCase())) continue;
+    const match = input.chart.facts.find((fact) => fact.category === kind && fact.label.toLowerCase().includes(term.toLowerCase()));
+    proposedUpdates.push({ kind, name: term[0].toUpperCase() + term.slice(1), detail: "", relation: match ? "already_in_chart" : "new", chartFactId: match?.id ?? "", explanation: "", segmentId: segment.id, quote: segment.text });
+  }
+  return {
+    subjective: input.transcript.segments.slice(0, 40).map((segment) => ({ text: segment.text.replace(/[\[\]{}<>\\]/g, " "), sources: [{ id: segment.id, quote: segment.text }] })),
+    objective: [], assessment: [], plan: [], clinicianSegments: [], patientSegments: [], proposedUpdates,
+  };
+}
+
 /**
  * Deterministic provider for development, tests and demos. Makes no network calls.
  * It is not a model and never stands in for one on live clinical data.
@@ -69,6 +93,9 @@ export const mockProvider: ModelProvider = {
     }
     if (structuredOutput?.name === "consultation_referral") {
       return { text: JSON.stringify(mockReferral(JSON.parse(last) as AuthoringInput)), provider: "mock", model: "mock-1" };
+    }
+    if (structuredOutput?.name === "scribe_soap_note") {
+      return { text: JSON.stringify(mockScribeNote(JSON.parse(last) as ScribeInput)), provider: "mock", model: "mock-1" };
     }
     return { text: `[mock] Received: ${last}`, provider: "mock", model: "mock-1" };
   },

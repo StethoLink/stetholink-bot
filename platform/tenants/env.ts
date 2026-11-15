@@ -37,6 +37,31 @@ const envSchema = z.object({
   OPENAI_MAX_COST_USD: z.coerce.number().positive().max(1).default(0.25),
   OPENAI_INPUT_USD_PER_MILLION: z.coerce.number().positive().max(1000).optional(),
   OPENAI_OUTPUT_USD_PER_MILLION: z.coerce.number().positive().max(1000).optional(),
+  // AI scribe. Off unless enabled. Audio is never stored: any value other than "none" is refused.
+  SCRIBE_ENABLED: z.enum(["true", "false"]).default("false"),
+  SCRIBE_AUDIO_RETENTION: z.enum(["none"]).default("none"),
+  SCRIBE_TRANSCRIPT_RETENTION_DAYS: z.coerce.number().int().min(1).max(30).default(7),
+  SCRIBE_SPOKEN_LANGUAGE: z.string().regex(/^[a-z]{2}(-[A-Z]{2})?$/).default("ar-SA"),
+  SCRIBE_NOTE_LANGUAGE: z.enum(["en", "ar"]).default("en"),
+  SCRIBE_MAX_VISIT_MINUTES: z.coerce.number().int().min(1).max(120).default(45),
+  // Hard ceiling on what one visit may cost (transcription plus the note).
+  SCRIBE_MAX_VISIT_USD: z.coerce.number().positive().max(5).default(0.5),
+  SCRIBE_NOTE_MODEL: z.string().min(1).max(128).default("gpt-5-mini"),
+  SCRIBE_NOTE_REASONING_EFFORT: z.enum(["minimal", "low", "medium", "high"]).default("low"),
+  SCRIBE_NOTE_INPUT_USD_PER_MILLION: z.coerce.number().positive().max(1000).optional(),
+  SCRIBE_NOTE_OUTPUT_USD_PER_MILLION: z.coerce.number().positive().max(1000).optional(),
+  TRANSCRIPTION_PROVIDER: z.enum(["mock", "openai", "elevenlabs"]).default("mock"),
+  TRANSCRIPTION_MODEL: z.string().min(1).max(128).default("gpt-transcribe"),
+  // Operator-verified price per audio minute, and the most the operator accepts to pay.
+  TRANSCRIPTION_USD_PER_MINUTE: z.coerce.number().positive().max(1).optional(),
+  TRANSCRIPTION_MAX_USD_PER_MINUTE: z.coerce.number().positive().max(1).default(0.01),
+  TRANSCRIPTION_LIVE_DATA_APPROVED: z.enum(["true", "false"]).default("false"),
+  TRANSCRIPTION_BASE_URL: z.url().optional(),
+  ELEVENLABS_API_KEY: z.string().optional(),
+  // Writing approved notes and selected items to the EHR. Needs write scopes in SMART_SCOPE.
+  EHR_WRITE_ENABLED: z.enum(["true", "false"]).default("false"),
+  FHIR_NOTE_DOC_STATUS: z.enum(["preliminary", "final"]).default("preliminary"),
+  FHIR_NOTE_TYPE_CODE: z.string().regex(/^[0-9]{3,7}-[0-9]$/).optional(),
   AUTH_MODE: z.enum(["dev", "smart", "staging", "supabase"]).default("dev"),
   CLINICAL_DATA_SOURCE: z.enum(["synthetic", "fhir", "openemr"]).default("synthetic"),
   FHIR_BASE_URL: z.url().optional(),
@@ -73,6 +98,19 @@ export function liveModeProblems(env: ServerEnv): string[] {
   if (env.AI_PROVIDER === "openai" && !(env.OPENAI_API_KEY && env.OPENAI_INPUT_USD_PER_MILLION && env.OPENAI_OUTPUT_USD_PER_MILLION)) {
     problems.push("OPENAI_API_KEY, OPENAI_INPUT_USD_PER_MILLION and OPENAI_OUTPUT_USD_PER_MILLION must be set");
   }
+  if (env.SCRIBE_ENABLED === "true") problems.push(...scribeProblems(env).map((problem) => `scribe: ${problem}`));
+  return problems;
+}
+/** Why the scribe may not run with a real transcription provider. Empty when it is fully configured. */
+export function scribeProblems(env: ServerEnv): string[] {
+  const problems: string[] = [];
+  if (env.TRANSCRIPTION_PROVIDER === "mock") problems.push("TRANSCRIPTION_PROVIDER must be a real provider (the stand-in never receives live speech)");
+  if (env.TRANSCRIPTION_LIVE_DATA_APPROVED !== "true") problems.push("TRANSCRIPTION_LIVE_DATA_APPROVED must be true");
+  if (!env.TRANSCRIPTION_USD_PER_MINUTE) problems.push("TRANSCRIPTION_USD_PER_MINUTE must be set");
+  else if (env.TRANSCRIPTION_USD_PER_MINUTE > env.TRANSCRIPTION_MAX_USD_PER_MINUTE) problems.push("TRANSCRIPTION_USD_PER_MINUTE is above TRANSCRIPTION_MAX_USD_PER_MINUTE");
+  if (env.TRANSCRIPTION_PROVIDER === "openai" && !env.OPENAI_API_KEY) problems.push("OPENAI_API_KEY must be set for transcription");
+  if (env.TRANSCRIPTION_PROVIDER === "elevenlabs" && !env.ELEVENLABS_API_KEY) problems.push("ELEVENLABS_API_KEY must be set");
+  if (!(env.SCRIBE_NOTE_INPUT_USD_PER_MILLION && env.SCRIBE_NOTE_OUTPUT_USD_PER_MILLION)) problems.push("SCRIBE_NOTE_INPUT_USD_PER_MILLION and SCRIBE_NOTE_OUTPUT_USD_PER_MILLION must be set");
   return problems;
 }
 
@@ -81,6 +119,9 @@ export class ServerConfigurationError extends Error {}
 /** Parses and validates server configuration. Refuses an incomplete live-mode configuration. */
 export function parseEnv(source: Record<string, string | undefined>): ServerEnv {
   const env = envSchema.parse(Object.fromEntries(Object.entries(source).filter(([, v]) => v !== "")));
+  if (env.TRANSCRIPTION_BASE_URL && !responsesEndpoint(env.TRANSCRIPTION_BASE_URL, env.NODE_ENV !== "production")) {
+    throw new ServerConfigurationError("TRANSCRIPTION_BASE_URL must be an HTTPS URL without credentials or parameters (HTTP is accepted only for a loopback address outside production)");
+  }
   if (env.OPENAI_BASE_URL && !responsesEndpoint(env.OPENAI_BASE_URL, env.NODE_ENV !== "production")) {
     throw new ServerConfigurationError("OPENAI_BASE_URL must be an HTTPS URL without credentials or parameters (HTTP is accepted only for a loopback address outside production)");
   }
