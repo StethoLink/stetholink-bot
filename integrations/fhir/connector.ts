@@ -3,6 +3,16 @@ import { ChartUnavailableError, type ClinicalDataAdapter } from "../../core/tool
 import type { ClinicalFact, EncounterContext, PatientContext } from "../../shared/contracts/index.ts";
 import { normalizeChart, type FhirResource } from "./facts.ts";
 
+/** A single-resource read the EHR refused. Carries the HTTP status only. */
+export class FhirReadError extends Error {
+  readonly status: number;
+  constructor(status: number) {
+    super(`FHIR request failed with status ${status}`);
+    this.name = "FhirReadError";
+    this.status = status;
+  }
+}
+
 export const isFhirId = (value: string) => /^(?!\.{1,2}$)[A-Za-z0-9.-]{1,64}$/.test(value);
 
 export interface FhirLaunchGrant {
@@ -75,7 +85,7 @@ export function createFhirConnector(grant: FhirLaunchGrant, request: typeof fetc
   async function read(path: string): Promise<FhirResource | null> {
     const { status, body } = await get(`${root}/${path}`);
     if (status === 404) return null;
-    if (!body) throw new Error(`FHIR request failed with status ${status}`);
+    if (!body) throw new FhirReadError(status);
     return body;
   }
 

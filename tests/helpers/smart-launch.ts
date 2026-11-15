@@ -27,21 +27,38 @@ export function smartEnv(role: "physician" | "clinician") {
 }
 
 /** A `fetch` that plays the issuer and the FHIR server. `fhirOverride` replaces single FHIR answers. */
-export async function fakeEhr(options: { scope?: string; fhirOverride?: (path: string, query: URLSearchParams) => unknown } = {}) {
+export async function fakeEhr(options: {
+  scope?: string;
+  fhirOverride?: (path: string, query: URLSearchParams) => unknown;
+  /** Changes what the issuer signs: other claims, issuer, audience or subject, times in seconds, or a key that is not in the JWKS. */
+  idToken?: { claims?: Record<string, unknown>; issuer?: string; audience?: string | string[]; subject?: string; issuedAt?: number; expiresAt?: number; foreignKey?: boolean };
+  /** Rewrites the token endpoint's JSON answer. */
+  token?: (body: Record<string, unknown>) => Record<string, unknown>;
+  /** Answers a request before the fake does; may throw to play an unreachable host. */
+  intercept?: (url: URL) => Response | undefined | Promise<Response | undefined>;
+} = {}) {
   const keys = await generateKeyPair("ES256");
   const jwk = await exportJWK(keys.publicKey);
-  const state = { nonce: "" };
+  const foreign = options.idToken?.foreignKey ? await generateKeyPair("ES256") : undefined;
+  const state = { nonce: "", verifier: "", idToken: "" };
   const env = smartEnv("physician");
   const request = async (target: URL | string | Request, init?: RequestInit) => {
     const url = new URL(String(target));
+    const intercepted = await options.intercept?.(url);
+    if (intercepted) return intercepted;
     if (url.origin === FAKE_EHR.oidc) {
       if (url.pathname === "/jwks") return Response.json({ keys: [jwk] });
       if (url.pathname === "/token") {
-        const idToken = await new SignJWT({ nonce: state.nonce, fhirUser: FAKE_EHR.fhirUser }).setProtectedHeader({ alg: "ES256" })
-          .setIssuer(FAKE_EHR.oidc).setAudience(FAKE_EHR.clientId).setSubject(FAKE_EHR.subject).setIssuedAt().setExpirationTime("5m").sign(keys.privateKey);
+        state.verifier = init?.body instanceof URLSearchParams ? init.body.get("code_verifier") ?? "" : "";
+        const signed = options.idToken ?? {};
+        const idToken = await new SignJWT({ nonce: state.nonce, fhirUser: FAKE_EHR.fhirUser, ...signed.claims }).setProtectedHeader({ alg: "ES256" })
+          .setIssuer(signed.issuer ?? FAKE_EHR.oidc).setAudience(signed.audience ?? FAKE_EHR.clientId).setSubject(signed.subject ?? FAKE_EHR.subject)
+          .setIssuedAt(signed.issuedAt).setExpirationTime(signed.expiresAt ?? "5m").sign((foreign ?? keys).privateKey);
+        state.idToken = idToken;
         // The EHR token never grants a StethoLink permission, whatever scope text it carries.
-        return Response.json({ id_token: idToken, scope: options.scope ?? env.SMART_SCOPE, token_type: "Bearer", access_token: FAKE_EHR.accessToken,
-          expires_in: 600, patient: FICTIONAL_PATIENT_ID, encounter: FICTIONAL_ENCOUNTER_ID });
+        const body = { id_token: idToken, scope: options.scope ?? env.SMART_SCOPE, token_type: "Bearer", access_token: FAKE_EHR.accessToken,
+          expires_in: 600, patient: FICTIONAL_PATIENT_ID, encounter: FICTIONAL_ENCOUNTER_ID };
+        return Response.json(options.token ? options.token(body) : body);
       }
       return new Response(null, { status: 404 });
     }
