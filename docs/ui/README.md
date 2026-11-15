@@ -55,3 +55,28 @@ No safety logic changed: the same server checks decide who may draft, approve an
 Send confirmation (new): ![](after/send-confirm-360.png)
 
 Tall screens are cropped to the first 2,600 px.
+
+## Scribe and specialist inbox
+
+These screens did not exist before the redesign, so there is no "before". Captured on 2026-11-15, after Phase 5.
+
+Scribe, 360 px, synthetic staging with Chromium's fake microphone (`tests/e2e/browser/scribe-flow.mjs`). The transcription and the note are the deterministic stand-ins, labelled on screen; they show the workflow, not transcription or note quality.
+
+| Consent before recording | Recording | Note with sources |
+| --- | --- | --- |
+| ![](after/scribe-consent-360.png) | ![](after/scribe-recording-360.png) | ![](after/scribe-note-360.png) |
+
+| Approval dialog | Result |
+| --- | --- |
+| ![](after/scribe-approve-360.png) | ![](after/scribe-result-360.png) |
+
+Specialist inbox and the physician's live workspace, 420 px, from the `LIVE_E2E_BROWSER=1` step of `tests/e2e/live-ehr-flow.mts`: the live code path against fake SMART, FHIR, transcription and model servers, with one invented patient. No real EHR is involved.
+
+| Inbox | One request and the reply | Physician's view: reply and chart status |
+| --- | --- | --- |
+| ![](after/inbox-list-420.png) | ![](after/inbox-request-420.png) | ![](after/live-consultation-420.png) |
+
+```bash
+STAGING_BASE_URL=http://127.0.0.1:3100 STAGING_LAUNCH_SECRET=<secret> SCRIBE_FAKE_AUDIO=speech.wav BROWSER_WIDTH=360 BROWSER_SCREENSHOT_DIR=out node tests/e2e/browser/scribe-flow.mjs
+LIVE_E2E_BROWSER=1 BROWSER_SCREENSHOT_DIR=out node tests/e2e/live-ehr-flow.mts
+```

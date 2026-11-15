@@ -5,7 +5,8 @@
 //
 //   STAGING_BASE_URL=http://127.0.0.1:3000 STAGING_LAUNCH_SECRET=... SCRIBE_FAKE_AUDIO=/path/to/any.wav node tests/e2e/browser/scribe-flow.mjs
 //
-// Needs Playwright with Chromium (not a project dependency). SCRIBE_PART_SECONDS shortens the wait (default 24).
+// Needs Playwright with Chromium (not a project dependency). SCRIBE_FAKE_AUDIO should hold sound followed by a
+// pause: a part is cut at a pause after 20 seconds of sound, or at 30 seconds.
 import assert from "node:assert/strict";
 import { mkdir } from "node:fs/promises";
 import { createRequire } from "node:module";

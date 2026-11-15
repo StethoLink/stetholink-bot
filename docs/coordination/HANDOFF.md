@@ -10,12 +10,10 @@ Written at the end of each working session so the next one starts from this file
 
 ## What is left
 
-1. **Final report to the owner, in Arabic, plain language** (the brief asks for seven points: what was finished per phase with commit links; how each thing was verified, real server or fake servers or not verified; benchmark results, chosen provider and measured cost per visit; before and after screenshots; what remains and who must do it; what the owner must do outside the code; environment variables for the first pilot). Everything it needs is in the workboard log, `docs/ai/scribe-benchmark.md`, `docs/sandbox.md`, `docs/go-live.md` (sections 1, 4, 10) and `docs/ui/README.md`. Commit links: `https://github.com/StethoLink/stetholink-bot/commit/<sha>`.
-2. Small follow-ups, only if time allows, each a separate small commit:
-   - `tests/e2e/README.md` does not yet describe `live-ehr-flow.mts` (and its `LIVE_E2E_BROWSER=1` step), `real-fhir-check.mts`, `browser/scribe-flow.mjs`, `supabase/tests/scribe.sql` and `operations.sql`.
-   - `docs/ui/` has consultation screenshots only; scribe and inbox screenshots can be added from `tests/e2e/browser/scribe-flow.mjs` and the `LIVE_E2E_BROWSER=1` step (`BROWSER_SCREENSHOT_DIR`).
-   - Re-run the two Chromium walkthroughs after Phase 5 (they last passed before it): `tests/e2e/browser/consultation-flow.mjs` and `scribe-flow.mjs`.
-3. **Not implemented, by decision or for lack of access** (say so in the report; do not start them without the owner): EHR refresh token; a real email sender for specialist codes; registering `http-partner`; the Q6 "stated by the physician" source (design only, `docs/decisions/0003-physician-stated-source.md`); a check against a public SMART sandbox, OpenEMR or a hospital EHR; a transcription benchmark on human speech.
+1. **The final report to the owner** (Arabic, plain language, seven points) is delivered as the last message of the session of 2026-11-15 that also did the follow-ups below. If it must be written again, everything it needs is in the workboard log, `docs/ai/scribe-benchmark.md`, `docs/sandbox.md`, `docs/go-live.md` (sections 1, 4, 10) and `docs/ui/README.md`. Commit links: `https://github.com/StethoLink/stetholink-bot/commit/<sha>`.
+2. Follow-ups done on 2026-11-15 after Phase 5: `tests/e2e/README.md` describes every script and SQL suite; both Chromium walkthroughs were re-run and pass (`consultation-flow.mjs` at 360 and 1280 px, `scribe-flow.mjs` at 360 px), and `live-ehr-flow.mts` passes with `LIVE_E2E_BROWSER=1`; scribe, inbox and live-workspace screenshots are in `docs/ui/after/`. No product code changed. Nothing is open here.
+3. **Not implemented, by decision or for lack of access** (do not start them without the owner): EHR refresh token; a real email sender for specialist codes; registering `http-partner`; the Q6 "stated by the physician" source (design only, `docs/decisions/0003-physician-stated-source.md`); a check against a public SMART sandbox, OpenEMR or a hospital EHR; a transcription benchmark on human speech.
+4. **Merging to `main`** is the owner's decision; this session may not push there.
 
 ## Commits of this brief
 
@@ -26,7 +24,8 @@ Written at the end of each working session so the next one starts from this file
 | 2 design system and UI | `f5d8fbd`, `dfa43d4` |
 | 3 scribe and EHR write-back | `4ee45c7`, `5bc29fa` |
 | 4 specialist inbox | `96e6d4e` |
-| 5 operations and docs | `fdc951b`, and the commit that added this file |
+| 5 operations and docs | `fdc951b`, `9197fe9` |
+| Follow-ups (test guide, screenshots) | `15726c2`, and the commit that added this row |
 
 ## Facts worth not re-deriving
 
@@ -41,6 +40,7 @@ Written at the end of each working session so the next one starts from this file
 - Node's `fetch` needs `NODE_USE_ENV_PROXY=1` to reach outside hosts. `api.openai.com` and `api.elevenlabs.io` have proxy-injected credentials: pass `OPENAI_API_KEY=proxy-injected` (and `ELEVENLABS_API_KEY=proxy-injected`) to scripts that insist on a key.
 - The proxy ends every outbound request at 30 seconds; long model calls fail here for that reason only.
 - Playwright with Chromium is preinstalled: `NODE_PATH=/opt/node-tools/node_modules`.
+- `consultation-flow.mjs` needs a fresh database for every run (it asserts an empty history). `live-ehr-flow.mts` run by hand needs a production build and a database with TLS, as `run-ci.sh` sets up (`localhost` URL plus `STETHOLINK_DATABASE_CA`); without TLS the launch answers 500. `scribe-flow.mjs` needs `SCRIBE_FAKE_AUDIO` with sound and pauses (a generated tone of 3 s on, 0.6 s off works).
 - A synthetic staging app for browser work: PostgreSQL 17 in Docker on a loopback port, `STETHOLINK_TEST_OWNER_URL=... node tests/e2e/m3-migrations.mts` to apply migrations (fresh database each time; history is append-only), then `VERCEL_ENV=preview AUTH_MODE=staging STAGING_LAUNCH_SECRET=<32+ chars> STETHOLINK_DATABASE_URL=postgres://stetholink_runtime@127.0.0.1:<port>/postgres AI_PROVIDER=mock CLINICAL_DATA_SOURCE=synthetic SCRIBE_ENABLED=true npx next dev apps/embedded-app -p 3100`.
 
 ## Handing off
