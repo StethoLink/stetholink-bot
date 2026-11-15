@@ -6,13 +6,13 @@ You are working on StethoLink (`StethoLink/stetholink-bot`). Read `AGENTS.md`, `
 
 The owner wants the smallest possible token use without lowering quality. So:
 
-1. **Do exactly one task (T1 to T8 below) per conversation.** When it is done, verified, committed and pushed, stop. Do not start the next task in the same conversation.
+1. **Do exactly one task (T1 to T9 below) per conversation.** When it is done, verified, committed and pushed, stop. Do not start the next task in the same conversation.
 2. **Before stopping, update `docs/coordination/HANDOFF.md`** (newest state only, short): what was done, the commit SHAs, how it was verified, what failed or is unverified, and the exact next task. Mark the task on the workboard per `AGENTS.md`.
 3. **End your last message with a ready-to-paste prompt for the next conversation**, under 15 lines: "Read `docs/coordination/HANDOFF.md` and `docs/agent-handoffs/fable-openemr-privacy-orders.md`, then do T<n>." Add only facts the handoff does not already hold.
 4. In a new conversation, read the handoff and this brief, then only the files the task touches. Do not re-read history, re-derive settled facts or re-run checks unrelated to the task.
 5. If a task is too big for one conversation, split it into numbered sub-steps in the handoff, finish one sub-step cleanly, and hand off.
 
-Do the tasks in order: T1, T2, T3, T4, T5, T6, T7, T8. T1 and T2 come first because every later task needs a launch that can be debugged.
+Do the tasks in order: T1, T2, T3, T4, T5, T6, T7, T8, T9. T9 is always last. T1 and T2 come first because every later task needs a launch that can be debugged.
 
 ## Background: what went wrong in the OpenEMR attempt
 
@@ -87,6 +87,17 @@ Run the full path against a real OpenEMR with a test patient created inside that
 ## T8. Final report to the owner
 
 A short plain-language report in Arabic: what works now, what was verified on a real system, what is still unverified, and what the hospital must provide (OpenEMR version or fix, TLS and reverse proxy, the clinician map, the order catalog, data processing agreements).
+
+## T9. Last task: merge every branch into `main`, then delete the branches that are no longer needed
+
+Do this only after T1 to T8 are done and pushed.
+
+1. `git fetch origin --prune`, then list every remote branch with its last commit, author, date, and whether it is already contained in `origin/main` (`git branch -r --merged origin/main` and `--no-merged`).
+2. For each branch not yet in `main`, read what it changes (`git log origin/main..<branch>` and the diff). Merge it into `main` when it holds wanted work, resolving conflicts by keeping both intents (`AGENTS.md` rule 5). If a branch is stale, duplicates work already in `main`, or would break `main`, do not merge it. List it for the owner with the reason.
+3. After each merge, run the checks `AGENTS.md` lists. Push to `main` only when they pass. Never force-push `main` and never rewrite pushed history.
+4. **Before deleting anything, send the owner the list of branches you plan to delete** (name, last commit, why it is no longer needed) **and wait for their confirmation.** Deleting a remote branch cannot be undone from here.
+5. After confirmation, delete only branches that are fully contained in `main`, or that the owner explicitly approved deleting. Never delete `main`, the default branch, or a branch with unmerged work the owner did not approve losing. Use `git push origin --delete <branch>`.
+6. Record in `docs/coordination/HANDOFF.md`: branches merged (with merge commits), branches deleted, branches kept and why.
 
 ## Quality bar for every task
 
