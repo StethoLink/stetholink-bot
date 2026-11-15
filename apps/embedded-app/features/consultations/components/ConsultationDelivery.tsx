@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { ConsultationDeliveryView } from "@/shared/contracts";
+import type { ChartWriteResult, ConsultationDeliveryView } from "@/shared/contracts";
 import { Alert, Badge, Button, ConfirmDialog } from "@/apps/embedded-app/components/ui";
 import { awaitingProvider, deliveryApi, DeliveryError, describeDelivery } from "../hooks/deliveryState";
 
@@ -15,6 +15,18 @@ export function ConsultationDelivery({ draftId, canRoute, onChanged, onView }: {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [confirming, setConfirming] = useState(false);
+  const [chart, setChart] = useState<ChartWriteResult[]>([]);
+  const [charting, setCharting] = useState(false);
+  const [chartBusy, setChartBusy] = useState(false);
+  const status = view?.status;
+  useEffect(() => { void deliveryApi.chart(draftId).then(setChart).catch(() => undefined); }, [draftId, status]);
+  async function writeChart() {
+    setChartBusy(true);
+    setError("");
+    try { setChart(await deliveryApi.writeToChart(draftId, chart.filter((entry) => entry.status !== "created" && entry.status !== "existing").map((entry) => entry.item as "consultation" | "report"))); }
+    catch (e) { setError(e instanceof DeliveryError ? e.message : "The chart could not be updated. Try again."); }
+    finally { setChartBusy(false); setCharting(false); }
+  }
   // One key per send intent: a retry after a network failure cannot create a second request.
   const sendKey = useRef<string | undefined>(undefined);
   const lastVersion = useRef<number | undefined>(undefined);
@@ -153,6 +165,35 @@ export function ConsultationDelivery({ draftId, canRoute, onChanged, onView }: {
           <Button disabled={busy} onClick={() => void refresh()}>Refresh status</Button>
         )}
       </div>
+      {chart.length > 0 && (
+        <div className="space-y-2 border-t border-slate-200 pt-3" role="group" aria-label="Patient chart">
+          <h4 className="text-sm font-medium">In the patient&apos;s chart</h4>
+          <ul className="space-y-1.5">
+            {chart.map((entry) => {
+              const done = entry.status === "created" || entry.status === "existing";
+              return (
+                <li key={entry.itemKey} className="flex flex-wrap items-center gap-2 text-sm">
+                  <span>{entry.item === "report" ? "Specialist reply" : "Consultation request"}</span>
+                  {done ? <Badge tone="success" dot>In the chart</Badge> : entry.status === "pending" ? <Badge tone="neutral" dot>Not written yet</Badge>
+                    : <Badge tone={entry.status === "failed" ? "danger" : "warning"} dot>Not written: copy it</Badge>}
+                  {!done && entry.status !== "pending" && entry.copyText && <Button size="sm" onClick={() => void navigator.clipboard.writeText(entry.copyText!)}>Copy to chart</Button>}
+                  {entry.failure && <span className="w-full text-xs text-slate-700">{entry.failure}.</span>}
+                </li>
+              );
+            })}
+          </ul>
+          {canRoute && chart.some((entry) => entry.status !== "created" && entry.status !== "existing") && (
+            <Button disabled={chartBusy} onClick={() => setCharting(true)}>Write to chart</Button>
+          )}
+          <ConfirmDialog open={charting} onClose={() => setCharting(false)} onConfirm={() => void writeChart()} busy={chartBusy} title="Write to the patient's chart?" confirmLabel="Write to chart">
+            <p className="font-medium">This is added to the chart in the EHR, as clinical notes for this visit under your name:</p>
+            <ul className="list-disc space-y-0.5 ps-5 text-slate-800">
+              {chart.filter((entry) => entry.status !== "created" && entry.status !== "existing").map((entry) => <li key={entry.itemKey}>{entry.item === "report" ? "The specialist's reply, as received" : "The consultation request you approved"}</li>)}
+            </ul>
+            <p className="text-xs text-slate-700">Nothing already in the chart is changed. Each note is written once. If the EHR does not accept a note, you get its text to copy.</p>
+          </ConfirmDialog>
+        </div>
+      )}
       {error && <Alert tone="danger">{error}</Alert>}
     </section>
   );

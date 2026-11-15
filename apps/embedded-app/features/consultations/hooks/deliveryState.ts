@@ -1,6 +1,6 @@
-import type { z } from "zod";
+import { z } from "zod";
 import type { ConsultationClarification, ConsultationDeliveryView, DeliveryFailureCode } from "@/shared/contracts";
-import { apiErrorSchema, consultationDeliveryViewSchema, consultationDraftSchema, consultationListSchema, createConsultationResultSchema, eligibleProvidersSchema } from "@/shared/schemas";
+import { apiErrorSchema, chartWriteResultSchema, consultationDeliveryViewSchema, consultationDraftSchema, consultationListSchema, createConsultationResultSchema, eligibleProvidersSchema } from "@/shared/schemas";
 
 export type EligibleProvider = z.infer<typeof eligibleProvidersSchema>[number];
 
@@ -76,6 +76,8 @@ export const deliveryApi = {
     call(consultationDeliveryViewSchema, `${draftUrl(draftId)}/delivery`, body),
   simulate: (draftId: string) => call(consultationDeliveryViewSchema, `${draftUrl(draftId)}/delivery/simulate`, {}),
   list: () => call(consultationListSchema, "/api/consultations/drafts"),
+  chart: (draftId: string) => call(z.array(chartWriteResultSchema), `${draftUrl(draftId)}/chart`),
+  writeToChart: (draftId: string, items: ("consultation" | "report")[]) => call(z.array(chartWriteResultSchema), `${draftUrl(draftId)}/chart`, { items }),
   revise: (draftId: string, body: { expectedVersion: number; idempotencyKey: string; summary: string; assessment: string; plan: string[] }) =>
     call(consultationDraftSchema, draftUrl(draftId), body, "PATCH"),
   /** Asks the model to reword the draft. The server validates the result and returns it to physician review. */

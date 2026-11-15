@@ -76,7 +76,8 @@ export function validateSelection(text: string, eligibleIds: string[]) {
 }
 
 export function renderFact(fact: ClinicalFact) {
-  const citation = `[${fact.id}; ${fact.source.reference}; documented ${fact.timestamp}]`;
+  // The record reference stays in the chart: this text is what a provider receives. The fact id is the citation.
+  const citation = `[${fact.id}; documented ${fact.timestamp}]`;
   return fact.status === "known"
     ? `${fact.label}: ${String(fact.value)}${fact.unit ? ` ${fact.unit}` : ""} ${citation}`
     : `${fact.label}: unknown (${fact.reason}) ${citation}`;

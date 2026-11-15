@@ -46,7 +46,9 @@ describe("grounded synthetic consultation drafting", () => {
       expect(fact).not.toHaveProperty("value");
       expect(result.plan.join("\n")).toContain(`${fact.label}: unknown (not_provided)`);
     }
-    expect(result.summary).toContain("synthetic-case-ahmed-v1");
+    // The text cites each fact by its id; the record reference stays with the fact and is not printed.
+    expect(result.summary).not.toContain("synthetic-case-ahmed-v1");
+    expect(result.clinicalFacts?.every((fact) => fact.source.reference === "synthetic-case-ahmed-v1")).toBe(true);
     expect(result.grounding?.safetyFlags).toContain("missing_investigations");
     expect(result.status).toBe("pending_approval");
     expect(result.reviewedBy).toBeUndefined();

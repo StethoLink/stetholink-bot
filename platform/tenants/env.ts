@@ -7,6 +7,15 @@ const envSchema = z.object({
   TENANT_ID: z.string().min(1).max(128).default("local-synthetic"),
   MOCK_RECIPIENT_IDS: z.string().default("synthetic-cardiology,synthetic-cardiology-declines,synthetic-cardiology-offline,synthetic-radiology"),
   MOCK_PROVIDER_SECRET: z.string().min(32).optional(),
+  // Receiving specialist services of a live tenant: JSON list of { id, displayName, specialties, transport, active }.
+  PROVIDER_DIRECTORY: z.string().optional(),
+  // Ids from PROVIDER_DIRECTORY this tenant may send to (enforced in Core and again in PostgreSQL).
+  PROVIDER_ALLOWLIST: z.string().default(""),
+  // Who may open a specialist inbox: JSON list of { specialistId (UUID), providerId, displayName, subject+fhirUser (EHR sign-in) and/or email }.
+  SPECIALIST_MAP: z.string().optional(),
+  // One-time sign-in codes by email for specialists without EHR access: none (off) or console (development only).
+  EMAIL_PROVIDER: z.enum(["none", "console"]).default("none"),
+  SPECIALIST_SESSION_MINUTES: z.coerce.number().int().min(5).max(60).default(30),
   PROVIDER_TIMEOUT_MS: z.coerce.number().int().min(100).max(30_000).default(10_000),
   LOCAL_SYNTHETIC_CHART: z.enum(["alpha", "ahmed", "omar"]).default("alpha"),
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
@@ -101,6 +110,42 @@ export function liveModeProblems(env: ServerEnv): string[] {
   if (env.SCRIBE_ENABLED === "true") problems.push(...scribeProblems(env).map((problem) => `scribe: ${problem}`));
   return problems;
 }
+const directoryEntry = z.object({
+  id: z.string().min(1).max(128).regex(/^[A-Za-z0-9._-]+$/), displayName: z.string().min(1).max(200), specialties: z.array(z.string().min(1).max(100)).min(1).max(20),
+  // The simulated specialist ("mock") can never be configured here.
+  transport: z.enum(["portal"]), active: z.boolean().default(true),
+}).strict();
+const specialistEntry = z.object({
+  specialistId: z.uuid(), providerId: z.string().min(1).max(128), displayName: z.string().min(1).max(200),
+  subject: z.string().min(1).optional(), fhirUser: z.string().min(1).optional(), email: z.email().max(254).optional(),
+}).strict().refine((entry) => (entry.subject !== undefined) === (entry.fhirUser !== undefined) && (entry.subject !== undefined || entry.email !== undefined), "Give subject and fhirUser together, or an email");
+export type ProviderDirectoryEntry = z.infer<typeof directoryEntry>;
+export type SpecialistEntry = z.infer<typeof specialistEntry>;
+function parseList<T>(raw: string | undefined, schema: z.ZodType<T>, name: string): T[] {
+  if (!raw) return [];
+  let value: unknown;
+  try { value = JSON.parse(raw); } catch { throw new ServerConfigurationError(`${name} is not valid JSON`); }
+  const parsed = z.array(schema).max(200).safeParse(value);
+  if (!parsed.success) throw new ServerConfigurationError(`${name} is not in the expected format`);
+  return parsed.data;
+}
+/** The tenant's receiving services, from server configuration. Empty for a synthetic tenant, which uses the simulated ones. */
+export function providerDirectory(env: ServerEnv): ProviderDirectoryEntry[] {
+  const entries = parseList(env.PROVIDER_DIRECTORY, directoryEntry, "PROVIDER_DIRECTORY");
+  if (new Set(entries.map((entry) => entry.id)).size !== entries.length || entries.some((entry) => entry.id.startsWith("synthetic-"))) {
+    throw new ServerConfigurationError("PROVIDER_DIRECTORY ids must be unique and must not name a synthetic provider");
+  }
+  return entries;
+}
+export function specialistMap(env: ServerEnv): SpecialistEntry[] {
+  const entries = parseList(env.SPECIALIST_MAP, specialistEntry, "SPECIALIST_MAP");
+  const unique = (values: (string | undefined)[]) => { const present = values.filter(Boolean); return new Set(present).size === present.length; };
+  if (!unique(entries.map((entry) => entry.specialistId)) || !unique(entries.map((entry) => entry.subject)) || !unique(entries.map((entry) => entry.email?.toLowerCase()))) {
+    throw new ServerConfigurationError("SPECIALIST_MAP entries must not repeat a specialist id, subject or email");
+  }
+  return entries;
+}
+
 /** Why the scribe may not run with a real transcription provider. Empty when it is fully configured. */
 export function scribeProblems(env: ServerEnv): string[] {
   const problems: string[] = [];
@@ -125,6 +170,13 @@ export function parseEnv(source: Record<string, string | undefined>): ServerEnv 
   if (env.OPENAI_BASE_URL && !responsesEndpoint(env.OPENAI_BASE_URL, env.NODE_ENV !== "production")) {
     throw new ServerConfigurationError("OPENAI_BASE_URL must be an HTTPS URL without credentials or parameters (HTTP is accepted only for a loopback address outside production)");
   }
+  // Malformed directory or specialist settings stop the server in either mode.
+  const directory = providerDirectory(env);
+  const specialists = specialistMap(env);
+  const allow = env.PROVIDER_ALLOWLIST.split(",").map((id) => id.trim()).filter(Boolean);
+  if (allow.some((id) => !directory.some((entry) => entry.id === id))) throw new ServerConfigurationError("PROVIDER_ALLOWLIST names a provider that is not in PROVIDER_DIRECTORY");
+  if (specialists.some((entry) => !directory.some((provider) => provider.id === entry.providerId))) throw new ServerConfigurationError("SPECIALIST_MAP names a provider that is not in PROVIDER_DIRECTORY");
+  if (env.EMAIL_PROVIDER === "console" && env.NODE_ENV === "production") throw new ServerConfigurationError("EMAIL_PROVIDER=console prints sign-in codes to the log and is refused in production");
   if (env.CLINICAL_DATA_MODE === "live") {
     const problems = liveModeProblems(env);
     if (problems.length) throw new ServerConfigurationError(`CLINICAL_DATA_MODE=live is refused: ${problems.join("; ")}`);

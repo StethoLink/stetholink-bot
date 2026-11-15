@@ -6,6 +6,7 @@ import { localSyntheticEnabled } from "@/platform/auth/session";
 import { createProviderRegistry } from "@/core/routing/registry";
 import type { ProviderDescriptor } from "@/shared/contracts";
 import { createMockSpecialistTransport, syntheticProviderDirectory } from "@/integrations/mock/specialist";
+import { createPortalTransport } from "@/integrations/providers/portal";
 
 /**
  * The simulated specialists exist only for a synthetic tenant in local development or preview
@@ -15,16 +16,23 @@ export function syntheticRoutingEnabled() {
   return getTenant().dataClassification === "synthetic" && (localSyntheticEnabled() || syntheticStagingEnabled(getEnv()));
 }
 
+/** A live tenant routes to the services in its configured directory; durable storage is required either way. */
+export function liveRoutingEnabled() {
+  const tenant = getTenant();
+  return tenant.dataClassification === "live" && tenant.directory.some((provider) => provider.active && tenant.recipients.has(provider.id));
+}
 /** The tenant's allowed providers. The same allowlist is enforced again inside the database. */
 export function getProviderRegistry() {
-  return createProviderRegistry(syntheticRoutingEnabled() ? syntheticProviderDirectory : [], getTenant().recipients);
+  const tenant = getTenant();
+  return createProviderRegistry(syntheticRoutingEnabled() ? syntheticProviderDirectory : tenant.directory, tenant.recipients);
 }
-
 const mockTransport = createMockSpecialistTransport();
+const portalTransport = createPortalTransport();
 export function getProviderTransport(provider: ProviderDescriptor) {
-  return syntheticRoutingEnabled() && provider.synthetic && provider.transport === "mock" ? mockTransport : undefined;
+  if (syntheticRoutingEnabled()) return provider.synthetic && provider.transport === "mock" ? mockTransport : undefined;
+  // A live tenant never reaches the simulated specialist: only non-synthetic inbox services are transmitted to.
+  return getTenant().dataClassification === "live" && !provider.synthetic && provider.transport === "portal" ? portalTransport : undefined;
 }
-
 /**
  * Per-provider callback secret for the synthetic specialists. Deployed previews must use
  * a server-side secret; the fixed development value works only on a local machine.

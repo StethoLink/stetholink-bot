@@ -10,6 +10,7 @@ export type * from "./clinician";
 export type * from "./attachment";
 export type * from "./provider";
 export type * from "./scribe";
+export type * from "./specialist";
 export { SOAP_SECTIONS } from "./scribe";
 export type { CreateConsultationDraftRequest } from "./routes";
 export { apiRoutes } from "./routes";

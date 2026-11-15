@@ -5,7 +5,8 @@ import { createRemoteJWKSet, jwtVerify } from "jose";
 import { z } from "zod";
 import { beginSmartLaunch, exchangeSmartCode, secureEndpoint, type SmartRegistration } from "@/integrations/fhir/smart";
 import { createFhirConnector, isFhirId } from "@/integrations/fhir/connector";
-import { getEnv } from "@/platform/tenants/env";
+import { getEnv, specialistMap } from "@/platform/tenants/env";
+import { saveSpecialistSession } from "./specialist-session";
 import { RouteError } from "@/core/errors";
 import { ChartUnavailableError } from "@/core/tools/connector";
 import { AuthError, cookieOptions, saveSession } from "./session";
@@ -47,11 +48,12 @@ function registration() {
 type Registration = ReturnType<typeof registration>;
 type Callback = { state: string; code: string };
 
-function smartIdentityAdapter(reg: Registration): IdentityAdapter<{ pending: z.infer<typeof pendingSchema>; callback: Callback }> {
+type Verified = Awaited<ReturnType<IdentityAdapter<unknown>["verify"]>> | { specialist: import("@/platform/tenants/env").SpecialistEntry };
+function smartIdentityAdapter(reg: Registration): { verify(launch: { pending: z.infer<typeof pendingSchema>; callback: Callback }): Promise<Verified> } {
   return {
     async verify({ pending, callback }) {
       const result = await exchangeSmartCode(reg, pending, callback);
-      if (!result.idToken || !result.scope || !result.grant.encounterId) throw new Error("Required SMART launch claims missing");
+      if (!result.idToken || !result.scope) throw new Error("Required SMART launch claims missing");
       const scopes = result.scope.split(/\s+/).filter(Boolean);
       if (!scopes.includes("openid") || !scopes.includes("fhirUser")) throw new Error("SMART identity scopes missing");
 
@@ -68,6 +70,14 @@ function smartIdentityAdapter(reg: Registration): IdentityAdapter<{ pending: z.i
         if (payload.at_hash !== hash) throw new Error("SMART access token binding failed");
       }
 
+      // A specialist opening the inbox: the launch has no patient, and the signed identity is in the tenant's specialist map.
+      // The EHR token is not kept: an inbox session reads no chart.
+      if (!result.hasPatient) {
+        const specialist = specialistMap(getEnv()).find((entry) => entry.subject === payload.sub && entry.fhirUser === payload.fhirUser);
+        if (!specialist) throw new Error("SMART user is not a registered specialist");
+        return { specialist };
+      }
+      if (!result.grant.encounterId) throw new Error("Required SMART launch claims missing");
       const mapped = reg.mapping.find((entry) => entry.subject === payload.sub && entry.fhirUser === payload.fhirUser);
       const root = reg.issuer.replace(/\/$/, "");
       const reference = mapped?.fhirUser.startsWith(root + "/") ? mapped.fhirUser.slice(root.length + 1) : mapped?.fhirUser;
@@ -138,6 +148,11 @@ export async function finishSmartLaunch(callback: Callback) {
     if (error instanceof ChartUnavailableError) throw error;
     throw new AuthError("forbidden", "SMART clinician or chart context could not be verified");
   });
+  if ("specialist" in verified) {
+    await saveSpecialistSession(verified.specialist);
+    return "/inbox" as const;
+  }
   if (verified.context.expiresAt <= Date.now()) throw new AuthError("forbidden", "SMART grant expired");
   await saveSession(verified);
+  return "/embed" as const;
 }

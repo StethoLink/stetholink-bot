@@ -112,8 +112,10 @@ describe("live consultation drafting through the verified path (fake FHIR adapte
     const draft = await drafted(service.create({ ...chart, specialty: "Cardiology", clinicalQuestion: "Is further work-up needed?" }, physician));
     expect(draft.summary.split("\n")[0]).toBe("Consultation draft; physician review required.");
     expect(draft.summary).not.toMatch(/synthetic/i);
-    expect(draft.summary).toContain("Condition/fic-htn");
-    expect(draft.summary).toContain("Observation/fic-bp");
+    // The text cites facts by their own ids; the EHR record reference never appears in text that can be sent.
+    expect(draft.summary).toContain("[Condition-fic-htn; documented");
+    expect(draft.summary).not.toContain("Condition/fic-htn");
+    expect(draft.summary).not.toContain("Observation/fic-bp");
     expect(draft.grounding?.provenance.dataClassification).toBe("live");
   });
 
@@ -293,9 +295,10 @@ describe("live routing through the physician path (fake provider)", () => {
     const envelope = consultationEnvelopeSchema.parse(send.mock.calls[0][0]);
     expect(envelope).toMatchObject({ dataClassification: "live", tenantId: TENANT, providerId: provider.id, requestId: attempts[0].requestId,
       approval: { approvedBy: physician.clinicianId, approvedAt: draft.reviewedAt } });
-    expect(envelope.clinicalFacts.map((fact) => fact.source.reference)).toContain("Condition/fic-htn");
+    // The provider receives each cited fact under its opaque id; no EHR record reference leaves the chart.
+    expect(envelope.clinicalFacts.map((fact) => fact.source)).toContainEqual({ type: "fhir", reference: "Condition-fic-htn" });
     const wire = JSON.stringify(envelope);
-    for (const secret of [patient.displayName, "Layla", patient.birthDate!, chart.patientId, chart.encounterId]) expect(wire).not.toContain(secret);
+    for (const secret of [patient.displayName, "Layla", patient.birthDate!, chart.patientId, chart.encounterId, "Condition/fic-htn", "MedicationRequest/fic-aml", "Observation/fic-bp", "ServiceRequest/fic-ecg"]) expect(wire).not.toContain(secret);
     expect(Object.keys(envelope)).not.toEqual(expect.arrayContaining(["patientId", "encounterId", "displayName", "birthDate", "syntheticOnly"]));
     // The audit record carries identifiers only.
     expect(audit).toHaveBeenCalledWith({ action: "consultation.dispatched", tenantId: TENANT, clinicianId: physician.clinicianId, draftId: draft.id, requestId: attempts[0].requestId, providerId: provider.id });

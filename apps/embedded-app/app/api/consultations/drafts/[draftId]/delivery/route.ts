@@ -8,7 +8,6 @@ export async function POST(req: Request, ctx: { params: Promise<{ draftId: strin
     const { draftId } = await ctx.params;
     const input = dispatchRequestSchema.safeParse(await readJson(req));
     if (!draftId || draftId.length > 128 || !input.success) return errorResponse("invalid_request", "Invalid delivery request");
-    if (session.source === "smart") return errorResponse("not_implemented", "Durable hospital consultation delivery is not configured");
     return contractResponse(consultationDeliveryViewSchema, await getConsultations(session).route(draftId, input.data));
   } catch (error) {
     return handleRouteError(error);

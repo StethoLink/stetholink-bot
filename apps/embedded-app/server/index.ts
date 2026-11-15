@@ -15,12 +15,17 @@ import { getTenant } from "@/platform/tenants";
 import { createProviderRouter } from "@/core/routing/router";
 import { eligibleProviders } from "@/core/routing/registry";
 import { auditConsultation } from "@/platform/audit";
-import { getProviderRegistry, getProviderTransport, providerCallbackSecret, syntheticRoutingEnabled } from "@/platform/providers";
+import { getProviderRegistry, getProviderTransport, liveRoutingEnabled, providerCallbackSecret, syntheticRoutingEnabled } from "@/platform/providers";
 import { CALLBACK_HEADERS, signProviderCallback } from "@/platform/providers/callback-auth";
 import { mockSpecialistCallback, mockSpecialistNextStep, syntheticProviderDirectory } from "@/integrations/mock/specialist";
 import type { DataSource, DispatchRequest } from "@/shared/contracts";
 import { classificationOfSource } from "@/shared/schemas";
 import { receiveProviderCallback } from "./provider-callbacks";
+import { getChartWriter } from "./chart-writer";
+import { createChartWriteLedger } from "@/platform/persistence/scribe";
+import type { ChartWriteItem } from "@/core/tools/chart-writer";
+import type { ChartWriteResult } from "@/shared/contracts";
+import { parseStatement } from "@/shared/utils/referral-text";
 
 export function getClinicalServices(session: VerifiedLaunch) {
   const adapter = getClinicalDataAdapter(session);
@@ -74,7 +79,7 @@ export function getConsultations(session: VerifiedLaunch) {
   const { adapter } = getClinicalServices(session);
   requireAssistantData(session, adapter);
   // The simulated specialists serve synthetic sessions only. A live tenant's provider directory is configured separately.
-  const directory = actor.dataClassification === "synthetic" ? syntheticProviderDirectory : [];
+  const directory = actor.dataClassification === "synthetic" ? syntheticProviderDirectory : tenant.directory;
   const service = createConsultationService({
     repository, provider: getModelProvider(), safety: clinicalSafetyGuard, adapter, dataClassification: actor.dataClassification,
     // The model is asked to use the spelling of specialties this tenant can actually route to.
@@ -82,10 +87,11 @@ export function getConsultations(session: VerifiedLaunch) {
   });
   // Routing needs durable storage and a configured provider directory. Today the only directory is
   // the simulated one, which the classification check keeps to synthetic sessions.
-  const routing = durable && actor.dataClassification === "synthetic" && syntheticRoutingEnabled();
+  const simulated = durable && actor.dataClassification === "synthetic" && syntheticRoutingEnabled();
+  const routing = simulated || (durable && actor.dataClassification === "live" && liveRoutingEnabled());
   const router = createProviderRouter({
     repository: lifecycle, registry: getProviderRegistry(), transport: getProviderTransport, tenantId: tenant.id, dataClassification: actor.dataClassification,
-    timeoutMs: env.PROVIDER_TIMEOUT_MS, simulator: routing, audit: auditConsultation,
+    timeoutMs: env.PROVIDER_TIMEOUT_MS, simulator: simulated, audit: auditConsultation,
   });
   function requireRouting() {
     if (!durable) throw new RouteError("provider_unavailable", "Configure durable consultation storage");
@@ -142,6 +148,49 @@ export function getConsultations(session: VerifiedLaunch) {
       }
       return (await router.eligible(draftId)).map(({ id, displayName, specialties, transport, synthetic }) => ({ id, displayName, specialties, transport, synthetic }));
     },
+    /**
+     * Writes the approved consultation, and the specialist's report once received, to the chart as
+     * clinical notes. Physician only; each document is created at most once; where the EHR takes
+     * no write, the text is returned for copying. With `write` false it only reports what was written.
+     */
+    async chart(draftId: string, write: readonly ("consultation" | "report")[] = []): Promise<ChartWriteResult[]> {
+      if (!durable) throw new RouteError("provider_unavailable", "Configure durable consultation storage");
+      const draft = await lifecycle.get(draftId);
+      if (!draft) throw new RouteError("not_found", "Draft not found");
+      const status = draft.lifecycleStatus ?? draft.status;
+      if (!["approved", "queued", "sent", "accepted", "responded", "failed"].includes(status)) return [];
+      // Citation markers are for the review screen; the chart note is the approved wording alone.
+      const plain = (text: string) => text.split("\n").map((line) => /^\s*[-•]/.test(line) ? `- ${parseStatement(line).text}` : line).join("\n");
+      const key = (item: string) => `sl-${draftId.replaceAll("-", "").slice(0, 40)}-${item}`;
+      const report = status === "responded" ? (await lifecycle.responses(draftId)).findLast((response) => response.kind === "report")?.report : undefined;
+      const documents: { item: "consultation" | "report"; origin: "consultation" | "specialist_report"; write: Extract<ChartWriteItem, { kind: "document" }> }[] = [
+        { item: "consultation", origin: "consultation", write: { kind: "document", itemKey: key("consult"), documentType: "consultation_request", language: "en",
+          title: `Consultation request: ${draft.grounding?.specialty ?? "specialist"}`, text: [plain(draft.summary), plain(draft.assessment)].filter(Boolean).join("\n\n") } },
+        ...(report ? [{ item: "report" as const, origin: "specialist_report" as const, write: { kind: "document" as const, itemKey: key("report"), documentType: "specialist_report" as const, language: "en",
+          title: `Specialist reply: ${draft.grounding?.specialty ?? "consultation"}`,
+          text: [`Reply from ${report.responder}`, report.summary, ...(report.recommendations.length ? ["Recommendations:", ...report.recommendations.map((line) => `- ${line}`)] : [])].join("\n") } }] : []),
+      ];
+      const ledger = createChartWriteLedger(actor);
+      if (write.length) {
+        if (!actor.roles.includes("physician") || !actor.scopes.includes("chart:write")) throw new RouteError("forbidden", "Only the physician can write to the chart");
+        const writer = getChartWriter(session);
+        for (const document of documents.filter((entry) => write.includes(entry.item))) {
+          // The database opens the ledger row only for a consultation this physician session may write, in an approved state.
+          const opened = await ledger.begin(document.origin, draftId, document.write.itemKey, "DocumentReference");
+          if (opened.status === "created" || opened.status === "existing") continue;
+          const outcome = writer ? await writer.create(document.write) : { status: "unsupported" as const, resourceType: "DocumentReference" as const, failure: "Writing to the chart is not switched on for this session" };
+          await ledger.record(document.write.itemKey, outcome.status, outcome.resourceId, outcome.failure);
+          auditConsultation({ action: "chart.write", tenantId: tenant.id, clinicianId: actor.clinicianId, draftId, itemKey: document.write.itemKey, resourceType: "DocumentReference", status: outcome.status, resourceId: outcome.resourceId });
+        }
+      }
+      const stored = await ledger.forOrigin(["consultation", "specialist_report"], draftId);
+      return documents.map((document) => {
+        const row = stored.find((entry) => entry.itemKey === document.write.itemKey);
+        const done = row?.status === "created" || row?.status === "existing";
+        return { itemKey: document.write.itemKey, item: document.item, resourceType: "DocumentReference", status: row?.status ?? "pending", resourceId: row?.resourceId, failure: row?.failure,
+          ...(done ? {} : { copyText: document.write.text }) };
+      });
+    },
     async delivery(draftId: string) {
       if (durable) return router.view(draftId);
       if (!(await repository.get(draftId))) throw new RouteError("not_found", "Draft not found");
@@ -153,6 +202,7 @@ export function getConsultations(session: VerifiedLaunch) {
      */
     async simulateSpecialist(draftId: string) {
       requireRouting();
+      if (!simulated) throw new RouteError("not_implemented", "There is no simulated specialist for real patient data");
       if (!(await lifecycle.get(draftId))) throw new RouteError("not_found", "Draft not found");
       const [latest] = await lifecycle.deliveries(draftId);
       const secret = latest && providerCallbackSecret(latest.providerId);

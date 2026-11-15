@@ -49,7 +49,7 @@ export async function exchangeSmartCode(
   pending: PendingLaunch,
   callback: { state: string; code: string },
   request: typeof fetch = fetch,
-): Promise<{ grant: FhirLaunchGrant; expiresAt: number; idToken?: string; scope?: string }> {
+): Promise<{ grant: FhirLaunchGrant; expiresAt: number; idToken?: string; scope?: string; hasPatient: boolean }> {
   const expected = Buffer.from(pending.state);
   const actual = Buffer.from(callback.state);
   if (!callback.code || pending.issuer !== registration.issuer || pending.expiresAt <= Date.now() ||
@@ -71,17 +71,19 @@ export async function exchangeSmartCode(
   const token = await response.json() as Record<string, unknown>;
   if (typeof token.token_type !== "string" || token.token_type.toLowerCase() !== "bearer" ||
       typeof token.access_token !== "string" || !token.access_token ||
-      typeof token.patient !== "string" || !isFhirId(token.patient) ||
+      // A launch outside a chart (a specialist opening the inbox) carries no patient; with one, it must be well formed.
+      (token.patient !== undefined && (typeof token.patient !== "string" || !isFhirId(token.patient))) ||
       typeof token.expires_in !== "number" || !Number.isSafeInteger(token.expires_in) ||
       token.expires_in <= 0 || token.expires_in > 86400 ||
       (token.encounter !== undefined && (typeof token.encounter !== "string" || !isFhirId(token.encounter)))) {
-    throw new Error("SMART authorization did not return a patient-scoped grant");
+    throw new Error("SMART authorization did not return a usable grant");
   }
   return {
     grant: {
       baseUrl: registration.issuer, accessToken: token.access_token,
-      patientId: token.patient, encounterId: token.encounter,
+      patientId: typeof token.patient === "string" ? token.patient : "", encounterId: token.encounter,
     },
+    hasPatient: typeof token.patient === "string",
     expiresAt: Date.now() + token.expires_in * 1000,
     idToken: typeof token.id_token === "string" ? token.id_token : undefined,
     scope: typeof token.scope === "string" ? token.scope : undefined,

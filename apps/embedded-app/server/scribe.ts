@@ -7,8 +7,6 @@ import { clinicalSafetyGuard } from "@/core/agent/safety/guard";
 import { RouteError } from "@/core/errors";
 import { createScribeService, type ScribeConfig } from "@/core/scribe/service";
 import type { TranscriptionProvider } from "@/core/scribe/ports";
-import type { ClinicalWriteAdapter } from "@/core/tools/chart-writer";
-import { createFhirWriter } from "@/integrations/fhir/writer";
 import { createElevenLabsTranscription } from "@/integrations/transcription/elevenlabs";
 import { mockTranscription } from "@/integrations/transcription/mock";
 import { createOpenAITranscription, type TranscriptionEvent } from "@/integrations/transcription/openai";
@@ -17,6 +15,7 @@ import type { VerifiedLaunch } from "@/platform/auth/identity";
 import { createChartWriteLedger, createScribeRepository } from "@/platform/persistence/scribe";
 import { getTenant } from "@/platform/tenants";
 import { getEnv, scribeProblems } from "@/platform/tenants/env";
+import { getChartWriter } from "./chart-writer";
 import { getClinicalServices, requireAssistantData } from "./index";
 
 const globals = globalThis as typeof globalThis & { stetholinkSpeechBudget?: SpendingLimiter; stetholinkScribeHints?: Map<string, readonly string[]> };
@@ -45,22 +44,6 @@ function getNoteProvider() {
     inputUsdPerMillion: env.SCRIBE_NOTE_INPUT_USD_PER_MILLION ?? env.OPENAI_INPUT_USD_PER_MILLION, outputUsdPerMillion: env.SCRIBE_NOTE_OUTPUT_USD_PER_MILLION ?? env.OPENAI_OUTPUT_USD_PER_MILLION,
     liveDataApproved: env.MODEL_LIVE_DATA_APPROVED === "true",
   }, fetch, { observe: (event) => console.info(JSON.stringify({ action: "model.call", ...event, at: new Date().toISOString() })) });
-}
-
-/**
- * The EHR writer exists only for a verified SMART session of a tenant configured for live data
- * with write-back switched on. A synthetic session never gets one, so it cannot write to a real
- * EHR; a live session never writes anywhere but its own launched chart.
- */
-export function getChartWriter(session: VerifiedLaunch): ClinicalWriteAdapter | null {
-  const env = getEnv();
-  const tenant = getTenant();
-  if (env.EHR_WRITE_ENABLED !== "true" || session.source !== "smart" || !session.ehrAccessToken || !env.FHIR_BASE_URL || tenant.connector === "synthetic" ||
-      tenant.dataClassification !== "live" || session.context.dataClassification !== "live" || !session.context.encounterId || !session.context.scopes.includes("chart:write")) return null;
-  return createFhirWriter({
-    baseUrl: env.FHIR_BASE_URL, accessToken: session.ehrAccessToken, patientId: session.context.patientId, encounterId: session.context.encounterId,
-    practitionerReference: session.ehrUser, grantedScopes: session.context.scopes.filter((scope) => scope.startsWith("smart:")).map((scope) => scope.slice(6)),
-  }, fetch, { docStatus: env.FHIR_NOTE_DOC_STATUS, noteTypeCode: env.FHIR_NOTE_TYPE_CODE });
 }
 
 export function scribeConfig(): ScribeConfig {

@@ -1,6 +1,6 @@
 import type { ClinicianContext } from "@/core/auth/clinician";
 import { RouteError } from "@/core/errors";
-import type { ConsultationDeliveryView, ConsultationDraft, ConsultationEnvelopeContent, DataClassification, DispatchRequest, ProviderDescriptor } from "@/shared/contracts";
+import type { ClinicalFact, ConsultationDeliveryView, ConsultationDraft, ConsultationEnvelopeContent, DataClassification, DispatchRequest, ProviderDescriptor } from "@/shared/contracts";
 import { consultationEnvelopeContentSchema, consultationEnvelopeSchema, dispatchRequestSchema } from "@/shared/schemas";
 import { ProviderTransportError, type DeliveryRecord, type DeliveryRepository, type ProviderRegistry, type ProviderTransport, type TransportFailure } from "./ports";
 import { eligibleProviders } from "./registry";
@@ -37,13 +37,16 @@ export function buildEnvelope(draft: ConsultationDraft, provider: ProviderDescri
     throw new RouteError("conflict", "The consultation needs a specialty and clinical question before routing");
   }
   const cited = new Set(citedEvidenceIds([draft.summary, draft.assessment, ...draft.plan].join("\n")));
+  // A provider never receives a chart identifier. The record reference (for example "Observation/123")
+  // stays in the chart; the fact travels under its own opaque id, which is what the text cites.
+  const withoutChartReference = <T extends { id: string; source: { type: ClinicalFact["source"]["type"]; reference: string } }>(item: T): T => ({ ...item, source: { type: item.source.type, reference: item.id } });
   const parsed = consultationEnvelopeContentSchema.safeParse({
     contractVersion: "1.0", tenantId, providerId: provider.id,
     specialty: grounding.specialty, reason: grounding.reason, question: grounding.question,
     summary: draft.summary, assessment: draft.assessment, plan: draft.plan,
-    clinicalFacts: (draft.clinicalFacts ?? []).filter((fact) => cited.has(fact.id)),
-    missingInformation: (draft.missingInformation ?? []).filter((fact) => cited.has(fact.id)),
-    attachments: draft.attachments ?? [], safetyFlags: grounding.safetyFlags,
+    clinicalFacts: (draft.clinicalFacts ?? []).filter((fact) => cited.has(fact.id)).map(withoutChartReference),
+    missingInformation: (draft.missingInformation ?? []).filter((fact) => cited.has(fact.id)).map(withoutChartReference),
+    attachments: (draft.attachments ?? []).map(withoutChartReference), safetyFlags: grounding.safetyFlags,
     approval: { approvedBy: draft.reviewedBy, approvedAt: draft.reviewedAt }, dataClassification: classification,
   });
   if (!parsed.success) throw new RouteError("conflict", "The approved consultation cannot be packaged for a provider");
