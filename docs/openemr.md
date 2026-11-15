@@ -1,25 +1,117 @@
 # OpenEMR and FHIR SMART launch
 
-Use a synthetic chart in a trusted EHR test environment. Register a public SMART client with launch URL `https://<app-host>/api/smart/launch` and exact redirect URI `https://<app-host>/api/smart/callback`. Start with a top-level launch to support SameSite=Lax cookies. Verify embedding with the hospital's supported browser and EHR configuration.
+How to plug StethoLink into OpenEMR so that it opens from the patient's chart. The steps were run against real OpenEMR 7.0.3 and 8.5.0 in Docker on 2026-11-15; what was and was not verified is at the end. Use a test patient created inside the EHR, never a real person's record.
 
-| Variable | Value |
+## OpenEMR versions
+
+| OpenEMR | Launch from the chart |
+| --- | --- |
+| 7.0.3 (patch 4) | **Works unpatched.** Verified end to end. |
+| 7.0.4 to 8.3.0 | Not run. The source of the faulty check below returns "allowed" in these versions, so the fault is not present. |
+| 8.4.0, 8.4.1, 8.5.0, 8.6.0 | **Fails in OpenEMR.** Reproduced on unpatched 8.5.0; the same code is in the 8.4.0, 8.4.1 and 8.6.0 releases and on `master` (2026-11-15). |
+
+The fault in 8.4.0 and later: `BearerTokenAuthorizationStrategy::populateTokenContextForRequest()` calls `checkUserHasAccessToPatient($restRequest->getRequestUserId(), $patientUuid)`. `getRequestUserId()` returns the numeric `users.id`; since 8.4.0 the check refuses anything that is not a UUID string. The launched patient is therefore never bound to the request, and every `patient/*` FHIR read answers 401. OpenEMR's log says `checkUserHasAccessToPatient rejected — user id missing or not a valid UUID {"userIdType":"integer"}`; StethoLink's log says `fhir_patient_unreadable` with `http:401`. It affects every SMART app that uses patient scopes with a clinician's sign-in, not only StethoLink.
+
+StethoLink does not ship or need a patched OpenEMR. Until OpenEMR fixes it, use a version that is not affected, or apply the vendor's fix when it is released. The fix belongs in OpenEMR: pass `$restRequest->getRequestUserUUIDString()` to the check. The issue text for OpenEMR is in [openemr-upstream-issue.md](openemr-upstream-issue.md).
+
+## 1. OpenEMR settings
+
+In Admin, Config, Connectors:
+
+- Enable the standard REST API and the FHIR REST API.
+- **Site Address (required for OAuth2 and FHIR)**: the exact public HTTPS origin of OpenEMR, for example `https://emr.hospital.example`, no trailing slash. OpenEMR builds `iss`, its endpoints and every signed `fhirUser` from it. If it differs from the address the server uses, discovery or the clinician mapping fails.
+
+Every clinician who will use StethoLink needs an **NPI** on their OpenEMR user (Admin, Users). Without one OpenEMR signs the user as `Person/<uuid>`, not `Practitioner/<uuid>`, and the launch stops with `clinician_not_practitioner`.
+
+## 2. Register the client
+
+Register a **public** client, in Admin, System, API Clients, "Register New App" (`/interface/smart/register-app.php`), or by request:
+
+```sh
+curl -X POST https://<openemr>/oauth2/default/registration -H 'Content-Type: application/json' -d '{
+  "application_type": "public",
+  "client_name": "StethoLink",
+  "redirect_uris": ["https://<app-host>/api/smart/callback"],
+  "initiate_login_uri": "https://<app-host>/api/smart/launch",
+  "contacts": ["<admin email>"],
+  "scope": "launch openid fhirUser patient/Patient.read patient/Encounter.read patient/AllergyIntolerance.read patient/Condition.read patient/MedicationRequest.read patient/Observation.read patient/Medication.read"
+}'
+```
+
+- Send only these fields. OpenEMR refuses `"token_endpoint_auth_method": "none"` (`invalid_client_metadata`), and refuses the whole registration if one scope is not in its list (`invalid_scope`, naming the scope).
+- `initiate_login_uri` is the launch URL. With it and the `launch` scope the app appears in the chart.
+- Scopes: 7.0.3 knows only the SMART v1 names (`patient/Patient.read`). 8.x also lists the v2 names (`patient/Patient.rs`), but 8.5.0 does not list `patient/Medication.rs`. Use the names the preflight accepts, and put the same list in `SMART_SCOPE`. Add write scopes only if `EHR_WRITE_ENABLED` is used.
+- Do not ask for `launch/patient`. With it OpenEMR treats the launch as standalone and leaves the visit out of the token. The server never sends it, whatever `SMART_SCOPE` holds.
+- The answer holds the `client_id` for `SMART_CLIENT_ID`. It also holds a client secret and a registration token; StethoLink does not use them, do not store them.
+
+## 3. Enable the client
+
+A new client is **Disabled**. In Admin, System, API Clients (`/interface/smart/admin-client.php`), choose Edit on StethoLink, then **Enable Client**. Until then the launch ends with `authorization_denied`.
+
+On the same page, the button labelled "Disable EHR Launch Authorization Flow" makes OpenEMR skip its own second sign-in and consent screen when the app is launched from the chart. Without it the clinician signs in again ("OpenEMR Login") and authorizes the scopes inside the StethoLink window on every launch. Both ways were run on 7.0.3 and both open the chart. Whether to skip is the hospital's decision.
+
+## 4. StethoLink settings
+
+| Variable | Value for OpenEMR (site `default`) |
 | --- | --- |
 | `AUTH_MODE` | `smart` |
-| `CLINICAL_DATA_SOURCE` | `openemr` or `fhir` |
+| `CLINICAL_DATA_SOURCE` | `openemr` |
 | `TENANT_ID` | Stable tenant identifier |
-| `STETHOLINK_DATABASE_URL` | Restricted runtime PostgreSQL connection |
-| `STETHOLINK_DATABASE_CA` | Trusted CA PEM if needed |
-| `FHIR_BASE_URL` | Exact FHIR URL sent as `iss` |
-| `SMART_CLIENT_ID` | Registered public client ID |
-| `SMART_AUTHORIZATION_URL`, `SMART_TOKEN_URL` | Pinned endpoints from SMART discovery |
-| `SMART_REDIRECT_URI` | Exact registered HTTPS callback |
-| `SMART_OIDC_ISSUER`, `SMART_JWKS_URL` | Pinned OIDC issuer and JWKS URL |
-| `SMART_SCOPE` | Include `launch openid fhirUser` and patient-scoped read and search for Patient, Encounter, AllergyIntolerance, Condition, MedicationRequest, Observation and Medication (`patient/Observation.rs` in SMART v2, `patient/Observation.read` in v1). A resource the EHR does not grant is shown as "could not be loaded" |
-| `SMART_CLINICIAN_MAP` | Server-side JSON array of trusted `subject`, `fhirUser`, `clinicianId` (UUID) and `role` (`clinician` or `physician`) entries |
+| `STETHOLINK_DATABASE_URL`, `STETHOLINK_DATABASE_CA` | Restricted runtime PostgreSQL connection and its CA |
+| `FHIR_BASE_URL` | `<Site Address>/apis/default/fhir`, exactly, no trailing slash |
+| `SMART_CLIENT_ID` | The `client_id` from the registration |
+| `SMART_AUTHORIZATION_URL` | `<Site Address>/oauth2/default/authorize` |
+| `SMART_TOKEN_URL` | `<Site Address>/oauth2/default/token` |
+| `SMART_OIDC_ISSUER` | `<Site Address>/oauth2/default` |
+| `SMART_JWKS_URL` | `<Site Address>/oauth2/default/jwk` |
+| `SMART_REDIRECT_URI` | `https://<app-host>/api/smart/callback`, exactly as registered |
+| `SMART_SCOPE` | The registered scope list. A resource the EHR does not grant is shown as "could not be loaded" |
+| `SMART_CLINICIAN_MAP` | Server-side JSON list of `subject`, `fhirUser`, `clinicianId` (UUID) and `role` (`clinician` or `physician`) |
+| `NODE_EXTRA_CA_CERTS` | PEM file with the CA of OpenEMR's certificate, when it is not a public CA |
 
-Use the exact signed `fhirUser` from the hospital's registration process, for example a relative `Practitioner/<id>` reference or its absolute equivalent on the pinned FHIR base. Obtain the subject and role through the hospital administrator. Update the mapping and revoke affected local sessions when access changes.
+### The clinician map
 
-Do not put `launch/patient` in `SMART_SCOPE`. It asks for standalone patient context; when it is requested together with `launch`, OpenEMR treats the launch as standalone and leaves the encounter out of the token, so a launch from the chart cannot open a visit. An EHR launch takes its patient and encounter from `launch` alone. The server removes `launch/patient` from the authorization request if the setting still contains it.
+OpenEMR signs the user's UUID as the subject, and `<FHIR_BASE_URL>/Practitioner/<the same UUID>` as `fhirUser`. So an entry is:
+
+```json
+{ "subject": "<user uuid>", "fhirUser": "Practitioner/<user uuid>", "clinicianId": "<a UUID you assign>", "role": "physician" }
+```
+
+`fhirUser` may be written relative (`Practitioner/<uuid>`) or absolute (`<FHIR_BASE_URL>/Practitioner/<uuid>`); both match what OpenEMR signs. Nothing else matches: the subject must be equal, and the `fhirUser` must be the same resource type and id on exactly `FHIR_BASE_URL` (another host, port, path or scheme does not match). The user's UUID, from the OpenEMR database:
+
+```sql
+SELECT username, LOWER(CONCAT_WS('-', SUBSTR(HEX(uuid),1,8), SUBSTR(HEX(uuid),9,4), SUBSTR(HEX(uuid),13,4), SUBSTR(HEX(uuid),17,4), SUBSTR(HEX(uuid),21))) AS uuid, npi FROM users WHERE username = '<login>';
+```
+
+Every mapped clinician can draft; only a mapped `physician` can approve and send. Update the map and revoke affected sessions when access changes.
+
+## 5. TLS
+
+**Server to OpenEMR.** StethoLink's server fetches discovery, the token endpoint, the signing keys and the chart. It trusts Node's public CAs plus the file in `NODE_EXTRA_CA_CERTS`, which Node reads once at start and ignores without an error if it is unreadable. With OpenEMR's self-signed or hospital-CA certificate missing from that file, the launch stops with `discovery_unreachable`. Do not start the app with `next dev --experimental-https`: it replaces this setting, so the server can no longer verify OpenEMR. Serve the app over HTTPS from a reverse proxy in front of `next start` instead, and keep `NODE_EXTRA_CA_CERTS` in the server's own environment.
+
+**Browser to StethoLink.** OpenEMR opens StethoLink in a frame inside its own page. A browser offers no "accept this certificate" page inside a frame, so with a certificate the browser does not trust the window stays empty. Give the app a certificate the clinicians' browsers already trust (a public CA, or the hospital CA installed on the workstations). For a local trial only: open `https://<app-host>/api/health` in its own tab, accept the certificate, then launch.
+
+**Cookies.** The pending launch and the session are cookies set inside that frame. With the default `SameSite=Lax` they are sent only when StethoLink and OpenEMR are on the same site (for example `stetholink.hospital.example` and `emr.hospital.example`); otherwise the callback ends with `launch_session_missing`. Serving StethoLink same-site with the EHR is the supported setup. `COOKIE_MODE=embedded` (`SameSite=None; Secure; Partitioned`) exists for a cross-site frame and was not run against OpenEMR.
+
+## 6. Preflight
+
+Before asking a clinician to sign in, run the preflight with the server's environment, including `NODE_EXTRA_CA_CERTS`:
+
+```sh
+node --env-file=.env.local scripts/smart-preflight.mts     # or: npm run smart:preflight
+```
+
+It signs nobody in and reads no chart. Each line is `PASS` or `FAIL` with what to fix; the exit code is 1 if a check failed. It checks: the settings are present; every endpoint is plain HTTPS and the redirect URI is the callback; the scope has `launch`, `openid` and `fhirUser`; the clinician map is well formed and every `fhirUser` is a clinician on `FHIR_BASE_URL` (entries are named by position, values are never printed); the CA file is readable and not expired; a TLS handshake to every host the server calls succeeds with the server's trust; SMART discovery answers, publishes exactly the pinned endpoints, offers PKCE S256 and EHR launch, and lists every requested scope; the OpenID configuration publishes exactly `SMART_OIDC_ISSUER` and `SMART_JWKS_URL`; the JWKS holds a usable signing key; the FHIR API answers.
+
+It cannot see what only a sign-in shows: that the client is enabled, that the signed subject is in the map, that a visit is open, and that OpenEMR lets the clinician read the chart.
+
+## 7. Launch
+
+1. Sign in to OpenEMR and open the patient's chart.
+2. **Open a visit.** The chart header must show "Open Encounter: <date>", not "Open Encounter: None". OpenEMR puts a visit in the token only while one is open. Without it StethoLink answers "Open a visit in the patient's chart, then launch StethoLink again."
+3. On the patient dashboard, in "SMART Enabled Apps", press **Launch** next to StethoLink. It opens in a window inside OpenEMR.
+4. Unless the skip from section 3 is on, choose "OpenEMR Login", sign in, and press Authorize.
+5. StethoLink shows the patient's name and the visit. If it shows an error, read the next section with the reference from the page.
 
 ## When a launch fails
 
@@ -56,12 +148,22 @@ The line never contains a token, an authorization code, the state or nonce, the 
 | `id_token_invalid` | callback | `detail`: `claim:iss` (the signed issuer is not `SMART_OIDC_ISSUER`), `claim:aud` (not `SMART_CLIENT_ID`), `claim:exp` or `claim:iat` (expired or clock difference above five minutes), `claim:fhiruser` and other `claim:` names (claim missing), `signature`, `algorithm`. |
 | `binding_failed` | callback | `detail`: `check:nonce`, `check:azp` or `check:at_hash`. The token does not belong to this launch. |
 | `missing_patient` | callback | The token has no patient and the user is not a registered specialist. The app was opened outside a patient's chart. |
-| `clinician_unmapped` | callback | No `SMART_CLINICIAN_MAP` entry has this exact `subject` and `fhirUser`. `detail` starting with `subject:` means no entry has the signed subject; starting with `fhir_user:` means the subject matched and the `fhirUser` did not. The rest is the form of the signed `fhirUser`: `relative` (`Practitioner/<id>`), `absolute_on_issuer` (`<FHIR_BASE_URL>/Practitioner/<id>`), `absolute_elsewhere` or `other`. Write the map entry in the same form. |
+| `clinician_unmapped` | callback | No `SMART_CLINICIAN_MAP` entry is this user. `detail` starting with `subject:` means no entry has the signed subject; starting with `fhir_user:` means the subject matched and the `fhirUser` names another resource. The rest is the form of the signed `fhirUser`: `relative` (`Practitioner/<id>`), `absolute_on_issuer` (`<FHIR_BASE_URL>/Practitioner/<id>`), `absolute_elsewhere` (a URL that is not on `FHIR_BASE_URL`: compare scheme, host, port and path with OpenEMR's Site Address) or `other`. The relative and the absolute form of the same clinician both match, so with `fhir_user:` check the id itself. |
+| `clinician_not_practitioner` | callback | The subject is in the map, and the EHR signed `Person/<id>` instead of `Practitioner/<id>`. OpenEMR does this for a user who has no NPI. Give the user an NPI in OpenEMR (Admin, Users), then launch again. |
 | `clinician_reference_invalid` | callback | The mapped `fhirUser` is not a `Practitioner` or `PractitionerRole` reference. |
 | `missing_encounter` | callback | The token has no encounter. In OpenEMR the chart header says "Open Encounter: None". The clinician is told: "Open a visit in the patient's chart, then launch StethoLink again." |
-| `fhir_patient_unreadable`, `fhir_encounter_unreadable` | callback | The FHIR read of the launched patient or visit failed. `detail`: the HTTP status (`http:401`, `http:403`), `empty` (not found, or the resource does not match the launch: another ID, or a visit of another patient), `request_failed` (no answer). |
+| `fhir_patient_unreadable`, `fhir_encounter_unreadable` | callback | The FHIR read of the launched patient or visit failed. `detail`: the HTTP status (`http:401`, `http:403`), `empty` (not found, or the resource does not match the launch: another ID, or a visit of another patient), `request_failed` (no answer). `http:401` on both, straight after a sign-in that worked, on OpenEMR 8.4.0 or later is the OpenEMR fault described under "OpenEMR versions". |
 | `encounter_unsupported` | callback | The visit exists but its status, type or start time cannot be used. The clinician is told why. |
 | `grant_expired` | callback | The grant ran out before the session was saved. |
 | `unexpected` | both | A fault outside the launch checks, for example the session store. Look for the neighbouring error line. |
 
-The EHR must return patient and encounter context and support the requested FHIR operations. The connector follows paged search results (`next` links on the same FHIR base only, up to 5 pages of 100 per list) and tells the clinician when a list was longer. It accepts the R4 and R5 shapes of the encounter class, status and reason; a visit it cannot use is refused at launch with the reason. Every mapped clinician can draft; only a mapped physician can approve and send. The SMART flow has signed protocol tests with a synthetic issuer. A genuine OpenEMR or hospital SSO launch still requires verification. [HL7 SMART App Launch](https://hl7.org/fhir/smart-app-launch/STU2.2/app-launch.html)
+The EHR must return patient and encounter context and support the requested FHIR operations. The connector follows paged search results (`next` links on the same FHIR base only, up to 5 pages of 100 per list) and tells the clinician when a list was longer. It accepts the R4 and R5 shapes of the encounter class, status and reason; a visit it cannot use is refused at launch with the reason. Every mapped clinician can draft; only a mapped physician can approve and send. The SMART flow has signed protocol tests with a fictional issuer. [HL7 SMART App Launch](https://hl7.org/fhir/smart-app-launch/STU2.2/app-launch.html)
+
+## What was verified
+
+Run on 2026-11-15 in Docker, with a fictional patient and visit created inside each OpenEMR, the production build of StethoLink behind a local HTTPS proxy, and a real browser (Chromium) driving OpenEMR's own pages:
+
+- **OpenEMR 7.0.3, unpatched:** registration by request; the client enabled in the admin page; launch from the patient dashboard; OpenEMR's sign-in and consent; callback; StethoLink rendered the patient and visit inside the OpenEMR window. Also with the authorization-flow skip on. On the way, each of these stopped the launch with the reason this page gives: an untrusted certificate (`discovery_unreachable`, preflight `FAIL tls`), an unmapped user (`clinician_unmapped`), a user without NPI (`clinician_not_practitioner`), no open visit (`missing_encounter`). The map held the relative `fhirUser`, OpenEMR signed the absolute one.
+- **OpenEMR 8.5.0, unpatched:** the same steps up to the callback, which failed with `fhir_patient_unreadable` (`http:401`) for the reason under "OpenEMR versions". The preflight also found that 8.5.0 does not list `patient/Medication.rs`.
+
+Not verified: a browser that checks certificates (the test browser was told to accept the local test certificates); StethoLink and OpenEMR on different sites (both were on `localhost`, so cookies were same-site); the admin menu paths as a person clicks them (the pages were opened by address); OpenEMR 7.0.4 to 8.4.1 and 8.6.0 running (source read only); a hospital's own OpenEMR and single sign-on; anything after the first screen (scribe, drafts, write-back are T7). Test set-up that did not go through OpenEMR's screens: the patient was created with OpenEMR's patient service from the command line, and the user's NPI was set in the database. OpenEMR's FHIR API reports the visit as `finished` while it is still open in the chart.

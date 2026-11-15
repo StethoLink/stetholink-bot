@@ -2,35 +2,47 @@
 
 Written at the end of each working session so the next one starts from this file instead of re-reading the whole history. Update it, commit it and push it before handing off. Newest state only; the detail is in [WORKBOARD.md](WORKBOARD.md).
 
-## Where things stand (2026-11-15, after T1 of the OpenEMR brief)
+## Where things stand (2026-11-15, after T2 of the OpenEMR brief)
 
-- **Brief in progress:** [fable-openemr-privacy-orders.md](../agent-handoffs/fable-openemr-privacy-orders.md), tasks T1 to T9, one per conversation (its "Rule zero"). On the workboard they are `O-T1` to `O-T9`.
-- **Branch:** all work of this brief is on `claude/wizardly-ptolemy-wyp0dh`, which is `main` (`6e0afdc`) plus the brief and T1. **It is not on `main`.** `AGENTS.md` says to push to `main`; the session that did T1 was started on this branch and pushed there only. Keep working on this branch; T9 merges it. If the owner says otherwise, fast-forward `main` to it (no conflicts: `main` has not moved).
+- **Brief in progress:** [fable-openemr-privacy-orders.md](../agent-handoffs/fable-openemr-privacy-orders.md), tasks T1 to T9, one per conversation (its "Rule zero"). On the workboard they are `O-T1` to `O-T9`. **T1 and T2 are done. Next is T3.**
+- **Branch:** all work of this brief is on `claude/wizardly-ptolemy-wyp0dh`, which is `main` (`6e0afdc`) plus the brief, T1 and T2. **It is not on `main`.** `AGENTS.md` says to push to `main`; these sessions were started on this branch and push there only. Keep working on this branch; T9 merges it.
 - **The earlier brief** (live MVP, workboard T1 to T19) is complete and on `main`; its details are in the workboard log.
+- **T1** (commit `88ae344`): every SMART launch failure has a reason code, logged once with the correlation ID the error page shows. Reasons and what to check: `docs/openemr.md`, "When a launch fails".
 
-## T1 done: SMART launch failures are diagnosable
+## T2 done: the launch works on a real OpenEMR 7.0.3
 
-- **Commits:** `90d2a95` (claim), `88ae344` (code, tests, docs), and the commit that wrote this section.
-- **What changed:** `platform/auth/smart-launch-failure.ts` (reason list, `SmartLaunchFailure`, the one log line, correlation ID), `platform/auth/smart-session.ts` (every branch throws a reason; mapping is checked before the visit; `ehrLaunchScope` drops `launch/patient`), `integrations/fhir/smart.ts` (`SmartExchangeError`), `integrations/fhir/connector.ts` (`FhirReadError`), `apps/embedded-app/server/http/launch-error.ts` (error page with the correlation ID; JSON for non-browser clients), both SMART routes, `docs/openemr.md` (section "When a launch fails": every reason and what to check), `.env.example`.
-- **Behaviour:** a failed launch writes one line, `{"action":"smart.launch_failed","stage","reason","detail"?,"correlationId","at"}`. A token without an encounter answers 422 with "Open a visit in the patient's chart, then launch StethoLink again."; every security failure keeps the generic message. The page and the `X-Correlation-Id` header show the ID.
-- **Verified:** `npm run check` (514 passed, 30 skipped opt-in), `npm run build`, `node --test tests/smoke/*.test.mts`. `tests/backend/smart-launch-diagnostics.test.ts` has a case for each of the 31 reasons (the suite fails if one has none) and checks in each that no console stream holds a token, code, state, nonce, verifier, subject, `fhirUser`, clinician or chart ID, client ID, host name or the EHR's error text.
-- **Not verified:** nothing was run against OpenEMR or any real EHR. `tests/e2e/run-ci.sh` (Docker) was not re-run. The error page is plain English HTML; Arabic, RTL and the design system are T5.
+- **Commits:** `a244499` (claim), `5b2f539` (code and tests), and the commit that wrote this section (runbook, issue text, board).
+- **What changed:** `integrations/fhir/smart.ts` (plain module: `clinicianReference`, `sameFhirUser`, `parseClinicianMap`, `checkSmartDiscovery`, `ehrLaunchScope`), `integrations/fhir/smart-preflight.ts` and `scripts/smart-preflight.mts` (`npm run smart:preflight`), `platform/auth/smart-session.ts` (uses them; a map entry matches the signed `fhirUser` relative or absolute on `FHIR_BASE_URL`; new reason `clinician_not_practitioner`), `docs/openemr.md` (runbook), `docs/openemr-upstream-issue.md` (text for the owner to file; **not filed**).
+- **Verified on real systems (Docker, fictional patient created inside OpenEMR, Chromium driving OpenEMR's own pages, production build behind a local HTTPS proxy):**
+  - OpenEMR **7.0.3 unpatched**: launch from the patient dashboard, OpenEMR sign-in and consent, callback, and StethoLink showing the patient and visit **inside the OpenEMR window**. Also with OpenEMR's authorization-flow skip on.
+  - OpenEMR **8.5.0 unpatched**: the launch reaches the callback and fails with `fhir_patient_unreadable` (`http:401`). This is the "UUID ACL bug": present in the 8.4.0, 8.4.1, 8.5.0 and 8.6.0 releases and on `master`; absent in 7.0.3 (run) and 7.0.4 to 8.3.0 (source read only).
+  - The preflight against both, including its failure without OpenEMR's certificate in `NODE_EXTRA_CA_CERTS`.
+- **Why the owner's attempt failed, as far as this run shows:** OpenEMR signs `Person/<uuid>` for a user without an NPI, so no `Practitioner/...` map entry could match; and on 8.4.0 or later the FHIR reads fail in OpenEMR whatever StethoLink does. Which OpenEMR version the owner ran is not known here.
+- **Not verified:** a browser that checks certificates (the test browser accepted the local test certificates); StethoLink and OpenEMR on different sites (both were `localhost`, so cookies were same-site); the admin menu paths by clicking (pages were opened by address); a hospital's own OpenEMR and single sign-on; anything after the first screen. The patient was created with OpenEMR's patient service from the command line and the NPI was set in the database, not through OpenEMR's screens. `tests/e2e/run-ci.sh` was not re-run.
+- **Checks:** `npm run check` (553 passed, 30 skipped opt-in), `npm run build`, `node --test tests/smoke/*.test.mts`.
 
-## Next: T2 (real OpenEMR launch end to end)
+## Next: T3 (remove synthetic and mock behaviour from the product)
 
-Do the brief's T2 as written. What T1 leaves for it:
+Do the brief's T3 as written. Notes from T2:
 
-- The mapping still needs the signed `sub` and `fhirUser` to equal the map entry exactly (a relative entry does not match an absolute signed value, or the reverse). T2 makes both forms match. On a real attempt, the `clinician_unmapped` detail says which half failed and the form OpenEMR signed.
-- The preflight script can reuse the checks behind `discovery_*`, `pkce_s256_unsupported`, `jwks_unavailable` and `registration_invalid` in `platform/auth/smart-session.ts` (`discover`, `registration`); they import `server-only`, so a script needs the logic moved to a plain module or repeated.
-- This cloud environment has no OpenEMR. Check whether Docker can pull and run one before writing "unverified".
+- `registration()` in `platform/auth/smart-session.ts` still tests `CLINICAL_DATA_SOURCE === "synthetic"`; the preflight (`integrations/fhir/smart-preflight.ts`) only requires `AUTH_MODE=smart`.
+- OpenEMR's FHIR API reports a visit as `finished` while it is open in the chart; the header then reads "Outpatient visit, finished". Left as is (T5 or T7 may want other wording).
+- For T5: in the frame, cookies worked only because both were on `localhost`. For T7: use OpenEMR 7.0.3 unless OpenEMR has fixed 8.x.
+
+## Running a real OpenEMR here (about 10 minutes)
+
+- `docker network create oe`; `docker run -d --name oe-db --network oe -e MYSQL_ROOT_PASSWORD=root mariadb:11.4`; wait until it accepts connections (otherwise OpenEMR's setup stops with "unable to connect to database as root"); then `docker run -d --name oe --network oe -p 127.0.0.1:9300:443 -e MYSQL_HOST=oe-db -e MYSQL_ROOT_PASS=root -e MYSQL_USER=openemr -e MYSQL_PASS=openemr -e OE_USER=admin -e OE_PASS=<password> -e OPENEMR_SETTING_rest_api=1 -e OPENEMR_SETTING_rest_fhir_api=1 -e OPENEMR_SETTING_site_addr_oath=https://localhost:9300 openemr/openemr:7.0.3`. Ready when `https://localhost:9300/apis/default/fhir/metadata` answers 200.
+- Its certificate: `docker exec oe cat /etc/ssl/certs/webserver.cert.pem`; put it, with the app's test certificate, in the file `NODE_EXTRA_CA_CERTS` names.
+- The app: production build, database with TLS as in `tests/e2e/run-ci.sh`, `startTlsProxy` from `tests/e2e/fakes/tls.mts` in front (3082 to 3081), live-mode env as in `tests/e2e/live-ehr-flow.mts` with the OpenEMR values from `docs/openemr.md`.
+- In the browser (Playwright, `ignoreHTTPSErrors`): log in at `/interface/login/login.php?site=default`, choose "Ask again later" on the product registration dialog (do not submit it), enable the client at `/interface/smart/admin-client.php`, open the chart with `navigateTab(webroot_url + '/interface/patient_file/summary/demographics.php?set_pid=1', 'pat', ...)`, open a visit at `/interface/forms/newpatient/new.php?autoloaded=1&calenc=` (or `encounter_top.php?set_encounter=<id>` for an existing one), then press `.smart-launch-btn` in the dashboard frame. PHP run by hand inside the 8.x container must run as `apache`, not root.
 
 ## What is left from the earlier brief
 
-Not implemented, by decision or for lack of access (do not start them without the owner): EHR refresh token; a real email sender for specialist codes; registering `http-partner`; the Q6 "stated by the physician" source (design only, `docs/decisions/0003-physician-stated-source.md`); a transcription benchmark on human speech. The check against OpenEMR is now T2 and T7 of the current brief.
+Not implemented, by decision or for lack of access (do not start them without the owner): EHR refresh token; a real email sender for specialist codes; registering `http-partner`; the Q6 "stated by the physician" source (design only, `docs/decisions/0003-physician-stated-source.md`); a transcription benchmark on human speech. The first OpenEMR check is done (T2); the whole flow is T7.
 
 ## Facts worth not re-deriving
 
-- **Verified on a real server:** FHIR reads and conditional creates against HAPI FHIR JPA Server 8.12.0 in Docker (`tests/e2e/real-fhir-check.mts`); OpenAI and ElevenLabs transcription and the OpenAI note model on synthetic speech and fictional visits. **Verified with fake servers:** the whole SMART launch to chart-write to specialist round trip (`tests/e2e/live-ehr-flow.mts`). **Not verified:** any hospital EHR, a public SMART sandbox (hosts blocked by this environment's network policy: `launch.smarthealthit.org`, `r4.smarthealthit.org`, `hapi.fhir.org`), human speech, the microphone inside a real EHR iframe.
+- **Verified on a real server:** FHIR reads and conditional creates against HAPI FHIR JPA Server 8.12.0 in Docker (`tests/e2e/real-fhir-check.mts`); OpenAI and ElevenLabs transcription and the OpenAI note model on synthetic speech and fictional visits. **Verified with fake servers:** the whole SMART launch to chart-write to specialist round trip (`tests/e2e/live-ehr-flow.mts`). **Verified on a real OpenEMR 7.0.3 (T2):** the SMART launch from the chart up to the first screen. **Not verified:** any hospital EHR, a public SMART sandbox (hosts blocked by this environment's network policy: `launch.smarthealthit.org`, `r4.smarthealthit.org`, `hapi.fhir.org`), human speech, the microphone inside a real EHR iframe.
 - **Benchmark:** `gpt-transcribe` chosen (word error rate 8.8%, medicines 87%, doses and readings 100%, allergies 100%, $0.0045 per minute); the cheaper `gpt-4o-mini-transcribe` failed the quality bar; ElevenLabs `scribe_v2` is the implemented alternative. **Measured cost of a 15-minute visit: about $0.074** (transcription $0.0675, note $0.0066), target was under $0.10.
 - **A leak found and closed in Phase 4:** the older structured-draft path printed EHR record references into consultation text that could be sent to a specialist.
 - **A fault found and fixed in Phase 5:** the production container failed at start because Next tried to install TypeScript to read `next.config.ts`; the config is now `next.config.mjs`.
