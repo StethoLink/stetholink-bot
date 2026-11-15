@@ -2,10 +2,10 @@
 
 Written at the end of each working session so the next one starts from this file instead of re-reading the whole history. Update it, commit it and push it before handing off. Newest state only; the detail is in [WORKBOARD.md](WORKBOARD.md).
 
-## Where things stand (2026-11-15, after T2 of the OpenEMR brief)
+## Where things stand (2026-11-15, after T3 of the OpenEMR brief)
 
-- **Brief in progress:** [fable-openemr-privacy-orders.md](../agent-handoffs/fable-openemr-privacy-orders.md), tasks T1 to T9, one per conversation (its "Rule zero"). On the workboard they are `O-T1` to `O-T9`. **T1 and T2 are done. Next is T3.**
-- **Branch:** all work of this brief is on `claude/wizardly-ptolemy-wyp0dh`, which is `main` (`6e0afdc`) plus the brief, T1 and T2. **It is not on `main`.** `AGENTS.md` says to push to `main`; these sessions were started on this branch and push there only. Keep working on this branch; T9 merges it.
+- **Brief in progress:** [fable-openemr-privacy-orders.md](../agent-handoffs/fable-openemr-privacy-orders.md), tasks T1 to T9, one per conversation (its "Rule zero"). On the workboard they are `O-T1` to `O-T9`. **T1, T2 and T3 are done. Next is T4.**
+- **Branch:** all work of this brief is on `claude/wizardly-ptolemy-wyp0dh`, which is `main` (`6e0afdc`) plus the brief, T1, T2 and T3. **It is not on `main`.** `AGENTS.md` says to push to `main`; these sessions were started on this branch and push there only. Keep working on this branch; T9 merges it.
 - **The earlier brief** (live MVP, workboard T1 to T19) is complete and on `main`; its details are in the workboard log.
 - **T1** (commit `88ae344`): every SMART launch failure has a reason code, logged once with the correlation ID the error page shows. Reasons and what to check: `docs/openemr.md`, "When a launch fails".
 
@@ -21,11 +21,26 @@ Written at the end of each working session so the next one starts from this file
 - **Not verified:** a browser that checks certificates (the test browser accepted the local test certificates); StethoLink and OpenEMR on different sites (both were `localhost`, so cookies were same-site); the admin menu paths by clicking (pages were opened by address); a hospital's own OpenEMR and single sign-on; anything after the first screen. The patient was created with OpenEMR's patient service from the command line and the NPI was set in the database, not through OpenEMR's screens. `tests/e2e/run-ci.sh` was not re-run.
 - **Checks:** `npm run check` (553 passed, 30 skipped opt-in), `npm run build`, `node --test tests/smoke/*.test.mts`.
 
-## Next: T3 (remove synthetic and mock behaviour from the product)
+## T3 done: nothing fabricated runs in the product
 
-Do the brief's T3 as written. Notes from T2:
+- **Commits:** `e3a9959` (claim), `95cb9fb` (code, tests, e2e), and the commit that wrote this section (docs, board).
+- **What the product is now:** one mode. SMART launch from the EHR is the only sign-in; the chart comes from `fhir` or `openemr`; the model is OpenAI (or a compatible `OPENAI_BASE_URL`); transcription is OpenAI or ElevenLabs; the only transport is the in-hospital inbox (`portal`). `platform/tenants/env.ts` refuses to start without all of it (`configurationProblems`) and refuses by name every removed setting (`removedSettings`). The full list of removed values is under *Interface changes* on the workboard; `.env.example` marks what is required.
+- **Where fictional data lives:** only `tests/` (`tests/fixtures/*`, `tests/helpers/*`, `tests/e2e/fakes/*`). `eslint.config.mjs` and `tests/backend/no-fixtures-in-product.test.ts` fail if product code imports from `tests/`, `fixtures` or `mocks`. Tests that need a full configuration use `tests/helpers/config.ts`.
+- **e2e, plainly:**
+  - **Changed and run:** `tests/e2e/run-ci.sh` (now: database, migrations with the SQL suites, then the one flow) and `tests/e2e/live-ehr-flow.mts` (added: eleven startups that must be refused, 404 for the removed routes, a restart that keeps the session, the draft and its delivery). Both passed here with Docker.
+  - **Deleted, because they drove the staging launch, the mock model or the simulated specialist:** `staging.mts`, `m3-persistence.mts`, `m3-restart.mts`, `m5-m6-flow.mts`, `m7-assistant-flow.mts`, `run-local-m3.sh`, `browser/consultation-flow.mjs`, `browser/scribe-flow.mjs`. HTTP-level coverage lost with them: concurrent create replay and competing edits, the history version cursor, natural-language revision, provider failure and retry, signed provider callbacks, and the browser walk-through at 360 px. Unit tests and SQL suites still cover those rules. Porting them to the fake-EHR launch was not done.
+  - **Unchanged and not run:** `real-fhir-check.mts`, `m3-migrations.mts` (unchanged, run as part of `run-ci.sh`), the `LIVE_E2E_BROWSER=1` part of the flow (unchanged, not run).
+- **Checks:** `npm run check` (559 passed, 30 skipped opt-in), `npm run build` with no environment set, `node --test tests/smoke/*.test.mts`, `bash tests/e2e/run-ci.sh`.
+- **Unverified:** nothing was run against a real OpenEMR, a real model or a real transcription service after this change. The launch code changed little (the registration check and where the classification comes from), but that is a reading, not a run. T7 runs it.
+- **Left in place on purpose:** the classification value `synthetic`, the transport kind `mock`, `ProviderDescriptor.synthetic` and the "No AI inference" / "Synthetic data" labels driven by a stored record's own provenance. No deployment can produce such records any more; fixtures and rows from earlier versions carry them. The database column `consultation_delivery_attempts.transport` still defaults to `'mock'` (needs a migration to rename; nobody displays it). Free-text chat (`/api/chat`, `getChat`) now answers 501 for every session, because it was allowed only on synthetic charts; T4 may decide whether pseudonymization makes it acceptable. The provider callback route refuses everything until a provider with a secret exists.
 
-- `registration()` in `platform/auth/smart-session.ts` still tests `CLINICAL_DATA_SOURCE === "synthetic"`; the preflight (`integrations/fhir/smart-preflight.ts`) only requires `AUTH_MODE=smart`.
+## Next: T4 (pseudonymize patient data before it reaches the model provider)
+
+Do the brief's T4 as written. Notes from T3:
+
+- The single boundary is `getModelProvider()` in `platform/tenants/model-provider.ts`. **The scribe builds a second provider itself** (`getNoteProvider()` in `apps/embedded-app/server/scribe.ts`, same `createOpenAIProvider`, other model): route it through the same layer or T4's "no call path can bypass it" is false.
+- Today the consultation request already leaves out the name, birth date and record ids (`core/consultation/authoring.ts`, checked in `live-ehr-flow.mts` and `tests/backend/live-clinical-path.test.ts`); free text (the physician's request, chart notes, the transcript) is where names can still travel.
+- Tests of the layer use the fixtures in `tests/fixtures`; add Arabic-script names there, never in product code.
 - OpenEMR's FHIR API reports a visit as `finished` while it is open in the chart; the header then reads "Outpatient visit, finished". Left as is (T5 or T7 may want other wording).
 - For T5: in the frame, cookies worked only because both were on `localhost`. For T7: use OpenEMR 7.0.3 unless OpenEMR has fixed 8.x.
 
@@ -33,7 +48,7 @@ Do the brief's T3 as written. Notes from T2:
 
 - `docker network create oe`; `docker run -d --name oe-db --network oe -e MYSQL_ROOT_PASSWORD=root mariadb:11.4`; wait until it accepts connections (otherwise OpenEMR's setup stops with "unable to connect to database as root"); then `docker run -d --name oe --network oe -p 127.0.0.1:9300:443 -e MYSQL_HOST=oe-db -e MYSQL_ROOT_PASS=root -e MYSQL_USER=openemr -e MYSQL_PASS=openemr -e OE_USER=admin -e OE_PASS=<password> -e OPENEMR_SETTING_rest_api=1 -e OPENEMR_SETTING_rest_fhir_api=1 -e OPENEMR_SETTING_site_addr_oath=https://localhost:9300 openemr/openemr:7.0.3`. Ready when `https://localhost:9300/apis/default/fhir/metadata` answers 200.
 - Its certificate: `docker exec oe cat /etc/ssl/certs/webserver.cert.pem`; put it, with the app's test certificate, in the file `NODE_EXTRA_CA_CERTS` names.
-- The app: production build, database with TLS as in `tests/e2e/run-ci.sh`, `startTlsProxy` from `tests/e2e/fakes/tls.mts` in front (3082 to 3081), live-mode env as in `tests/e2e/live-ehr-flow.mts` with the OpenEMR values from `docs/openemr.md`.
+- The app: production build, database with TLS as in `tests/e2e/run-ci.sh`, `startTlsProxy` from `tests/e2e/fakes/tls.mts` in front (3082 to 3081), the env of `tests/e2e/live-ehr-flow.mts` (`liveEnv`) with the OpenEMR values from `docs/openemr.md`.
 - In the browser (Playwright, `ignoreHTTPSErrors`): log in at `/interface/login/login.php?site=default`, choose "Ask again later" on the product registration dialog (do not submit it), enable the client at `/interface/smart/admin-client.php`, open the chart with `navigateTab(webroot_url + '/interface/patient_file/summary/demographics.php?set_pid=1', 'pat', ...)`, open a visit at `/interface/forms/newpatient/new.php?autoloaded=1&calenc=` (or `encounter_top.php?set_encounter=<id>` for an existing one), then press `.smart-launch-btn` in the dashboard frame. PHP run by hand inside the 8.x container must run as `apache`, not root.
 
 ## What is left from the earlier brief
@@ -53,8 +68,8 @@ Not implemented, by decision or for lack of access (do not start them without th
 - Node's `fetch` needs `NODE_USE_ENV_PROXY=1` to reach outside hosts. `api.openai.com` and `api.elevenlabs.io` have proxy-injected credentials: pass `OPENAI_API_KEY=proxy-injected` (and `ELEVENLABS_API_KEY=proxy-injected`) to scripts that insist on a key.
 - The proxy ends every outbound request at 30 seconds; long model calls fail here for that reason only.
 - Playwright with Chromium is preinstalled: `NODE_PATH=/opt/node-tools/node_modules`.
-- `consultation-flow.mjs` needs a fresh database for every run (it asserts an empty history). `live-ehr-flow.mts` run by hand needs a production build and a database with TLS, as `run-ci.sh` sets up (`localhost` URL plus `STETHOLINK_DATABASE_CA`); without TLS the launch answers 500. `scribe-flow.mjs` needs `SCRIBE_FAKE_AUDIO` with sound and pauses (a generated tone of 3 s on, 0.6 s off works).
-- A synthetic staging app for browser work: PostgreSQL 17 in Docker on a loopback port, `STETHOLINK_TEST_OWNER_URL=... node tests/e2e/m3-migrations.mts` to apply migrations (fresh database each time; history is append-only), then `VERCEL_ENV=preview AUTH_MODE=staging STAGING_LAUNCH_SECRET=<32+ chars> STETHOLINK_DATABASE_URL=postgres://stetholink_runtime@127.0.0.1:<port>/postgres AI_PROVIDER=mock CLINICAL_DATA_SOURCE=synthetic SCRIBE_ENABLED=true npx next dev apps/embedded-app -p 3100`.
+- `live-ehr-flow.mts` run by hand needs a production build and a database with TLS, as `run-ci.sh` sets up (`localhost` URL plus `STETHOLINK_DATABASE_CA`); without TLS the launch answers 500. `bash tests/e2e/run-ci.sh` does all of it in about a minute.
+- There is no synthetic staging app any more. For browser work without an EHR, run `live-ehr-flow.mts` with `LIVE_E2E_BROWSER=1`, or start the fakes from `tests/e2e/fakes/ehr.mts` and launch through them as that script's `smartLaunch` does. For a real chart use the OpenEMR steps above.
 
 ## Handing off
 

@@ -60,8 +60,6 @@ Set as environment variables or secrets of the container. Values in angle bracke
 ```
 NODE_ENV=production
 TENANT_ID=<hospital-id>
-CLINICAL_DATA_MODE=live
-AUTH_MODE=smart
 CLINICAL_DATA_SOURCE=fhir
 COOKIE_MODE=embedded
 
@@ -140,7 +138,7 @@ The application writes one JSON line per event to standard output: launches refu
 
 - **Application:** start the previous image tag. Sessions are short, so clinicians relaunch from the chart.
 - **Database:** migrations only add tables, functions and grants; they do not rewrite stored rows. The previous application version runs against the newer schema, except across a release whose notes say otherwise (see *Interface changes* on the workboard). Do not drop tables to roll back; restore from backup only if data is damaged.
-- **Feature switches**, without a new image: `SCRIBE_ENABLED=false`, `EHR_WRITE_ENABLED=false` (items are then offered as text to copy), `PROVIDER_ALLOWLIST=` (no sending), `CLINICAL_DATA_MODE=synthetic` (the chart stays readable; the assistant is off).
+- **Feature switches**, without a new image: `SCRIBE_ENABLED=false`, `EHR_WRITE_ENABLED=false` (items are then offered as text to copy), `PROVIDER_ALLOWLIST=` (no sending). There is no switch that turns the assistant off while keeping the chart: `CLINICAL_DATA_MODE=synthetic` no longer exists and stops the server at start. To stop model use, stop the application.
 - What was written to the EHR stays there. It was created under the physician's name and is corrected in the EHR.
 
 ## 9. Pilot checklist

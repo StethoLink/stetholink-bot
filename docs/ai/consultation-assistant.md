@@ -1,6 +1,6 @@
 # Consultation assistant
 
-The physician asks for a consultation in plain language. A language model drafts the request from the open chart; the physician reviews, revises, and approves or rejects it. Only synthetic charts are supported.
+The physician asks for a consultation in plain language. A language model drafts the request from the open chart; the physician reviews, revises, and approves or rejects it. It works on the chart of the EHR launch only; there are no built-in charts and no stand-in model.
 
 ## What the model does and does not do
 
@@ -59,8 +59,9 @@ Server-side environment variables. Nothing here is exposed to the browser.
 
 | Variable | Purpose |
 | --- | --- |
-| `AI_PROVIDER` | `mock` (default; deterministic fallback, labelled as not AI) or `openai` |
-| `OPENAI_API_KEY` | Server-side key |
+| `AI_PROVIDER` | `openai`, the only value and the default. `mock` was removed: the server refuses to start with it |
+| `MODEL_LIVE_DATA_APPROVED` | Required `true`: the operator's statement that the model deployment may process the patients' data |
+| `OPENAI_API_KEY` | Required. Server-side key |
 | `OPENAI_MODEL` | Model id. Must support the Responses API with strict JSON schema output |
 | `OPENAI_INPUT_USD_PER_MILLION`, `OPENAI_OUTPUT_USD_PER_MILLION` | Required. Upper-bound rates you accept; no price is assumed. Calls are refused without them |
 | `OPENAI_MAX_COST_USD` | Worst-case cost allowed for one call including retries (default 0.25) |
@@ -68,7 +69,6 @@ Server-side environment variables. Nothing here is exposed to the browser.
 | `OPENAI_MAX_INPUT_TOKENS`, `OPENAI_MAX_OUTPUT_TOKENS` | Token bounds (defaults 16000 and 8000). Reasoning tokens count as output |
 | `OPENAI_REASONING_EFFORT` | Optional, for reasoning models |
 | `OPENAI_TIMEOUT_MS`, `OPENAI_MAX_RETRIES` | One deadline covers all attempts (defaults 90000 and 1; maximum 120000). The drafting and revision routes allow 120 s |
-| `STAGING_LIVE_MODEL` | `enabled` lets preview staging use the live model. Default `disabled` |
 
 Each model call logs one `model.call` line: provider, model, task, outcome, reason code, HTTP status, attempts, latency, tokens and estimated cost. Prompts, chart content, model output and keys are never logged. The draft stores provider, model, prompt version, tokens, estimated cost and latency, and the interface shows them.
 
@@ -87,7 +87,7 @@ npx vitest run tests/backend/openai-referral-live.test.ts
 
 A skipped live test is unverified, not passed.
 
-- `tests/e2e/browser/consultation-flow.mjs`: the whole workflow in a browser. Set `EXPECT_LIVE_MODEL=1` to require a model-written draft.
+- The browser walk-through script (`tests/e2e/browser/consultation-flow.mjs`) was removed with the synthetic staging mode it drove. `tests/e2e/live-ehr-flow.mts` with `LIVE_E2E_BROWSER=1` opens the workspace in a browser against fake servers; with a real model the workflow is checked in T7 of the OpenEMR brief.
 
 ## Live verification record
 

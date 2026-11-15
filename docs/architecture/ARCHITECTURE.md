@@ -9,8 +9,8 @@ core/routing/            Provider registry, router, transport port and callback 
 core/patient-context/    Patient-context service
 core/scribe/             Transcription port, sentence splitting, SOAP note generation and validation, scribe service
 core/tools/              Clinical read port, clinical write port (create only), empty model tool allowlist
-integrations/            FHIR reader, fact normalization and writer; OpenEMR and synthetic connectors; transcription
-                         adapters; provider adapters; inbox (portal) and mock specialist transports
+integrations/            FHIR reader, fact normalization and writer; OpenEMR connector; transcription
+                         adapters; provider adapters; the inbox (portal) transport
 platform/auth/           Identity adapters and opaque server-side sessions
 platform/persistence/    PostgreSQL session and consultation storage
 platform/tenants/        Server-side tenant configuration
@@ -37,7 +37,7 @@ Supabase can host PostgreSQL for a dedicated tenant. The backend uses a restrict
 
 ## Provider routing and specialist responses
 
-Routing is separate from approval and from the EHR connector. `core/routing` owns three small ports: `ProviderRegistry` (the tenant's allowed providers), `ProviderTransport` (send one envelope, idempotent on its request id) and `DeliveryRepository`/`ProviderResponseSink` (durable state). The mock specialist is one transport; a provider portal or partner API would be others using the same versioned envelope and callback contracts in `shared/contracts/provider.ts`.
+Routing is separate from approval and from the EHR connector. `core/routing` owns three small ports: `ProviderRegistry` (the tenant's allowed providers), `ProviderTransport` (send one envelope, idempotent on its request id) and `DeliveryRepository`/`ProviderResponseSink` (durable state). The in-hospital inbox (`portal`) is the one transport; a partner API would be another using the same versioned envelope and callback contracts in `shared/contracts/provider.ts`.
 
 ```text
 physician approval -> review_ehr_consultation                    (records the reviewed version and the chosen destination)
@@ -55,19 +55,23 @@ clinician readback -> delivery view (RLS: same tenant, clinician, patient, encou
 - Clinician commands cannot set `sent`, `accepted`, `responded` or `failed`. Those come only from the transport result and from verified provider callbacks.
 - Callbacks are deduplicated by response id, never move state backwards, are refused for superseded, rejected or cancelled requests, and are still linked when they arrive before the transport result or after a timeout.
 
-A synthetic tenant routes to the simulated specialists. A live tenant routes to the receiving services in its own configuration (`PROVIDER_DIRECTORY`, `PROVIDER_ALLOWLIST`); the server refuses a simulated provider there. The first real transport is `portal`: a specialist service inside the same hospital. The stored delivery request is its inbox entry, so "sending" is an acknowledgement of a durable row and is idempotent by nature. The specialist reads only requests sent to that service (same tenant, same classification), sees only the envelope, and accepts, declines with a reason or reports. The reply is recorded through the same `ProviderResponseService` and `record_provider_callback` as a signed callback; only the way the sender is authenticated differs. The envelope and the consultation text carry no EHR record reference: a fact travels under its own opaque id.
+A tenant routes only to the receiving services in its own configuration (`PROVIDER_DIRECTORY`, `PROVIDER_ALLOWLIST`). There is no simulated specialist: a provider without a real transport cannot be sent to. The transport is `portal`: a specialist service inside the same hospital. The stored delivery request is its inbox entry, so "sending" is an acknowledgement of a durable row and is idempotent by nature. The specialist reads only requests sent to that service (same tenant, same classification), sees only the envelope, and accepts, declines with a reason or reports. The reply is recorded through the same `ProviderResponseService` and `record_provider_callback` as a signed callback; only the way the sender is authenticated differs. The envelope and the consultation text carry no EHR record reference: a fact travels under its own opaque id.
 
 ## Consultation assistant
 
-`core/consultation/authoring.ts` turns a physician's natural-language request, the normalized chart facts and the patient's age and sex into a consultation draft. The model first reviews the request and, when it does not fit the chart or is unclear, returns questions instead of a draft; the physician answers, proceeds anyway or rewrites the request. The model returns one structured JSON object and has no tools. Every statement must cite documented facts and is checked against them; unsupported statements are removed and counted, missing information is written from the chart, and suggestions are kept apart. Revision reuses the same checks and the recorded lifecycle, so a revised draft is again awaiting physician review. The OpenAI adapter enforces a per-call cost bound, a per-instance daily limit, a deadline and bounded retries, and reports tokens, estimated cost and latency. The deterministic mock remains for tests and as a fallback the interface labels as not being AI. [Assistant guide](../ai/consultation-assistant.md)
+`core/consultation/authoring.ts` turns a physician's natural-language request, the normalized chart facts and the patient's age and sex into a consultation draft. The model first reviews the request and, when it does not fit the chart or is unclear, returns questions instead of a draft; the physician answers, proceeds anyway or rewrites the request. The model returns one structured JSON object and has no tools. Every statement must cite documented facts and is checked against them; unsupported statements are removed and counted, missing information is written from the chart, and suggestions are kept apart. Revision reuses the same checks and the recorded lifecycle, so a revised draft is again awaiting physician review. The OpenAI adapter enforces a per-call cost bound, a per-instance daily limit, a deadline and bounded retries, and reports tokens, estimated cost and latency. There is no fallback: the deterministic stand-in exists only under `tests/fixtures`, and the server does not start without a configured model. [Assistant guide](../ai/consultation-assistant.md)
 
 Provider-specific logic sits behind `ProviderAdapter` in `integrations/providers/`. No real provider is connected. [Provider integration](../providers/integration.md)
 
-## Synthetic staging and clinical safety
+## One mode, and where test data lives
 
-A preview-only route verifies a server-configured secret and resolves fixed synthetic launch profiles. It exercises the same durable session and database boundaries as SMART. Local development opens a fixed synthetic chart for the mock workflow. Vercel production denies both synthetic authentication modes. [Staging checks](../../tests/e2e/README.md)
+The running product has no built-in patients, no stand-in model or transcription, no simulated specialist, no in-memory browser client and no sign-in other than the SMART launch. `platform/tenants/env.ts` refuses to start unless the EHR launch, the EHR data source, PostgreSQL, session encryption and an approved, priced model are configured, and it refuses by name any setting of the removed synthetic modes. Nothing falls back to fabricated content: a missing part is a configuration error at startup or a visible error on the request.
 
-Staging uses the deterministic mock model unless a live model is explicitly enabled; only synthetic charts are sent either way. Synthetic output checks reject invalid draft structures, unsafe formatting and selected unauthorized claims or treatment instructions. Generated drafts remain pending until physician review.
+Fictional charts, the deterministic model and transcription stand-ins, the simulated specialist and the fake EHR, model and transcription servers live under `tests/` (`tests/fixtures`, `tests/helpers`, `tests/e2e/fakes`). `eslint.config.mjs` (`no-restricted-imports`) and `tests/backend/no-fixtures-in-product.test.ts` fail when `apps/`, `core/`, `platform/`, `integrations/`, `shared/` or `scripts/` import from `tests/`, a `fixtures` folder or a `mocks` folder. Real patient data is never committed and never used in automated tests.
+
+`DataClassification` keeps two values. Every session, draft, envelope and reply of a deployment is `live`, because it comes from an EHR. `synthetic` remains as the label of test fixtures, so a fixture can never pass a live-only guard, and of rows stored by earlier versions, which no session can open.
+
+Output checks reject invalid draft structures, unsafe formatting and selected unauthorized claims or treatment instructions. Generated drafts remain pending until physician review. [End-to-end checks](../../tests/e2e/README.md)
 
 ## Chart facts from FHIR
 
@@ -91,7 +95,7 @@ each item          -> begin_chart_write       (refused unless that item's origin
 all items done     -> finish_scribe_session   (audit; the transcript is deleted once the note is in the chart)
 ```
 
-The model cannot reach this path: it has no tools, and an item exists for writing only after a physician selected it. A session of a synthetic tenant gets no writer, so synthetic data never reaches an EHR; a live session writes only to its own launched chart. Where the EHR grants no scope or support, or write-back is off, the item is offered as text to copy.
+The model cannot reach this path: it has no tools, and an item exists for writing only after a physician selected it. A session writes only to its own launched chart. Where the EHR grants no scope or support, or write-back is off, the item is offered as text to copy.
 
 ## Operations
 

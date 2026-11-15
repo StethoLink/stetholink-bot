@@ -1,5 +1,7 @@
 # Interface: before and after the design system
 
+> **Note (OpenEMR brief, T3, 2026-11-15).** The screenshots on this page were taken before the synthetic staging mode was removed, on a fictional chart with the deterministic stand-ins. The scripts and the staging launch named below (`tests/e2e/browser/*.mjs`, `STAGING_*`) no longer exist, and the "synthetic", "simulated" and "demo fallback" labels they show cannot appear in the product any more. T5 of the brief replaces these screenshots with ones taken inside a real OpenEMR frame. For a browser run today use `LIVE_E2E_BROWSER=1` with `tests/e2e/live-ehr-flow.mts`.
+
 Screenshots were taken with Playwright by `tests/e2e/browser/consultation-flow.mjs` at 360, 480 and 1280 px wide, on the synthetic chest-pain chart with the deterministic fallback (no AI inference). The 360 and 1280 px captures of four screens are kept here.
 
 ```bash

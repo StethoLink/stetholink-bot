@@ -5,7 +5,7 @@ StethoLink is a plugin inside the hospital EHR. A clinician opens it from the pa
 - **Record a visit** and get a SOAP note in which every statement points at the words that support it. After the physician approves, the note and the selected new items (for example an allergy) are created in the EHR.
 - **Prepare a consultation** from the chart with a source for every statement, approve it, send it to a specialist service, read the reply and add it to the chart.
 
-The EHR stays the source of truth. StethoLink registers no patients, has no separate sign-in for clinicians and keeps only working data: drafts, a temporary transcript and audit records. The same application runs on fictional charts for development and demos.
+The EHR stays the source of truth. StethoLink registers no patients, has no separate sign-in for clinicians and keeps only working data: drafts, a temporary transcript and audit records. It contains no built-in patients, no stand-in model and no simulated specialist: without a real EHR, a real model and durable storage configured, the server refuses to start and says which setting is missing.
 
 | To | Read |
 | --- | --- |
@@ -17,65 +17,45 @@ The EHR stays the source of truth. StethoLink registers no patients, has no sepa
 
 Docker and any PostgreSQL 15+ are enough to run it; nothing depends on a particular cloud.
 
-## Run the synthetic workflow on Windows
+## Run it
 
-Use Node.js 22 and npm. From the repository root in PowerShell:
+StethoLink has one mode. It needs:
 
-```powershell
-Copy-Item .env.example apps/embedded-app/.env.local
+- an EHR with SMART on FHIR (for a first run: [OpenEMR in Docker](docs/openemr.md), or a [FHIR sandbox](docs/sandbox.md)) with a test patient created inside that EHR;
+- PostgreSQL 15+ with the migrations in `supabase/migrations` applied (`node scripts/migrate.mjs`);
+- a model deployment with its key and verified rates.
+
+Use Node.js 22 and npm. From the repository root:
+
+```sh
+cp .env.example apps/embedded-app/.env.local   # then fill in every value marked "required"
 npm ci
-npm run dev
+npm run smart:preflight                        # checks the EHR registration before anyone signs in
+npm run build && npm start
 ```
 
-1. Open [the synthetic patient chart](http://localhost:3000/embed).
-2. Type a request such as *Prepare a cardiology consultation about blood pressure control* and choose **Prepare consultation**.
-3. For API verification, open [the health endpoint](http://localhost:3000/api/health).
+Then launch StethoLink from the patient chart in the EHR. Opening `/embed` directly shows "Open StethoLink from the patient chart": there is no other sign-in.
 
-This quick start keeps drafts in memory and uses the deterministic fallback, which the interface labels as not being AI. Development auth can prepare drafts only: physician decisions, sending, specialist responses and history need the verified synthetic staging session and PostgreSQL, which the full demonstration starts for you.
+If a required setting is empty, or a setting of the removed synthetic modes is still present (`AI_PROVIDER=mock`, `CLINICAL_DATA_SOURCE=synthetic`, `AUTH_MODE=dev` or `staging`, `STAGING_LAUNCH_SECRET`, ...), the server exits at start with a line such as `StethoLink refused to start: StethoLink is not configured: CLINICAL_DATA_SOURCE must be set`. It names settings, never their values.
 
-## Full demonstration (assistant, review, approval, provider, response, history)
+With Docker:
 
-Requires Node.js 22 and Docker Desktop. From the repository root:
-
-```powershell
-npm ci
-npm run demo
+```sh
+docker build -t stetholink .
+docker run --rm -p 127.0.0.1:3000:3000 --env-file apps/embedded-app/.env.local stetholink
 ```
 
-Open the link the command prints (`http://127.0.0.1:3000/staging#secret=…`), keep **Omar (fictional chest-pain case)** selected and choose **Open synthetic chart**.
+## Test data
 
-1. Type *Prepare a cardiology consultation for this patient regarding possible acute coronary syndrome.* and choose **Prepare consultation**. The draft shows the clinical question, documented findings with their chart sources, missing information and AI suggestions.
-2. Select a **Source:** link to see the chart fact behind a statement.
-3. Under **Ask the assistant to revise this draft**, type *Make it shorter and focus on the ECG findings.* The revised draft returns for your review.
-4. **Approve**, choose **Synthetic Cardiology Consult Service (simulated)**, then **Confirm approve**. Nothing can be sent before this step, and it can only be sent to the approved provider.
-5. **Send approved consultation**, then **Simulate the provider's next reply** twice: the provider accepts, then its response appears, labelled as simulated.
-6. Reload the page: the consultation is under **Consultations for this chart** with its response.
-
-To use a real model, set these before `npm run demo` (see [the assistant guide](docs/ai/consultation-assistant.md)):
-
-```powershell
-$env:AI_PROVIDER = "openai"
-$env:OPENAI_API_KEY = "<server-side key>"
-$env:OPENAI_MODEL = "<model id>"
-$env:OPENAI_INPUT_USD_PER_MILLION = "<upper bound you accept>"
-$env:OPENAI_OUTPUT_USD_PER_MILLION = "<upper bound you accept>"
-```
-
-Only fictional charts are sent to the model. The specialist is always the built-in simulated provider: no real provider is integrated. The other synthetic providers show failure handling (*unreachable* fails and can be retried; *declines requests* refuses). `npm run demo` starts a throwaway local PostgreSQL container and removes it on exit; set `DEMO_DATABASE_OWNER_URL` to an empty local PostgreSQL to keep data between runs.
-
-With Docker Desktop:
-
-```powershell
-docker build -t stetholink-dev .
-docker run --rm -p 127.0.0.1:3000:3000 --env-file .env.example stetholink-dev
-```
+Real patient data is never committed and never used in automated tests ([AGENTS.md](AGENTS.md)). Fictional charts, the deterministic model stand-in and the fake EHR, model and transcription servers live under `tests/` only. `npm run lint` and `npm run check` fail if `apps/`, `core/`, `platform/`, `integrations/`, `shared/` or `scripts/` import anything from `tests/`, a `fixtures` or a `mocks` folder.
 
 ## Verify
 
-```powershell
+```sh
 npm run check
 npm run build
 node --test tests/smoke/*.test.mts
+bash tests/e2e/run-ci.sh   # Linux with Docker: the whole flow against fake EHR, model and transcription servers
 ```
 
 The smoke tests use Node 22.18+ and need no dependency installation. See the [architecture](docs/architecture/ARCHITECTURE.md) and [SMART sandbox setup](docs/openemr.md) for integration boundaries and limitations.

@@ -1,5 +1,13 @@
 # API Contracts v1.1.0
 
+> **State after the OpenEMR brief, T3 (2026-11-15).** The product has no synthetic mode any more. Read the milestone sections below as history where they speak of the mock provider, synthetic staging, the in-memory repository, the demo route or simulated providers. What is true now:
+>
+> - Every route needs the session of a SMART launch from the EHR. `POST /api/staging/launch`, `POST /api/consultations/demo` and `POST /api/consultations/drafts/:draftId/delivery/simulate` were removed (404).
+> - `ConsultationDeliveryView` has no `canSimulate`. `@/shared/api-client` exports the HTTP client only; `createMockApiClient` is a test fixture (`tests/fixtures/mock-api-client.ts`) and `NEXT_PUBLIC_API_MODE` is gone.
+> - Fictional charts are in `tests/fixtures/synthetic-data.ts`, the deterministic model in `tests/fixtures/mock-provider.ts`; product code cannot import them.
+> - `POST /api/provider/v1/callbacks` refuses every request (401): no provider with a callback secret is registered.
+> - The transport kind `mock` and the `synthetic` flag of `ProviderDescriptor`, and the classification `synthetic`, remain in the contracts for fixtures and for rows stored by earlier versions. A deployment produces `live` records and `portal` deliveries only.
+
 Human-readable mirror of `shared/contracts` (types), `shared/schemas` (validation), and `apiRoutes`.
 Keep this reference aligned with the contracts.
 
@@ -9,13 +17,13 @@ Clinical routes require a verified clinician session. The health and authenticat
 | # | Method | Path | Request body | 2xx response | Status |
 |---|---|---|---|---|---|
 | 1 | GET | `/api/health` | — | `{ status: "ok", contractVersion }` | ✅ implemented |
-| 2 | POST | `/api/chat` | `ChatRequest` | `ChatResponse` | ✅ mock provider |
-| 3 | GET | `/api/patients/:patientId/context` | — | `PatientContext` | Synthetic or read-only SMART sandbox |
-| 4 | GET | `/api/encounters/:encounterId` | — | `EncounterContext` | Synthetic or read-only SMART sandbox |
-| 5 | POST | `/api/consultations/drafts` | `CreateConsultationDraftRequest` | `ConsultationDraft` (201), or `ConsultationClarificationNeeded` (200, nothing stored) for a natural-language request the assistant questions | Synthetic context with Supabase or development persistence |
+| 2 | POST | `/api/chat` | `ChatRequest` | `ChatResponse` | Answers 501 with EHR data (free-text chat is off for patients' charts) |
+| 3 | GET | `/api/patients/:patientId/context` | — | `PatientContext` | EHR chart of the launch |
+| 4 | GET | `/api/encounters/:encounterId` | — | `EncounterContext` | EHR chart of the launch |
+| 5 | POST | `/api/consultations/drafts` | `CreateConsultationDraftRequest` | `ConsultationDraft` (201), or `ConsultationClarificationNeeded` (200, nothing stored) for a natural-language request the assistant questions | EHR chart of the launch, PostgreSQL |
 | 6 | GET | `/api/consultations/drafts/:draftId` | — | `ConsultationDraft` | ✅ clinician-owned rows |
 | 7 | POST | `/api/consultations/drafts/:draftId/approval` | `ApprovalRequest` | `ConsultationDraft` | Atomic in Supabase |
-| 8 | POST | `/api/consultations/drafts/:draftId/delivery` | `DispatchRequest` | `ConsultationDeliveryView` | Synthetic providers; see M5/M6 below |
+| 8 | POST | `/api/consultations/drafts/:draftId/delivery` | `DispatchRequest` | `ConsultationDeliveryView` | The tenant's `PROVIDER_DIRECTORY` services (`portal`) |
 | 9 | GET | `/api/consultations/drafts/:draftId/delivery` | — | `ConsultationDeliveryView\|null` | Clinician-owned draft |
 
 ## Types

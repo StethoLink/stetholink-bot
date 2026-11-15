@@ -2,7 +2,7 @@
 
 Automated tests use fake servers. This page is for the next step: a real FHIR server or EHR sandbox that holds **test patients only**. It is a real integration over the real protocol; no real patient is involved until a hospital approves it.
 
-Any EHR source counts as live data for StethoLink. A sandbox therefore runs with `CLINICAL_DATA_MODE=live`, and everything live mode requires applies (verified SMART launch, PostgreSQL, a real model with `MODEL_LIVE_DATA_APPROVED=true`).
+Any EHR source counts as live data for StethoLink, and StethoLink has no other mode. A sandbox therefore needs the full configuration (verified SMART launch, PostgreSQL, session encryption, a real model with `MODEL_LIVE_DATA_APPROVED=true`); the server does not start without it.
 
 ## What has been checked, and how
 
@@ -40,8 +40,7 @@ Needs outbound HTTPS to `launch.smarthealthit.org` from the server that runs Ste
 
    | Variable | Value |
    | --- | --- |
-   | `CLINICAL_DATA_MODE` | `live` |
-   | `AUTH_MODE`, `CLINICAL_DATA_SOURCE` | `smart`, `fhir` |
+   | `CLINICAL_DATA_SOURCE` | `fhir` |
    | `FHIR_BASE_URL` | the `iss` exactly |
    | `SMART_AUTHORIZATION_URL`, `SMART_TOKEN_URL`, `SMART_JWKS_URL`, `SMART_OIDC_ISSUER` | from the discovery document |
    | `SMART_CLIENT_ID` | any id (the sandbox accepts unregistered public clients) |

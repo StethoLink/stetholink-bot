@@ -54,7 +54,6 @@ On the same page, the button labelled "Disable EHR Launch Authorization Flow" ma
 
 | Variable | Value for OpenEMR (site `default`) |
 | --- | --- |
-| `AUTH_MODE` | `smart` |
 | `CLINICAL_DATA_SOURCE` | `openemr` |
 | `TENANT_ID` | Stable tenant identifier |
 | `STETHOLINK_DATABASE_URL`, `STETHOLINK_DATABASE_CA` | Restricted runtime PostgreSQL connection and its CA |
@@ -126,7 +125,7 @@ The line never contains a token, an authorization code, the state or nonce, the 
 | `reason` | Stage | Meaning and what to check |
 | --- | --- | --- |
 | `launch_malformed` | launch | The EHR did not send exactly one `iss` and one `launch`. Check the launch URL registered in the EHR. |
-| `not_configured` | both | `AUTH_MODE` is not `smart`, the data source is synthetic, or a `SMART_*` or `FHIR_BASE_URL` setting is empty. |
+| `not_configured` | both | A `SMART_*` or `FHIR_BASE_URL` setting is empty. The server also refuses to start in that state, so this is seen only if the configuration check was bypassed. |
 | `registration_invalid` | both | `detail`: `clinician_map` (not valid JSON or a field is wrong), `clinician_map_duplicate` (a subject or clinician ID appears twice), `scope` (`launch`, `openid` or `fhirUser` missing from `SMART_SCOPE`), `endpoint` (issuer or JWKS URL is not HTTPS), `fhir_base`. |
 | `issuer_unregistered` | launch | `detail: issuer`: the `iss` the EHR sent is not exactly `FHIR_BASE_URL` (compare scheme, host, port, path and trailing slash). |
 | `discovery_unreachable` | launch | The server could not fetch `<FHIR_BASE_URL>/.well-known/smart-configuration`: DNS, a certificate the server does not trust, a redirect, or a timeout. |

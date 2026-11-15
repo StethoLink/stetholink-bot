@@ -2,15 +2,15 @@
 
 **The first real destination is a specialist service inside the same hospital**, reached through the `portal` transport: the request waits in that service's inbox inside StethoLink (`/inbox`), and the specialist's reply returns through the same callback contract. It is configured with `PROVIDER_DIRECTORY`, `PROVIDER_ALLOWLIST` and `SPECIALIST_MAP` ([go-live runbook](../go-live.md)). The envelope carries the approved text with age and sex and the cited facts under opaque ids; it never carries a name, birth date, chart identifier or EHR record reference.
 
-The rest of this page is about connecting a provider **outside** the hospital through an API, which is not done yet. **No external provider is integrated.** The only providers are the built-in simulated ones, and the interface labels them and their responses as simulated. This page describes what exists and what a real integration still needs. It names no provider, price, turnaround time or API, because none has been agreed.
+The rest of this page is about connecting a provider **outside** the hospital through an API, which is not done yet. **No external provider is integrated**, and no simulated provider exists in the product (the simulated specialist is a test fixture under `tests/fixtures/specialist.ts`). The callback route `POST /api/provider/v1/callbacks` therefore refuses every request until a provider with a callback secret is registered. This page describes what exists and what a real integration still needs. It names no provider, price, turnaround time or API, because none has been agreed.
 
 ## What exists
 
 | Concern | Where | State |
 | --- | --- | --- |
-| Provider identity, specialties, transport kind, active flag | `ProviderDescriptor`, `core/routing/registry.ts` | Built. Directory is in code; no administration |
-| Tenant allowlist | `MOCK_RECIPIENT_IDS`, checked in Core and PostgreSQL | Built |
-| Request format | Envelope contract 1.0, `shared/contracts/provider.ts` | Built. Synthetic-only by contract |
+| Provider identity, specialties, transport kind, active flag | `ProviderDescriptor`, `core/routing/registry.ts` | Built. Directory is in server configuration (`PROVIDER_DIRECTORY`); no administration screen |
+| Tenant allowlist | `PROVIDER_ALLOWLIST`, checked in Core and PostgreSQL | Built |
+| Request format | Envelope contract 1.0, `shared/contracts/provider.ts` | Built. Carries the tenant's data classification |
 | Outbound transmission | `ProviderTransport` / `ProviderAdapter`, `core/routing/ports.ts` | Interface built |
 | Authentication | HMAC-SHA256 over timestamp and body, per-provider secret | Built for callbacks and the reference adapter |
 | Delivery acknowledgment | Adapter returns `{requestId, providerReference}`; stored on the request | Built |
@@ -33,9 +33,9 @@ The rest of this page is about connecting a provider **outside** the hospital th
 ## What a real integration still needs
 
 - A provider, an agreement, and its sandbox credentials and API documentation.
-- A decision on real patient data. The envelope, the database and the router refuse anything not marked synthetic. Lifting that needs clinical safety, privacy and data residency review, not a code change alone.
+- A decision on sending patient data outside the hospital. The envelope carries the tenant's `live` classification already; an outside recipient needs clinical safety, privacy and data residency review, not a code change alone.
 - Durable provider and secret administration per tenant (currently environment variables and code).
 - A scheduled poller for providers without callbacks, and rate limiting on the callback route.
 - A reassignment path after a provider declines (today the consultation is cancelled and prepared again).
 
-An integration is complete only after a permitted test request reaches an authenticated provider and a verified response comes back. Until then, report the provider as simulated.
+An integration is complete only after a permitted test request reaches an authenticated provider and a verified response comes back. Until then, report the provider as not integrated.
