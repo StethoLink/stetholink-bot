@@ -17,8 +17,9 @@ const width = Number(env.FRAME_WIDTH ?? 0);
 const shot = async (target, name) => { if (env.SHOTS) await target.screenshot({ path: `${env.SHOTS}/${name}.png` }); };
 
 // A test host name that is a different site from OpenEMR's resolves to this machine.
-const browser = await chromium.launch({ args: [`--host-resolver-rules=MAP ${app.hostname} 127.0.0.1`, "--no-proxy-server"] });
-const context = await browser.newContext({ ignoreHTTPSErrors: true, viewport: { width: 1280, height: 900 }, locale: "en-US" });
+// A fake microphone, so that no permission prompt hides the frame's own policy.
+const browser = await chromium.launch({ args: [`--host-resolver-rules=MAP ${app.hostname} 127.0.0.1`, "--no-proxy-server", "--use-fake-ui-for-media-stream", "--use-fake-device-for-media-stream"] });
+const context = await browser.newContext({ ignoreHTTPSErrors: true, viewport: { width: 1280, height: 900 }, locale: "en-US", deviceScaleFactor: env.SHOTS ? 2 : 1 });
 const popups = [];
 const page = await context.newPage();
 // Any further window or tab, opened by anyone, is counted.
@@ -132,6 +133,7 @@ if (width) {
   }, width);
   await page.waitForTimeout(400);
   assert.equal(await frame.evaluate(() => window.innerWidth), width, "the frame did not take the width under test");
+  attributes.width = (await element.boundingBox()).width;
 }
 
 if (env.UI === "ar") {
@@ -171,6 +173,59 @@ if (expectState === "no-visit") {
   // The session cookie as the browser stored it.
   const cookies = (await context.cookies()).filter((cookie) => cookie.domain === app.hostname);
   console.log(JSON.stringify({ patientShown: true, cookies: cookies.map(({ name: cookie, sameSite, secure, httpOnly, partitionKey }) => ({ cookie, sameSite, secure, httpOnly, partitioned: !!partitionKey })) }));
+  if (env.SCRIBE === "1") {
+    // The recorder inside OpenEMR's frame. OpenEMR does not put allow="microphone" on it, so the browser refuses the
+    // microphone: the panel must say so and offer no new window (it used to offer one).
+    await frame.getByRole("tab").nth(0).click();
+    await frame.getByRole("button", { name: "Start recording" }).first().click();
+    await frame.getByRole("checkbox").check();
+    await frame.getByRole("dialog").getByRole("button", { name: "Start recording" }).click();
+    const refusal = frame.getByText(/microphone is not allowed inside the EHR window/i);
+    if (attributes.allow && /microphone/.test(attributes.allow)) await frame.getByText(/Recording|Pause/).first().waitFor();
+    else {
+      await refusal.waitFor({ timeout: 20000 });
+      assert.equal(await frame.getByText(/new window/i).count(), 0, "the panel still offers a new window");
+      await shot(element, name("scribe-blocked"));
+    }
+    assert.equal(popups.length, 0, "recording opened a window");
+    console.log("SCRIBE " + JSON.stringify({ frameAllow: attributes.allow, refused: !(attributes.allow && /microphone/.test(attributes.allow)) }));
+  }
+  if (env.DRAFT === "1") {
+    // A consultation drafted by the real model from this chart, then the physician's approval dialog. Needs the model
+    // configured on the server. The draft goes through the de-identification layer; nothing is sent to a specialist.
+    const chartToggle = frame.locator("button[aria-controls=chart-summary]");
+    if (await chartToggle.getAttribute("aria-expanded") === "true") await chartToggle.click();
+    await frame.getByRole("tab").nth(1).click();
+    await frame.getByRole("textbox").first().fill(env.DRAFT_REQUEST ?? "Prepare a cardiology consultation for this patient regarding the chest pain.");
+    await frame.getByRole("button", { name: "Prepare consultation" }).click();
+    await shot(element, name("draft-working"));
+    const draftHeading = frame.locator('h3:has-text("Clinical question")');
+    const questions = frame.locator('section[aria-label="The assistant questions this request"]');
+    await draftHeading.or(questions).or(frame.locator("[role=alert].alert-danger")).first().waitFor({ timeout: 110000 });
+    let outcome = await draftHeading.count() ? "draft" : await questions.count() ? "questions" : "alert";
+    // The model asks before it drafts a vague request. Answer once, then accept what it still doubts ("Prepare anyway").
+    for (let round = 0; round < 2 && outcome === "questions"; round++) {
+      console.log("DRAFT questions");
+      await shot(element, name(`draft-questions${round || ""}`));
+      const answer = frame.getByPlaceholder("Your answer").first();
+      if (round === 0 && await answer.count()) {
+        await answer.fill("Urgent evaluation: should she go to the emergency department now, and which tests come first?");
+        await frame.getByRole("button", { name: "Answer and continue" }).click();
+      } else await frame.getByRole("button", { name: "Prepare anyway" }).click();
+      await draftHeading.or(questions).or(frame.locator("[role=alert].alert-danger")).first().waitFor({ timeout: 110000 });
+      outcome = await draftHeading.count() ? "draft" : await questions.count() ? "questions" : "alert";
+    }
+    if (outcome === "draft") {
+      await frame.locator('h3:has-text("Clinical question")').scrollIntoViewIfNeeded();
+      await shot(element, name("draft"));
+      await frame.getByRole("button", { name: "Approve", exact: true }).click();
+      await frame.getByRole("dialog").locator("select").selectOption({ index: 1 });
+      await shot(element, name("approve-dialog"));
+      await frame.getByRole("button", { name: "Confirm approve" }).click();
+      await frame.getByRole("heading", { name: /Send to/ }).or(frame.getByRole("button", { name: /^Send/ })).first().waitFor({ timeout: 30000 }).catch(() => undefined);
+      await shot(element, name("approved"));
+    }
+  }
   if (env.BREAK_HOOK) {
     // The caller stops a dependency now (for example the database: `docker stop <db>`), within BREAK_HOOK milliseconds.
     // The panel must then show the failure with the reference the server logged.
@@ -186,5 +241,5 @@ if (expectState === "no-visit") {
 }
 assert.deepEqual(outside, [], "a StethoLink page asked for something outside its own origin");
 assert.ok(policies.size > 0 && ![...policies].some((policy) => policy === "MISSING" || !policy.includes(`frame-ancestors ${emr}`)), `policy missing or wrong: ${[...policies].slice(0, 2)}`);
-console.log(JSON.stringify({ ok: true, state: expectState, sameSite: app.hostname === new URL(emr).hostname, frame: attributes, popups: popups.length, outsideRequests: outside.length, appUrl: frame.url().replace(app.origin, "") }));
+console.log(JSON.stringify({ ok: true, browser: `Chromium ${browser.version()}`, state: expectState, sameSite: app.hostname === new URL(emr).hostname, frame: attributes, popups: popups.length, outsideRequests: outside.length, appUrl: new URL(frame.url()).pathname }));
 await browser.close();

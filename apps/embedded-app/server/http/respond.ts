@@ -26,14 +26,17 @@ const STATUS: Record<ApiErrorCode, number> = {
 /** The caller already logged this failure under its own correlation ID (the SMART launch does). */
 export interface Trace { correlationId: string }
 
+/** Codes that mean something broke or is unreachable. A refusal, a missing record or a feature the hospital did not set up (`not_implemented`) is not a fault. */
+const FAULTS: readonly ApiErrorCode[] = ["internal_error", "provider_unavailable"];
+
 /**
- * A failure on the server's side (5xx) carries a reference: `error.requestId` in the body and `X-Correlation-Id`,
+ * A failure on the server's side (`internal_error`, `provider_unavailable`) carries a reference: `error.requestId` in the body and `X-Correlation-Id`,
  * the same value as one `api.request_failed` log line. The line holds the error code and the reference only:
- * no path, no identifier, no message. A refusal the clinician caused or can fix (4xx) is not logged and has none.
+ * no path, no identifier, no message. Any other answer (a refusal, a missing record, a conflict, a feature not set up) is not logged and has none.
  */
 export function errorResponse(code: ApiErrorCode, message: string, trace?: Trace) {
   const headers: Record<string, string> = { "Cache-Control": "no-store", "Referrer-Policy": "no-referrer" };
-  const correlationId = trace?.correlationId ?? (STATUS[code] >= 500 ? newCorrelationId() : undefined);
+  const correlationId = trace?.correlationId ?? (FAULTS.includes(code) ? newCorrelationId() : undefined);
   if (!correlationId) return NextResponse.json({ error: { code, message } }, { status: STATUS[code], headers });
   if (!trace) console.error(JSON.stringify({ action: "api.request_failed", code, correlationId, at: new Date().toISOString() }));
   headers["X-Correlation-Id"] = correlationId;

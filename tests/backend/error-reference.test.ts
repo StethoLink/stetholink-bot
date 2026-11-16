@@ -25,7 +25,7 @@ describe("the reference on an error", () => {
     expect(log.mock.calls.flat().join(" ")).not.toMatch(/Salma|4471/);
   });
 
-  it.each(["invalid_request", "unauthenticated", "forbidden", "not_found", "conflict", "unsupported_encounter"] as const)(
+  it.each(["invalid_request", "unauthenticated", "forbidden", "not_found", "conflict", "unsupported_encounter", "not_implemented", "safety_blocked"] as const)(
     "is absent from %s, which the server does not log", async (code) => {
       const response = errorResponse(code, "refused");
       expect(await response.json()).toEqual({ error: { code, message: "refused" } });

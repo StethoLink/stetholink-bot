@@ -2,10 +2,10 @@
 
 Written at the end of each working session so the next one starts from this file instead of re-reading the whole history. Update it, commit it and push it before handing off. Newest state only; the detail is in [WORKBOARD.md](WORKBOARD.md).
 
-## Where things stand (2026-11-16, after T4 of the OpenEMR brief)
+## Where things stand (2026-11-16, after sub-step 1 of T5 of the OpenEMR brief)
 
-- **Brief in progress:** [fable-openemr-privacy-orders.md](../agent-handoffs/fable-openemr-privacy-orders.md), tasks T1 to T9, one per conversation (its "Rule zero"). On the workboard they are `O-T1` to `O-T9`. **T1 to T4 are done. Next is T5.**
-- **Branch:** all work of this brief is on `claude/wizardly-ptolemy-wyp0dh`, which is `main` (`6e0afdc`) plus the brief and T1 to T4. **It is not on `main`.** `AGENTS.md` says to push to `main`; these sessions were started on this branch and push there only. Keep working on this branch; T9 merges it.
+- **Brief in progress:** [fable-openemr-privacy-orders.md](../agent-handoffs/fable-openemr-privacy-orders.md), tasks T1 to T9, one per conversation (its "Rule zero"). On the workboard they are `O-T1` to `O-T9`. **T1 to T4 are done. T5 is split: sub-step 1 is done, sub-step 2 is next (below), then T6.**
+- **Branch:** all work of this brief is on `claude/wizardly-ptolemy-wyp0dh`, which is `main` (`6e0afdc`) plus the brief, T1 to T4 and T5 sub-step 1. **It is not on `main`.** `AGENTS.md` says to push to `main`; these sessions were started on this branch and push there only. Keep working on this branch; T9 merges it.
 - **The earlier brief** (live MVP, workboard T1 to T19) is complete and on `main`; its details are in the workboard log.
 - **T1** (commit `88ae344`): every SMART launch failure has a reason code, logged once with the correlation ID the error page shows. Reasons and what to check: `docs/openemr.md`, "When a launch fails".
 
@@ -45,14 +45,29 @@ Written at the end of each working session so the next one starts from this file
 - **Left as it was:** free-text chat still answers 501 for every session. It would pass through the layer if switched on (it uses `getModelProvider`), but the model client only runs the three structured tasks; whether to offer chat is the owner's decision, not made here.
 - **Small things noticed, not changed:** a date written in two forms in one request comes back in the form seen first; a lower-case transliteration variant of a short name (under six letters, for example "sami" for a patient Sami) is not replaced unless capitalised, so that words like "same" survive; the exact spelling is always replaced.
 
-## Next: T5 (make the embedded UI live inside the hospital system)
+## T5 sub-step 1 done: StethoLink runs inside the EHR's frame, English and Arabic shell, states
 
-Do the brief's T5 as written. Notes for it:
+- **Commits:** `a100a8f` (claim), `012f844` and `b60821c` (code, tests, script, runbook), and the commit that wrote this section (docs, screenshots, board).
+- **Where it is:** `platform/http/security-headers.ts` and `apps/embedded-app/middleware.ts` (frame policy and same-origin content policy on every response); `apps/embedded-app/i18n/` (`messages.ts` en and ar, `client.tsx` `useT()`, `server.ts` `getLocale()`), `app/api/locale/route.ts`; `features/ehr-panel` (`ChartFacts.tsx` has `partsNotShared` and `NotSharedNotice`), `features/workspace` (language button, patient bar); `server/http/respond.ts` (reference on faults) and `server/http/launch-error.ts` (both languages); `tests/e2e/browser/openemr-frame.mjs` (opt-in real-OpenEMR script). Interface details are on the workboard; the runbook is `docs/openemr.md` 5a; the screenshots and what they show wrongly are in `docs/ui/README.md`.
+- **Which setup was run:** both. Same site (`localhost` and `localhost`) with `COOKIE_MODE=lax`; other site (`127.0.0.1` and `localhost`) with `COOKIE_MODE=embedded`; other site with `lax` fails with `launch_session_missing`. All in Chromium 153 against OpenEMR 7.0.3, with certificate errors ignored. The nginx file in 5a was **not** run (the test used a small Node TLS proxy).
+- **Checks:** `npm run check` (627 passed, 31 skipped opt-in), `npm run build`, `node --test tests/smoke/*.test.mts`, `bash tests/e2e/run-ci.sh` and the same with `LIVE_E2E_BROWSER=1` (the inbox, workspace and history pages under the new policy).
+- **Not verified:** browsers except Chromium; a browser that checks certificates; a working microphone in the frame (OpenEMR 7.0.3 opens the frame without `allow="microphone"`, so the scribe shows its refusal; recording itself, the scribe's note, the specialist's side and write-back are T7).
+- **What the scripts need here:** Docker (`rm -f /var/run/docker.pid /var/run/docker.sock; nohup dockerd`), the OpenEMR steps below, a hosts-free cross-site pair (`127.0.0.1` against `localhost`; a made-up host name did not resolve inside Chromium here), `NODE_PATH=/opt/node-tools/node_modules`. Test data inside OpenEMR was added with SQL (list rows, ICD-10 and RxNorm descriptions in the code tables, the visit reason) because the image has no code tables.
+- **Found and not fixed (read these before T6):**
+  1. **OpenEMR 7.0.3 chart reads come back empty.** StethoLink asks `Condition?clinical-status=active` and `MedicationRequest?status=active&_include=MedicationRequest:medication`; OpenEMR answers 200 with an empty bundle (it does not support `clinical-status` on `Condition`; the medication search was empty over HTTP though its own service returns the row with `status: active`, cause not isolated, `_include` first suspect). So problems and medications show "not recorded" and the model's draft says "active medication orders are not recorded" for a chart that has them. The connector already filters by `clinicalStatus` and `status` itself, so dropping or retrying without the unsupported parameters for `CLINICAL_DATA_SOURCE=openemr` is the likely fix (`integrations/fhir/connector.ts`, lines about 154 and 155); check the answer with a token (the OpenEMR access log under `/var/log/apache2/access.log` in the container shows each query and its size). T6 reads allergies, duplicates of active orders and interactions from these facts, so fix it first.
+  2. A free-text allergy arrives as `code` = `data-absent-reason: unknown` with the name only in `text.div`; StethoLink shows "Unknown". A coded problem with an empty `display` (no code tables installed) is dropped. Prefer `text.div` or the code itself over hiding an entry.
+  3. "Reviewed by" in the approved draft shows the clinician's UUID, not a name.
+- **Small things noticed, not changed:** the Scribe tab's capability line shows `ar-SA` raw; the model asks questions before it drafts a vague request (two rounds in the run), which is right but takes three model calls.
 
-- "No patient data goes anywhere except the EHR, StethoLink's database and the de-identified model call": the model call is now covered by T4; the scribe's audio to the transcription provider is the remaining outbound patient data and is documented, not removed. T5 still has to check for third-party fonts, analytics and CDNs at runtime.
-- In the T2 run the frame worked because StethoLink and OpenEMR were both on `localhost` (same-site cookies). Cross-site was never tried.
-- OpenEMR's FHIR API reports a visit as `finished` while it is open in the chart; the header then reads "Outpatient visit, finished".
-- For T6: order drafting must call `getModelProvider(modelPrivacy(session, adapter))`; the layer then applies with no further work. For T7: use OpenEMR 7.0.3 unless OpenEMR has fixed 8.x, and check `getIdentity()` against it (which of `RelatedPerson` and `Practitioner` it grants).
+## Next: T5 sub-step 2 (the three work areas in Arabic), then T6
+
+Do the rest of T5 as written in the brief ("Arabic and English with correct RTL", the screenshots). What is left:
+
+- **Translate the Scribe, Consultations and History work areas** (`features/consultations/**`, `features/scribe/**`, `features/specialist/SpecialistInbox.tsx`, the texts in `hooks/deliveryState.ts`, `hooks/draftState.ts`, `hooks/statusTracker.ts`, `concern-labels.ts`, `features/assistant` if it stays) into the dictionary in `apps/embedded-app/i18n/messages.ts` (add keys to `en` and `ar`; `tests/frontend/i18n.test.ts` already fails if `ar` lacks one or holds English). Use `useT()` in components; functions that build texts outside a component take `Messages`. Then delete the `english()` wrapper and `untranslatedNote` in `features/workspace/components/Workspace.tsx`. What the model or the specialist wrote stays as written, with `dir="auto"` or `<bdi>`. Add a test that renders each work area in Arabic and fails on any ASCII UI sentence left (names, codes and references excepted).
+- **Retake the screenshots** of those areas in the OpenEMR frame with `tests/e2e/browser/openemr-frame.mjs` (`UI=ar`, `DRAFT=1`): the composer, the questions, the draft with sources, the approval dialog and the delivery panel in Arabic. The scribe's recording and note, the inbox and the specialist's reply still need T7's set-up (a microphone the frame allows, a specialist sign-in); say so in `docs/ui/README.md` as it does now.
+- If a text does not fit in 360 px in Arabic, fix the layout, not the text.
+
+Then T6 as the brief says. Order the work so that finding 1 above is fixed before T6 builds on chart reads.
 
 ## Running a real OpenEMR here (about 10 minutes)
 

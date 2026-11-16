@@ -38,3 +38,8 @@ With `LIVE_E2E_BROWSER=1` the same run opens the stored sessions in Chromium (ne
 ## What was removed with the synthetic mode (OpenEMR brief, T3)
 
 These scripts drove the staging launch, the mock model and the simulated specialist, which no longer exist: `staging.mts`, `m3-persistence.mts`, `m3-restart.mts`, `m5-m6-flow.mts`, `m7-assistant-flow.mts`, `run-local-m3.sh`, `browser/consultation-flow.mjs`, `browser/scribe-flow.mjs`. Of what they covered over HTTP, the flow above keeps launch, drafting, approval, routing, replies and restart. It does **not** repeat over HTTP: concurrent create replay and competing edits, the history version cursor, natural-language revision, signed provider callbacks (no provider uses them now), provider failure and retry, and the browser walk-through of the consultation and scribe screens at 360 px. The SQL suites and the unit tests (`tests/backend/provider-routing.test.ts`, `referral-authoring.test.ts`, `scribe.test.ts`, `tests/frontend/*`) still cover those rules below the HTTP layer.
+
+## In a real OpenEMR frame (opt-in, not part of CI)
+
+`tests/e2e/browser/openemr-frame.mjs` drives a real OpenEMR (Docker, 7.0.3) in Chromium, launches StethoLink from the chart of a patient created in that OpenEMR, and checks that it stays in the OpenEMR window with no popup, no outside request and the frame policy. It also takes the screenshots in `docs/ui/after/`. It needs Playwright with Chromium, a running OpenEMR and StethoLink (steps and options in [docs/openemr.md, 5a](../../docs/openemr.md)). It is never pointed at real patients.
+

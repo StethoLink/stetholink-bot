@@ -222,3 +222,24 @@ Run on 2026-11-15 in Docker, with a fictional patient and visit created inside e
 - **OpenEMR 8.5.0, unpatched:** the same steps up to the callback, which failed with `fhir_patient_unreadable` (`http:401`) for the reason under "OpenEMR versions". The preflight also found that 8.5.0 does not list `patient/Medication.rs`.
 
 Not verified: a browser that checks certificates (the test browser was told to accept the local test certificates); StethoLink and OpenEMR on different sites (both were on `localhost`, so cookies were same-site); the admin menu paths as a person clicks them (the pages were opened by address); OpenEMR 7.0.4 to 8.4.1 and 8.6.0 running (source read only); a hospital's own OpenEMR and single sign-on; anything after the first screen (scribe, drafts, write-back are T7). Test set-up that did not go through OpenEMR's screens: the patient was created with OpenEMR's patient service from the command line, and the user's NPI was set in the database. OpenEMR's FHIR API reports the visit as `finished` while it is still open in the chart.
+
+### Embedded panel (OpenEMR brief, T5, 2026-11-16)
+
+Run in Docker on **OpenEMR 7.0.3, unpatched**, with a fictional patient and visit made in that OpenEMR, the production build of StethoLink behind the test TLS proxy of `tests/e2e/fakes/tls.mts`, and Chromium 153 driving OpenEMR's own pages with `tests/e2e/browser/openemr-frame.mjs` (certificate errors ignored, as before). The real OpenAI model drafted the consultation; nothing was sent to a specialist.
+
+- **Cross-site, `COOKIE_MODE=embedded`** (StethoLink on `127.0.0.1`, OpenEMR on `localhost`, different sites): the launch, the chart at 360, 420 and about 1230 px in English and Arabic, "no open visit", a client registered without the allergy and medication scopes (the panel names what was not loaded), a database outage (the panel shows the reference the server logged), the microphone refused by OpenEMR's frame, a consultation drafted by the real model after two rounds of its questions, and the physician's approval dialog and approval. The browser stored the session cookie as `SameSite=None; Secure; HttpOnly; Partitioned`.
+- **Same site, `COOKIE_MODE=lax`** (both on `localhost`): the launch and the chart.
+- **Cross-site with `COOKIE_MODE=lax`:** the callback ended with `launch_session_missing`, as section 5a says it will.
+- **On every run:** one window only (no popup, no new tab), the panel a child frame of the OpenEMR page, every StethoLink response carrying `frame-ancestors https://localhost:9300` (OpenEMR's origin), no request from a StethoLink page to any other origin, no sideways scroll at 360 px, the application's own font loaded, a visible focus ring on the first Tab stop.
+
+**Not verified:** the nginx file in 5a (never run; the test used a small Node TLS proxy); any browser except Chromium, so Partitioned cookies in Firefox and Safari are unexercised (Safari blocks third-party cookies altogether, so use the same-site setup there); a browser that checks certificates; a microphone that works inside the frame (only its refusal was seen, because OpenEMR 7.0.3 gives the frame no `allow="microphone"`); recording, the scribe's note, the specialist's inbox and reply, sending, and writing to the chart (T7); a hospital's own OpenEMR and single sign-on.
+
+### What OpenEMR 7.0.3 returns that StethoLink reads wrongly (found in T5, not fixed)
+
+Seen while the chart looked emptier than the one in OpenEMR; recorded so that T6 and T7 start from it.
+
+- **`Condition?patient=…&clinical-status=active` returns an empty bundle** (HTTP 200). OpenEMR's service refuses the `clinical-status` parameter ("This search field does not exist or is not supported") and returns nothing, so every active problem is shown as "not recorded". Without the parameter OpenEMR returns the two problems of the test patient, each with `clinicalStatus: active`, which the connector already filters on.
+- **`MedicationRequest?patient=…&status=active&_include=MedicationRequest:medication` was also empty over HTTP,** although the same service called inside OpenEMR returns the medication with `status: active`. The cause was not isolated (the `_include` is the first suspect). The draft then states that active medication orders are "not recorded".
+- **A free-text allergy comes back with `code` = `data-absent-reason: unknown`** and its name only in `text.div`; StethoLink shows it as "Unknown". A coded allergy (RxNorm) shows its name.
+- **A coded problem comes back with an empty `display` when the OpenEMR install has no code tables** (the Docker image has none); StethoLink drops an entry it cannot label. With the two ICD-10 descriptions added to the test database the displays were present.
+
