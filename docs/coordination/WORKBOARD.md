@@ -57,7 +57,7 @@ Brief: [fable-openemr-privacy-orders.md](../agent-handoffs/fable-openemr-privacy
 | O-T3 | Remove synthetic and mock behaviour from the product | done (claude) |
 | O-T4 | Pseudonymize patient data before the model provider | done (claude) |
 | O-T5 | Embedded UI inside the hospital system | done (claude) |
-| O-T6 | Order drafting | claimed (claude): sub-steps 0 to 3 of 5 done (chart reads, groundwork, drafting end to end, the physician's decision and the write-back); **4 (UI in English and Arabic) next, then 5 (close-out)**, see the handoff |
+| O-T6 | Order drafting | claimed (claude): sub-steps 0 to 3 of 5 done (chart reads, groundwork, drafting end to end, the physician's decision and the write-back); **sub-step 4 (UI in English and Arabic) claimed 2026-11-16, then 5 (close-out)**, see the handoff. No migration, env variable, scope or route is planned for sub-step 4 |
 | O-T7 | Verify the whole flow on real systems | open |
 | O-T8 | Final report to the owner | open |
 | O-T9 | Merge branches into `main`, delete merged ones after owner confirmation | open |
