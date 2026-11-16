@@ -24,7 +24,9 @@ try {
       name.includes("data_classification") ? ["data_classification.sql"] :
       name.includes("chart_writes") ? ["scribe.sql"] :
       name.includes("retention") ? ["operations.sql"] :
-      name.includes("order_drafts") ? ["orders.sql"] : [];
+      name.includes("order_drafts") ? ["orders.sql"] :
+      // This migration replaces begin_chart_write and run_retention: the suites of what they did before run again.
+      name.includes("order_decisions") ? ["order_decisions.sql", "scribe.sql", "operations.sql"] : [];
     for (const suite of suites) {
       await sql.unsafe(await readFile("supabase/tests/" + suite, "utf8"));
       console.log("Passed", suite);

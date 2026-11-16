@@ -101,7 +101,7 @@ function fakeScribeNote(input: ScribeInput) {
   return { subjective: input.transcript.segments.map((segment) => ({ text: segment.text, sources: [{ id: segment.id, quote: segment.text }] })),
     objective: [], assessment: [], plan: [], clinicianSegments: [], patientSegments: [], proposedUpdates };
 }
-const WRITABLE = ["DocumentReference", "AllergyIntolerance", "Condition", "MedicationStatement"];
+const WRITABLE = ["DocumentReference", "AllergyIntolerance", "Condition", "MedicationStatement", "ServiceRequest", "MedicationRequest"];
 
 export async function startFakeEhr(options: FakeEhrOptions) {
   const origin = `https://localhost:${options.port}`;
@@ -120,6 +120,8 @@ export async function startFakeEhr(options: FakeEhrOptions) {
     created: [] as Array<Record<string, unknown> & { resourceType: string; id: string }>,
     transcriptionRequests: [] as Array<{ model: string; language: string; prompt: string; bytes: number }>,
     transcriptionCalls: 0,
+    /** Resource types this EHR does not take a create for, as OpenEMR 7.0.3 takes neither ServiceRequest nor MedicationRequest. */
+    noCreate: new Set<string>(),
     /** Replace one FHIR answer, e.g. to return an unsupported encounter. */
     fhirOverride: undefined as undefined | ((path: string, query: URLSearchParams) => unknown),
   };
@@ -200,8 +202,8 @@ export async function startFakeEhr(options: FakeEhrOptions) {
         const ifNoneExist = typeof req.headers["if-none-exist"] === "string" ? req.headers["if-none-exist"] : undefined;
         state.fhirRequests.push({ method: req.method ?? "GET", path: resource, ifNoneExist });
         if (resource === "/metadata") return json(res, 200, { resourceType: "CapabilityStatement", fhirVersion: "4.0.1",
-          rest: [{ mode: "server", resource: WRITABLE.map((type) => ({ type, interaction: [{ code: "read" }, { code: "create" }], conditionalCreate: true })) }] });
-        if (req.method === "POST" && WRITABLE.includes(resource.slice(1))) {
+          rest: [{ mode: "server", resource: WRITABLE.map((type) => ({ type, interaction: state.noCreate.has(type) ? [{ code: "read" }] : [{ code: "read" }, { code: "create" }], conditionalCreate: !state.noCreate.has(type) })) }] });
+        if (req.method === "POST" && WRITABLE.includes(resource.slice(1)) && !state.noCreate.has(resource.slice(1))) {
           // Conditional create (FHIR R4): the identifier in If-None-Exist decides between 201 and 200.
           const incoming = JSON.parse(await body(req)) as Record<string, unknown> & { resourceType: string; identifier?: Array<{ system: string; value: string }> };
           if (incoming.resourceType !== resource.slice(1) || !ifNoneExist) return json(res, 400, { resourceType: "OperationOutcome" });

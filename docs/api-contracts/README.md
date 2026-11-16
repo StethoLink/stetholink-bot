@@ -25,6 +25,12 @@ Clinical routes require a verified clinician session. The health and authenticat
 | 7 | POST | `/api/consultations/drafts/:draftId/approval` | `ApprovalRequest` | `ConsultationDraft` | Atomic in Supabase |
 | 8 | POST | `/api/consultations/drafts/:draftId/delivery` | `DispatchRequest` | `ConsultationDeliveryView` | The tenant's `PROVIDER_DIRECTORY` services (`portal`) |
 | 9 | GET | `/api/consultations/drafts/:draftId/delivery` | — | `ConsultationDeliveryView\|null` | Clinician-owned draft |
+| 10 | POST | `/api/orders/drafts` | `CreateOrderDraftRequest` | `OrderDraft` (201), or `OrderNoMatch` (200, nothing stored) | The hospital's `ORDER_CATALOG_FILE` (501 without it), EHR chart of the launch, PostgreSQL; [orders.md](../orders.md) |
+| 11 | GET | `/api/orders/drafts` | — | `OrderDraftSummary[]` | Clinician-owned rows of the visit |
+| 12 | GET | `/api/orders/drafts/:draftId` | — | `OrderDraft` | Clinician-owned rows |
+| 13 | POST | `/api/orders/drafts/:draftId/decisions` | `OrderDecisionRequest` | `OrderDraft` | Physician only; one command, enforced again in PostgreSQL |
+| 14 | GET | `/api/orders/drafts/:draftId/chart` | — | `ChartWriteResult[]` (one per approved order; `copyText` for what is not in the chart) | Reads only |
+| 15 | POST | `/api/orders/drafts/:draftId/chart` | — | `ChartWriteResult[]` | Physician with `chart:write`; create only, once per order, per resource `unsupported` where the EHR takes no write |
 
 ## Types
 

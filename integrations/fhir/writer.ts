@@ -15,11 +15,17 @@ export interface FhirWriterOptions {
   docStatus?: "preliminary" | "final";
   /** LOINC code of the note type, set by the hospital. */
   noteTypeCode?: string;
+  /**
+   * Status of a written ServiceRequest or MedicationRequest. "draft" (the default) leaves the order in the EHR for the physician to sign and
+   * release there, so nothing is dispensed or collected because of the write; "active" places it.
+   */
+  orderStatus?: "draft" | "active";
   now?: () => Date;
 }
 
 const RESOURCE: Record<ChartWriteItem["kind"], ChartResourceType> = {
   document: "DocumentReference", allergy: "AllergyIntolerance", condition: "Condition", medication: "MedicationStatement",
+  service_request: "ServiceRequest", medication_request: "MedicationRequest",
 };
 const DOCUMENT_TYPE = {
   soap_note: { code: "11506-3", display: "Progress note" },
@@ -97,6 +103,21 @@ export function createFhirWriter(grant: FhirWriteGrant, request: typeof fetch = 
         category: [codeSystem("condition-category", "problem-list-item")], code: { text: item.name }, subject: patient, encounter, recordedDate: stamp,
         ...(practitioner ? { recorder: practitioner } : {}),
         note: [{ text: `${item.detail ? `${item.detail}. ` : ""}Stated during the visit and recorded by the treating physician through StethoLink.` }],
+      };
+    }
+    if (item.kind === "service_request" || item.kind === "medication_request") {
+      // An order the physician approved from the hospital's catalog. The code and the dose are the catalog's own, as text and as the catalog's code.
+      const status = options.orderStatus ?? "draft";
+      const coding = item.code ? { coding: [{ system: item.code.system, code: item.code.code, ...(item.code.display ? { display: item.code.display } : {}) }] } : {};
+      const common = {
+        identifier, status, intent: "order", subject: patient, encounter, authoredOn: stamp, ...(practitioner ? { requester: practitioner } : {}),
+        ...(item.physicianNote ? { note: [{ text: item.physicianNote }] } : {}),
+      };
+      if (item.kind === "service_request") return { resourceType: "ServiceRequest", ...common, category: [{ text: item.orderKind }], code: { ...coding, text: item.display } };
+      const { product, dose, route, frequency, duration } = item.medication;
+      return {
+        resourceType: "MedicationRequest", ...common, medicationCodeableConcept: { ...coding, text: product },
+        dosageInstruction: [{ text: [dose, route, frequency, duration].filter(Boolean).join(", ") }],
       };
     }
     return {

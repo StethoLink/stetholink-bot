@@ -90,6 +90,12 @@ export function createOrderRepository(context: ClinicianContext): OrderRepositor
         return draft ? loadOrderDraft(tx, draft) : null;
       });
     },
+    async decide(input) {
+      return scoped(async (tx) => {
+        const [row] = await tx`select * from public.decide_ehr_order_lines(${input.draftId}, ${input.expectedVersion}, ${input.idempotencyKey}, ${tx.json(input.decisions as never)})`;
+        return loadOrderDraft(tx, row);
+      });
+    },
     async create(draft, retry) {
       const payload = orderDraftSchema.parse(draft);
       return scoped(async (tx) => {

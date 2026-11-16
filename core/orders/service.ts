@@ -1,13 +1,15 @@
 import type { ClinicianContext } from "@/core/auth/clinician";
-import type { CreateOrderDraftRequest, DataClassification, OrderCatalog, OrderDraft, OrderDraftSummary, OrderLine, OrderNoMatch } from "@/shared/contracts";
-import { createOrderDraftRequestSchema, orderDraftSchema } from "@/shared/schemas";
+import type { ChartWriteResult, CreateOrderDraftRequest, DataClassification, OrderCatalog, OrderDecisionRequest, OrderDraft, OrderDraftSummary, OrderLine, OrderNoMatch } from "@/shared/contracts";
+import { createOrderDraftRequestSchema, orderDecisionRequestSchema, orderDraftSchema } from "@/shared/schemas";
 import type { ModelProvider } from "@/core/agent/providers/types";
 import type { SafetyGuard } from "@/core/agent/safety/guard";
 import type { ClinicalDataAdapter } from "@/core/tools/connector";
+import { RESOURCE_OF, type ChartWriteItem, type ClinicalWriteAdapter } from "@/core/tools/chart-writer";
+import type { ChartWriteLedger } from "@/core/scribe/repository";
 import { loadVerifiedChart } from "@/core/consultation/chart";
 import { RouteError } from "@/core/errors";
 import { MAX_ORDER_ATTEMPTS, ORDERS_PROMPT_VERSION, ORDER_INSTRUCTIONS, buildOrderInput, orderFormat, validateOrders, type OrderAuthoringContext, type ValidatedOrders } from "./authoring";
-import { flagsFor } from "./flags";
+import { MIN_OVERRIDE_REASON, flagsFor, requiredAcknowledgements } from "./flags";
 import type { OrderRepository } from "./repository";
 
 export interface OrderServiceDeps {
@@ -19,6 +21,37 @@ export interface OrderServiceDeps {
   dataClassification: DataClassification;
   /** The hospital's approved orders. The only source of what a draft may contain. */
   catalog: OrderCatalog;
+  /** What may be, and was, created in the EHR. Without it nothing can be written, and the approved orders are only listed. */
+  ledger?: ChartWriteLedger;
+  /** The EHR's write port, or null when this session or EHR takes no writes: the approved orders are then offered as text to enter. */
+  writer?: ClinicalWriteAdapter | null;
+  audit?: (event: { action: "chart.write"; tenantId: string; clinicianId: string; draftId: string; itemKey: string; resourceType: string; status: string; resourceId?: string }) => void;
+}
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const KIND_LABEL = { lab: "Laboratory", imaging: "Imaging", nursing: "Nursing", medication: "Medication" } as const;
+/** The key under which an approved line is written to the EHR (and recorded in the ledger): one per line, so a repeat creates nothing more. */
+export const orderItemKey = (lineId: string) => `sl-ord-${lineId.replaceAll("-", "")}`;
+
+/** What the EHR is asked to create for an approved line: the catalog's own code and dose, and the physician's acknowledgement and reason as a note. */
+export function orderWriteItem(line: OrderLine): Extract<ChartWriteItem, { kind: "service_request" | "medication_request" }> {
+  const note = ["Prepared with StethoLink and approved by the ordering physician.",
+    ...(line.acknowledged?.length ? [`Acknowledged: ${line.acknowledged.join(", ")}.`] : []), ...(line.overrideReason ? [`Reason: ${line.overrideReason}`] : [])].join(" ");
+  const common = { itemKey: orderItemKey(line.id), display: line.display, ...(line.code ? { code: line.code } : {}), physicianNote: note };
+  if (line.kind === "medication") {
+    if (!line.medication) throw new RouteError("internal_error", "A medication order without its medication");
+    return { kind: "medication_request", ...common, medication: line.medication };
+  }
+  return { kind: "service_request", ...common, orderKind: line.kind };
+}
+/** The approved order as text, for the clinician to enter where the EHR takes no write. */
+export function orderCopyText(line: OrderLine): string {
+  const code = line.code ? ` (${line.code.code}, ${line.code.system})` : "";
+  if (line.kind === "medication" && line.medication) {
+    const { product, dose, route, frequency, duration } = line.medication;
+    return `${KIND_LABEL.medication}: ${product}, ${[dose, route, frequency, duration].filter(Boolean).join(", ")}${code}`;
+  }
+  return `${KIND_LABEL[line.kind]}: ${line.display}${code}`;
 }
 
 /**
@@ -35,6 +68,19 @@ export function createOrderService(deps: OrderServiceDeps) {
       throw new RouteError("forbidden", "Order drafting is not allowed for this session");
     }
     return { patientId: actor.patientId, encounterId: actor.encounterId };
+  }
+
+  /** Approving an order is the physician's: the role, the permission, an active session of the right classification. */
+  function requireApproval(actor: ClinicianContext) {
+    if (actor.authorization !== "active" || actor.expiresAt <= Date.now() || actor.dataClassification !== classification || !actor.roles.includes("physician") ||
+        !actor.scopes.includes("order:approve") || !actor.scopes.includes("order:draft") || !actor.encounterId) {
+      throw new RouteError("forbidden", "Physician approval is required");
+    }
+  }
+  /** Writing to the EHR is the physician's too, with the permission to write to the chart. */
+  function requireChartWrite(actor: ClinicianContext) {
+    requireApproval(actor);
+    if (!actor.scopes.includes("chart:write")) throw new RouteError("forbidden", "Only the physician can write to the chart");
   }
 
   async function assertSafe(parts: readonly string[]) {
@@ -118,6 +164,70 @@ export function createOrderService(deps: OrderServiceDeps) {
     async list(actor: ClinicianContext): Promise<OrderDraftSummary[]> {
       requireDrafting(actor);
       return deps.repository.list();
+    },
+
+    /**
+     * The physician's decision on lines of a draft: approve or reject each, in one command. Only a mapped physician can decide. An order
+     * flagged for an allergy or a major interaction is approved only with that flag acknowledged and a reason. A line that was decided
+     * is not decided again, and a retry of the same command returns its first result. Nothing is written to the EHR here.
+     */
+    async decide(input: OrderDecisionRequest, actor: ClinicianContext): Promise<OrderDraft> {
+      requireApproval(actor);
+      const parsed = orderDecisionRequestSchema.safeParse(input);
+      const lineIds = parsed.success ? parsed.data.decisions.map((decision) => decision.lineId) : [];
+      if (!parsed.success || !UUID.test(parsed.data.draftId) || !lineIds.every((id) => UUID.test(id)) || new Set(lineIds).size !== lineIds.length) throw new RouteError("invalid_request", "Invalid order decision");
+      const draft = await deps.repository.get(parsed.data.draftId);
+      if (!draft) throw new RouteError("not_found", "Order draft not found");
+      for (const decision of parsed.data.decisions) {
+        const line = draft.lines.find((entry) => entry.id === decision.lineId);
+        if (!line) throw new RouteError("not_found", "Order not found");
+        // A decided line is the repository's to answer: the retry of a command returns its first result, anything else is refused.
+        if (line.status !== "pending" || decision.decision !== "approve") continue;
+        const required = requiredAcknowledgements(line.flags);
+        if (required.length && (!required.every((kind) => decision.acknowledged?.includes(kind)) || (decision.overrideReason?.trim().length ?? 0) < MIN_OVERRIDE_REASON)) {
+          throw new RouteError("invalid_request", `Approving this order needs you to acknowledge ${required.join(" and ")} and to give a reason of at least ${MIN_OVERRIDE_REASON} characters`);
+        }
+      }
+      return orderDraftSchema.parse(await deps.repository.decide(parsed.data));
+    },
+
+    /**
+     * What of the approved orders of a draft is in the chart, and the text to enter for what is not. With `write`, a physician creates
+     * each approved order in the EHR once, as a ServiceRequest or MedicationRequest; a pending or rejected order is never written. Where the EHR takes
+     * no such write (OpenEMR 7.0.3 takes neither), the order comes back as "unsupported" with its text.
+     */
+    async chart(draftId: string, actor: ClinicianContext, options: { write?: boolean } = {}): Promise<ChartWriteResult[]> {
+      requireDrafting(actor);
+      if (options.write) requireChartWrite(actor);
+      if (!UUID.test(draftId)) throw new RouteError("invalid_request", "Invalid draft id");
+      const draft = await deps.repository.get(draftId);
+      if (!draft) throw new RouteError("not_found", "Order draft not found");
+      const ledger = deps.ledger;
+      if (!ledger) throw new RouteError("not_implemented", "Writing orders to the chart is not set up");
+      const approved = draft.lines.filter((line) => line.status === "approved");
+      if (options.write) {
+        for (const line of approved) {
+          const item = orderWriteItem(line);
+          const resourceType = RESOURCE_OF[item.kind];
+          // The database opens the ledger row only for a line this physician approved, as the resource its kind needs.
+          const opened = await ledger.begin("order", line.id, item.itemKey, resourceType);
+          if (opened.status === "created" || opened.status === "existing") continue;
+          const outcome = deps.writer ? await deps.writer.create(item) : { status: "unsupported" as const, resourceType, failure: "Writing to the chart is not switched on for this session" };
+          await ledger.record(item.itemKey, outcome.status, outcome.resourceId, outcome.failure);
+          deps.audit?.({ action: "chart.write", tenantId: actor.tenantId, clinicianId: actor.clinicianId, draftId, itemKey: item.itemKey, resourceType, status: outcome.status, resourceId: outcome.resourceId });
+        }
+      }
+      const results: ChartWriteResult[] = [];
+      for (const line of approved) {
+        const item = orderWriteItem(line);
+        const [row] = await ledger.forOrigin(["order"], line.id);
+        const done = row?.status === "created" || row?.status === "existing";
+        results.push({
+          itemKey: item.itemKey, item: line.id, resourceType: RESOURCE_OF[item.kind], status: row?.status ?? "pending",
+          ...(row?.resourceId ? { resourceId: row.resourceId } : {}), ...(row?.failure ? { failure: row.failure } : {}), ...(done ? {} : { copyText: orderCopyText(line) }),
+        });
+      }
+      return results;
     },
   };
 }

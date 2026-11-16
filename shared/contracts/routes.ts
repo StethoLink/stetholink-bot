@@ -29,6 +29,18 @@ export const apiRoutes = {
     method: "GET",
     path: (draftId: string) => `/api/orders/drafts/${encodeURIComponent(draftId)}`,
   },
+  decideOrderLines: {
+    method: "POST",
+    path: (draftId: string) => `/api/orders/drafts/${encodeURIComponent(draftId)}/decisions`,
+  },
+  getOrderChart: {
+    method: "GET",
+    path: (draftId: string) => `/api/orders/drafts/${encodeURIComponent(draftId)}/chart`,
+  },
+  writeOrderChart: {
+    method: "POST",
+    path: (draftId: string) => `/api/orders/drafts/${encodeURIComponent(draftId)}/chart`,
+  },
 } as const;
 
 export interface CreateConsultationDraftRequest {

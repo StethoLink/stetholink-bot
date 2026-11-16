@@ -17,7 +17,7 @@ export interface StoredScribeSession {
   createdAt: string;
 }
 export interface StoredChartWrite { itemKey: string; resourceType: string; status: ChartWriteStatus; resourceId?: string; failure?: string }
-export type ChartWriteOrigin = "scribe_note" | "scribe_update" | "consultation" | "specialist_report";
+export type ChartWriteOrigin = "scribe_note" | "scribe_update" | "consultation" | "specialist_report" | "order";
 
 /** Durable scribe state. Every method is scoped to the verified clinician's chart and data classification. */
 export interface ScribeRepository {

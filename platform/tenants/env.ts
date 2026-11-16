@@ -67,6 +67,8 @@ const envSchema = z.object({
   EHR_WRITE_ENABLED: z.enum(["true", "false"]).default("false"),
   FHIR_NOTE_DOC_STATUS: z.enum(["preliminary", "final"]).default("preliminary"),
   FHIR_NOTE_TYPE_CODE: z.string().regex(/^[0-9]{3,7}-[0-9]$/).optional(),
+  // Status of an approved order written to the EHR as ServiceRequest or MedicationRequest: draft waits there for the physician to sign and release it; active places it.
+  FHIR_ORDER_STATUS: z.enum(["draft", "active"]).default("draft"),
   // The only way in is the verified SMART launch from the EHR.
   AUTH_MODE: z.enum(["smart"]).default("smart"),
   // The EHR the chart is read from. Required: there is no built-in chart.

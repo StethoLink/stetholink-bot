@@ -1,7 +1,10 @@
 import type { ExistingOrder } from "@/core/orders/flags";
 import type { OrderCreateRequest, OrderRepository } from "@/core/orders/repository";
 import { RouteError } from "@/core/errors";
-import type { ClinicalFact, EncounterContext, KnownClinicalFact, OrderDraft, OrderDraftSummary, PatientContext } from "@/shared/contracts";
+import { requiredAcknowledgements } from "@/core/orders/flags";
+import { orderItemKey } from "@/core/orders/service";
+import type { ChartWriteLedger, StoredChartWrite } from "@/core/scribe/repository";
+import type { ClinicalFact, EncounterContext, KnownClinicalFact, OrderDecisionRequest, OrderDraft, OrderDraftSummary, PatientContext } from "@/shared/contracts";
 
 /** FICTIONAL DATA ONLY. The test catalog (order-catalog.ts), the chart facts it is checked against and an order store for the service tests. */
 export { ORDER_CATALOG, orderItem } from "./order-catalog.ts";
@@ -32,12 +35,16 @@ export function orderChart(facts: ClinicalFact[] = ORDER_FACTS, patientId = "fic
  * request refused, only pending lines at creation, and every stored value a copy. It is the double of the port, not of the database;
  * the database's own rules are tested in supabase/tests/orders.sql.
  */
-export function memoryOrderRepository(existing: ExistingOrder[] = []): OrderRepository & { drafts: OrderDraft[]; keys: Map<string, { request: OrderCreateRequest; id: string }> } {
+export function memoryOrderRepository(existing: ExistingOrder[] = [], decider = "55555555-5555-4555-8555-555555555555"): OrderRepository & {
+  drafts: OrderDraft[]; keys: Map<string, { request: OrderCreateRequest; id: string }>; decisions: OrderDecisionRequest[];
+} {
   const drafts: OrderDraft[] = [];
   const keys = new Map<string, { request: OrderCreateRequest; id: string }>();
+  const decisions: OrderDecisionRequest[] = [];
+  const decided = new Map<string, { input: OrderDecisionRequest; draftId: string }>();
   const copy = <T,>(value: T): T => structuredClone(value);
   return {
-    drafts, keys,
+    drafts, keys, decisions,
     async get(id) { const found = drafts.find((draft) => draft.id === id); return found ? copy(found) : null; },
     async list() {
       return drafts.map((draft): OrderDraftSummary => ({
@@ -66,5 +73,58 @@ export function memoryOrderRepository(existing: ExistingOrder[] = []): OrderRepo
       keys.set(retry.key, { request: copy(retry.request), id: draft.id });
       return copy(draft);
     },
+    async decide(input) {
+      decisions.push(copy(input));
+      const earlier = decided.get(input.idempotencyKey);
+      if (earlier) {
+        if (JSON.stringify(earlier.input) !== JSON.stringify(input)) throw new RouteError("conflict", "This idempotency key was already used for another decision");
+        return copy(drafts.find((entry) => entry.id === earlier.draftId)!);
+      }
+      const draft = drafts.find((entry) => entry.id === input.draftId);
+      if (!draft) throw new RouteError("not_found", "Order draft not found");
+      if (draft.version !== input.expectedVersion) throw new RouteError("conflict", "Stale order draft version");
+      // As the database does: every decision is checked before any is made.
+      for (const decision of input.decisions) {
+        const line = draft.lines.find((entry) => entry.id === decision.lineId);
+        if (!line) throw new RouteError("not_found", "Order not found");
+        if (line.status !== "pending") throw new RouteError("conflict", "This order was already decided");
+        const required = requiredAcknowledgements(line.flags);
+        if (decision.decision === "approve" && required.length && (!required.every((kind) => decision.acknowledged?.includes(kind)) || (decision.overrideReason?.trim().length ?? 0) < 10)) {
+          throw new RouteError("invalid_request", "An allergy or a major interaction needs an acknowledgement and a reason");
+        }
+      }
+      const now = new Date().toISOString();
+      for (const decision of input.decisions) {
+        const line = draft.lines.find((entry) => entry.id === decision.lineId)!;
+        const approve = decision.decision === "approve";
+        Object.assign(line, { status: approve ? "approved" : "rejected", decidedBy: decider, decidedAt: now });
+        if (approve && decision.acknowledged?.length) line.acknowledged = [...new Set(decision.acknowledged)].sort();
+        if (approve && decision.overrideReason?.trim()) line.overrideReason = decision.overrideReason.trim();
+      }
+      draft.version += 1;
+      draft.updatedAt = now;
+      decided.set(input.idempotencyKey, { input: copy(input), draftId: draft.id });
+      return copy(draft);
+    },
   };
+}
+
+/** The write ledger as the database keeps it: a row opens only for an order line that is approved, under that line's key, as the resource its kind needs. */
+export function memoryOrderLedger(repository: ReturnType<typeof memoryOrderRepository>) {
+  const rows = new Map<string, StoredChartWrite & { originId: string }>();
+  const begun: string[] = [];
+  const ledger: ChartWriteLedger = {
+    async begin(origin, originId, itemKey, resourceType) {
+      begun.push(originId);
+      const found = repository.drafts.flatMap((draft) => draft.lines).find((entry) => entry.id === originId);
+      const type = found?.kind === "medication" ? "MedicationRequest" : "ServiceRequest";
+      if (origin !== "order" || !found || found.status !== "approved" || itemKey !== orderItemKey(found.id) || resourceType !== type) throw new RouteError("forbidden", "This item was not approved for the chart");
+      const row = rows.get(itemKey) ?? { itemKey, resourceType, status: "pending" as const, originId };
+      rows.set(itemKey, row);
+      return row;
+    },
+    async record(itemKey, status, resourceId, failure) { const row = rows.get(itemKey)!; if (!["created", "existing"].includes(row.status)) Object.assign(row, { status, resourceId, failure }); },
+    async forOrigin(_origins, originId) { return [...rows.values()].filter((row) => row.originId === originId); },
+  };
+  return { ledger, rows, begun };
 }

@@ -1,4 +1,4 @@
-import type { ClinicalFact, InteractionRule, KnownClinicalFact, OrderCatalog, OrderCatalogItem, OrderFlag, OrderLineStatus } from "@/shared/contracts";
+import type { ClinicalFact, InteractionRule, KnownClinicalFact, OrderCatalog, OrderCatalogItem, OrderFlag, OrderFlagKind, OrderLineStatus } from "@/shared/contracts";
 import { mentionsTerm } from "./text";
 
 /** An order already drafted or approved for this encounter, by its catalog id. */
@@ -16,6 +16,13 @@ const factText = (fact: KnownClinicalFact) => `${fact.label} ${typeof fact.value
 /** What a physician must acknowledge, with a reason, before approving: an allergy, or a major interaction. */
 export function requiresOverride(flag: Pick<OrderFlag, "kind" | "severity">): boolean {
   return flag.kind === "allergy" || (flag.kind === "interaction" && flag.severity === "major");
+}
+
+/** A reason for going ahead shorter than this says nothing. The database enforces the same length. */
+export const MIN_OVERRIDE_REASON = 10;
+/** The flag kinds a physician must acknowledge to approve an order that carries these flags. */
+export function requiredAcknowledgements(flags: readonly Pick<OrderFlag, "kind" | "severity">[]): OrderFlagKind[] {
+  return [...new Set(flags.filter(requiresOverride).map((flag) => flag.kind))];
 }
 
 /**

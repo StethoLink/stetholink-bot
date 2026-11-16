@@ -3,18 +3,19 @@ import type { VerifiedLaunch } from "@/platform/auth/identity";
 import type { ModelProvider, ModelRequest } from "@/core/agent/providers/types";
 import type { OrderCatalog, OrderDraft } from "@/shared/contracts";
 import { orderDraftSchema, orderNoMatchSchema } from "@/shared/schemas";
-import { ORDER_CATALOG, memoryOrderRepository } from "@/tests/fixtures/orders";
+import { ORDER_CATALOG, memoryOrderLedger, memoryOrderRepository } from "@/tests/fixtures/orders";
 import { completeSmartLaunch, fakeEhr, FAKE_EHR, smartEnv } from "../helpers/smart-launch";
 
 /**
  * Order drafting through the server composition for a verified LIVE session: the signed SMART launch, the fake FHIR server's chart,
  * a scripted model and an in-memory store. Every patient, clinician, order and identifier is fictional.
  */
-const { env, model, calls, store, catalogState, jar, handles } = vi.hoisted(() => ({
+const { env, model, calls, store, ledgerState, catalogState, jar, handles } = vi.hoisted(() => ({
   env: {} as Record<string, string | number | undefined>,
   model: { current: undefined as unknown },
   calls: [] as Array<{ task: unknown; sessionKey: string }>,
   store: { current: undefined as unknown },
+  ledgerState: { current: undefined as unknown },
   catalogState: { current: null as unknown },
   jar: new Map<string, string>(),
   handles: new Map<string, { kind: string; payload: unknown; expiresAt: number }>(),
@@ -24,6 +25,7 @@ vi.mock("@/platform/tenants/model-provider", () => ({ getModelProvider: (privacy
 vi.mock("@/platform/tenants/order-catalog", () => ({ getOrderCatalog: () => catalogState.current }));
 vi.mock("@/platform/persistence", () => ({ createConsultationRepository: () => ({}), createProviderResponseSink: () => ({ record: vi.fn() }) }));
 vi.mock("@/platform/persistence/orders", () => ({ createOrderRepository: () => store.current }));
+vi.mock("@/platform/persistence/scribe", () => ({ createChartWriteLedger: () => ledgerState.current }));
 vi.mock("next/headers", () => ({ cookies: async () => ({
   get: (key: string) => ({ value: jar.get(key) }), set: (key: string, value: string) => jar.set(key, value),
 }), headers: async () => new Headers({ host: "app.example.test" }) }));
@@ -78,6 +80,7 @@ beforeEach(() => {
   Object.assign(env, live);
   jar.clear(); handles.clear(); calls.length = 0;
   store.current = memoryOrderRepository();
+  ledgerState.current = memoryOrderLedger(store.current as ReturnType<typeof memoryOrderRepository>).ledger;
   catalogState.current = ORDER_CATALOG;
 });
 afterEach(() => { vi.clearAllMocks(); vi.unstubAllGlobals(); vi.restoreAllMocks(); });
@@ -153,6 +156,65 @@ describe("order drafting for a verified live session", () => {
     const session = await launched();
     await expect(getOrders(session).create({ request: "Prepare a CBC", idempotencyKey: "k-5" })).rejects.toThrow("not approved");
     expect((store.current as ReturnType<typeof memoryOrderRepository>).drafts).toHaveLength(0);
+  });
+});
+
+const repositoryOf = () => store.current as ReturnType<typeof memoryOrderRepository>;
+const REASON = "The patient tolerated it before; the benefit outweighs the risk.";
+/** What was sent to the EHR's FHIR server with POST (the launch itself posts to the token endpoint, which is not a write). */
+const posts = () => vi.mocked(globalThis.fetch).mock.calls.filter(([target, init]) => init?.method === "POST" && String(target).startsWith(FAKE_EHR.fhir));
+
+describe("approving orders is the physician's, and writing them is the physician's too", () => {
+  it("refuses a clinician who is not a physician, from the permissions of the signed launch, and records nothing", async () => {
+    model.current = pickingModel().provider;
+    const nurse = await launched("clinician");
+    const draft = orderDraftSchema.parse(await getOrders(nurse).create({ request: "Prepare a CBC", idempotencyKey: "k-nurse" }));
+    const decision = { draftId: draft.id, expectedVersion: draft.version, idempotencyKey: "d-nurse", decisions: [{ lineId: draft.lines[0].id, decision: "approve" as const }] };
+    await expect(getOrders(nurse).decide(decision)).rejects.toMatchObject({ code: "forbidden" });
+    await expect(getOrders(nurse).writeToChart(draft.id)).rejects.toMatchObject({ code: "forbidden" });
+    expect(repositoryOf().decisions).toEqual([]);
+    expect(repositoryOf().drafts[0].lines[0].status).toBe("pending");
+  });
+
+  it("lets the launched physician decide, logging counts only, and writes nothing for what is not approved", async () => {
+    model.current = pickingModel().provider;
+    const info = vi.spyOn(console, "info").mockImplementation(() => undefined);
+    const session = await launched();
+    const orders = getOrders(session);
+    const draft = orderDraftSchema.parse(await orders.create({ request: "Prepare a CBC and amoxicillin for this patient", idempotencyKey: "k-doc" }));
+    const [cbc, amoxicillin] = draft.lines;
+    // Nothing is approved: the chart list is empty and nothing is written, with or without the write.
+    expect(await orders.chart(draft.id)).toEqual([]);
+    expect(await orders.writeToChart(draft.id)).toEqual([]);
+    expect(posts()).toEqual([]);
+    // The documented penicillin allergy has to be acknowledged, with a reason.
+    await expect(orders.decide({ draftId: draft.id, expectedVersion: 1, idempotencyKey: "d-1", decisions: [{ lineId: amoxicillin.id, decision: "approve" }] })).rejects.toMatchObject({ code: "invalid_request" });
+    const decided = orderDraftSchema.parse(await orders.decide({ draftId: draft.id, expectedVersion: 1, idempotencyKey: "d-2", decisions: [
+      { lineId: cbc.id, decision: "approve" }, { lineId: amoxicillin.id, decision: "reject" }] }));
+    expect(decided.lines.map((line) => line.status)).toEqual(["approved", "rejected"]);
+    expect(decided.lines[0].decidedBy).toBe(FAKE_EHR.clinicianId);
+    const logged = info.mock.calls.map((call) => String(call[0])).join("\n");
+    expect(logged).toContain('"action":"orders.decided"');
+    expect(logged).toContain('"approved":1');
+    for (const text of ["CBC", "amoxicillin", "Penicillin", "Faisal", REASON]) expect(logged, text).not.toContain(text);
+    // The list of approved orders carries the text to enter; reading it writes nothing.
+    expect(await orders.chart(draft.id)).toEqual([expect.objectContaining({ item: cbc.id, resourceType: "ServiceRequest", status: "pending", copyText: expect.stringContaining("Complete blood count") })]);
+    expect(posts()).toEqual([]);
+  });
+
+  it("offers the approved order as text when this session has no writer, or the EHR did not grant the create scope", async () => {
+    model.current = pickingModel().provider;
+    const session = await launched();
+    const orders = getOrders(session);
+    const draft = orderDraftSchema.parse(await orders.create({ request: "Prepare a CBC", idempotencyKey: "k-text" }));
+    await orders.decide({ draftId: draft.id, expectedVersion: 1, idempotencyKey: "d-text", decisions: [{ lineId: draft.lines[0].id, decision: "approve" }] });
+    // Write-back is switched off (the default): the order is offered as text.
+    expect((await orders.writeToChart(draft.id))[0]).toMatchObject({ status: "unsupported", failure: "Writing to the chart is not switched on for this session", copyText: expect.stringContaining("Complete blood count") });
+    // Switched on, but the launch did not grant ServiceRequest.c: still nothing is sent to the EHR.
+    env.EHR_WRITE_ENABLED = "true";
+    const written = await getOrders(session).writeToChart(draft.id);
+    expect(written[0]).toMatchObject({ resourceType: "ServiceRequest", status: "unsupported", failure: expect.stringContaining("did not give StethoLink permission") });
+    expect(posts()).toEqual([]);
   });
 });
 

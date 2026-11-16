@@ -86,12 +86,28 @@ The flags use the chart and the hospital's own catalog. StethoLink adds no clini
 
 **Size.** The whole catalog is sent to the model with the chart, about 130 bytes an order. The default input limit (`OPENAI_MAX_INPUT_TOKENS`, 16000 bytes) fits about 30 orders; `ORDER_MAX_INPUT_TOKENS` (at most 120000) sets a larger limit for order drafting only, and about 800 orders are the most that fit. A larger request costs more: raise `OPENAI_MAX_COST_USD` (at most 1) when the call's worst case, input limit and output limit at the configured rates, is above it, or retries are refused. A catalog that cannot leave room for a chart stops the server at start and says which setting to raise.
 
+## Approval
+
+Only a mapped physician (role `physician` in `SMART_CLINICIAN_MAP`, so `order:approve`) decides, and decides each order one by one: approve or reject, any number of lines in one command that either succeeds or changes nothing. A non-physician cannot approve, whatever their session claims: the application refuses it and PostgreSQL refuses it again.
+
+- An order flagged for an **allergy** or a **major interaction** is approved only with that flag acknowledged and a reason of at least 10 characters. The acknowledgement and the reason are stored with the line and written into the EHR order's note. Other flags (duplicates, moderate or minor interactions, "not checked") do not block approval; they stay visible beside the order.
+- A line that was decided is not decided again, by anyone. The command carries the draft's version and an idempotency key: a stale version is refused (409), and a retry of the same command returns its first result.
+- Approval changes only StethoLink's own record. It writes nothing to the EHR.
+
+## Writing to the EHR
+
+After approval the physician chooses to write the approved orders to the chart. Each approved order becomes one FHIR `ServiceRequest` (laboratory, imaging, nursing) or `MedicationRequest` (medication), created conditionally under a key derived from the line, so a repeat creates nothing more. Only `create` is ever issued, never an update or a delete, and pending or rejected orders are never written (the write ledger in PostgreSQL opens a row only for a line this physician approved, as the resource its kind needs).
+
+- The record carries the catalog's own code (when the catalog gave one) and name, the medication's product and dose as the catalog states them, the launched patient and visit, the physician as requester and a note saying it was approved by the ordering physician, with the acknowledgement and reason where one was needed.
+- **Status.** `FHIR_ORDER_STATUS=draft` (the default) writes `status: draft, intent: order`: the order waits in the EHR for the physician to sign and release it there, so nothing is collected or dispensed because of the write. `active` places the order at once; choose it only when the hospital's process wants that.
+- **Where the EHR takes no write**, the order is offered as text for the clinician to enter, and the screen says so. The decision is made for each resource: the EHR must have granted the create scope (`patient/ServiceRequest.c`, `patient/MedicationRequest.c`, or `.write` in SMART v1) and its capability statement must declare `create` for the resource. **OpenEMR 7.0.3 has no `ServiceRequest` and offers `MedicationRequest` for reading only**, so every approved order there is shown as text ([openemr.md](openemr.md), "What OpenEMR 7.0.3's FHIR API accepts for orders"). The write to a hospital EHR that does accept the resources has been exercised against a fake FHIR server in `tests/e2e/live-ehr-flow.mts` only; it is unverified on any real EHR.
+
 ## Permissions and storage
 
-- Every mapped clinician receives `order:draft` and can draft and read their own drafts of the visit. Only a mapped **physician** receives `order:approve`, with `chart:write` for writing to the EHR. The EHR token grants none of these (`platform/auth/smart-session.ts`).
+- Every mapped clinician receives `order:draft` and can draft and read their own drafts of the visit. Only a mapped **physician** receives `order:approve`, with `chart:write` for writing to the EHR. A draft is visible to the clinician who drafted it only, so a physician decides on their own drafts, not on a colleague's. The EHR token grants none of these (`platform/auth/smart-session.ts`).
 - Drafts are stored in PostgreSQL (`order_drafts`, `order_lines`, `order_events`, `order_idempotency`), readable only by the clinician who drafted them, on that chart, with row-level security. Lines are written only by the database command that checks the session; a line's content cannot change afterwards, and a decision, once made, is final. The audit trail holds identifiers and counts, never the request or an order's text.
 - A repeated request with the same idempotency key returns the stored draft without asking the model again; the same key for another request is refused with 409.
 
 ## Interface
 
-`POST /api/orders/drafts` `{ request, idempotencyKey }` returns the draft (201), or `{ "outcome": "no_match", … }` (200, nothing stored) when no order could be drafted. `GET /api/orders/drafts` lists the visit's drafts; `GET /api/orders/drafts/:id` reads one. Without the catalog every route answers 501 "not set up". Contracts: `shared/contracts/orders.ts`, `shared/schemas/orders.ts`.
+`POST /api/orders/drafts` `{ request, idempotencyKey }` returns the draft (201), or `{ "outcome": "no_match", … }` (200, nothing stored) when no order could be drafted. `GET /api/orders/drafts` lists the visit's drafts; `GET /api/orders/drafts/:id` reads one; `POST /api/orders/drafts/:id/decisions` `{ draftId, expectedVersion, idempotencyKey, decisions: [{ lineId, decision, acknowledged?, overrideReason? }] }` records the physician's decisions; `GET` and `POST /api/orders/drafts/:id/chart` list and write the approved orders (`ChartWriteResult[]`, with `copyText` for what is not in the chart). Without the catalog every route answers 501 "not set up". Contracts: `shared/contracts/orders.ts`, `shared/schemas/orders.ts`.

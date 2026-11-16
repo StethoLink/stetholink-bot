@@ -47,6 +47,7 @@ Limits you must know before telling anyone "the model never sees patient data":
   | Sign-in and context | `launch openid fhirUser` |
   | Read the chart | `patient/Patient.rs patient/Encounter.rs patient/Condition.rs patient/MedicationRequest.rs patient/Medication.rs patient/AllergyIntolerance.rs patient/Observation.rs` |
   | Write approved results | `patient/DocumentReference.c patient/AllergyIntolerance.c patient/Condition.c patient/MedicationStatement.c` |
+  | Write approved orders (optional; see [orders.md](orders.md)) | `patient/ServiceRequest.c patient/MedicationRequest.c` |
 
   StethoLink only creates; it never asks for update or delete. A resource the EHR does not grant is shown to the clinician as "could not be loaded" (reads) or offered as text to copy (writes).
 - **Launch context:** patient and encounter for clinicians. For specialists, a second launch point without a patient (the application list, or a standalone launch) that opens the inbox.
@@ -119,6 +120,7 @@ EHR_WRITE_ENABLED=true
 FHIR_NOTE_DOC_STATUS=preliminary
 
 ORDER_CATALOG_FILE=/etc/stetholink/orders.json   # the hospital's own order catalog, docs/orders.md; without it order drafting is off
+FHIR_ORDER_STATUS=draft                          # draft: an approved order waits in the EHR for the physician to sign it there; active: placed on write
 ORDER_MAX_INPUT_TOKENS=<only for a catalog of more than about 30 orders; at most 120000>
 
 PROVIDER_DIRECTORY=[{"id":"cardiology-service","displayName":"Cardiology consult service","specialties":["Cardiology"],"transport":"portal"}]
@@ -174,7 +176,7 @@ Technical, with a test patient in the hospital's test EHR first:
 - [ ] Consultation: every statement opens its source; approval and sending each show their confirmation
 - [ ] The specialist opens the inbox from the EHR, sees no patient identifiers, accepts and replies; the physician sees the reply
 - [ ] "Write to chart" creates the notes in the EHR once; repeating it creates nothing more
-- [ ] Orders (`docs/orders.md`): "prepare a CBC and a chest X-ray" drafts those two and no others; "prepare the basic orders for this case" proposes only orders of the hospital's catalog, each with the chart facts it rests on; an order for a documented allergy shows its flag; a nurse can draft and cannot approve; the server does not start with a malformed catalog
+- [ ] Orders (`docs/orders.md`): "prepare a CBC and a chest X-ray" drafts those two and no others; "prepare the basic orders for this case" proposes only orders of the hospital's catalog, each with the chart facts it rests on; an order for a documented allergy shows its flag; a nurse can draft and cannot approve; approving an order flagged for an allergy needs the flag acknowledged and a reason; "write to the chart" creates each approved order once (as a draft in the EHR) or, where the EHR takes no such write, shows the text to enter; the server does not start with a malformed catalog
 - [ ] Scribe: the microphone works in the EHR window (or the "open in a new window" message appears); recording does not start without the consent confirmation
 - [ ] A recorded test visit produces a note; a new allergy is offered unselected; a conflict with the chart is shown and cannot be selected
 - [ ] The approved note and the selected allergy appear in the EHR, authored by the physician, for the right visit; the transcript is gone from StethoLink

@@ -18,6 +18,6 @@ export function getChartWriter(session: VerifiedLaunch): ClinicalWriteAdapter | 
   return createFhirWriter({
     baseUrl: env.FHIR_BASE_URL, accessToken: session.ehrAccessToken, patientId: session.context.patientId, encounterId: session.context.encounterId,
     practitionerReference: session.ehrUser, grantedScopes: session.context.scopes.filter((scope) => scope.startsWith("smart:")).map((scope) => scope.slice(6)),
-  }, fetch, { docStatus: env.FHIR_NOTE_DOC_STATUS, noteTypeCode: env.FHIR_NOTE_TYPE_CODE });
+  }, fetch, { docStatus: env.FHIR_NOTE_DOC_STATUS, noteTypeCode: env.FHIR_NOTE_TYPE_CODE, orderStatus: env.FHIR_ORDER_STATUS });
 }
 

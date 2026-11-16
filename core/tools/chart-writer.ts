@@ -10,11 +10,18 @@ export type ChartWriteItem =
   | { kind: "document"; itemKey: string; documentType: ChartDocumentType; title: string; text: string; language: string }
   | { kind: "allergy"; itemKey: string; substance: string; reaction?: string; intolerance: boolean; confirmedByPhysician: boolean }
   | { kind: "condition"; itemKey: string; name: string; detail?: string }
-  | { kind: "medication"; itemKey: string; name: string; dosageText?: string };
+  | { kind: "medication"; itemKey: string; name: string; dosageText?: string }
+  | { kind: "service_request"; itemKey: string; orderKind: "lab" | "imaging" | "nursing"; display: string; code?: OrderCode; physicianNote?: string }
+  | { kind: "medication_request"; itemKey: string; display: string; code?: OrderCode; medication: OrderedMedication; physicianNote?: string };
 
-export type ChartResourceType = "DocumentReference" | "AllergyIntolerance" | "Condition" | "MedicationStatement";
+/** The hospital's own code for an order and the medication of a catalog entry, copied unchanged from the catalog the physician approved from. */
+export interface OrderCode { system: string; code: string; display?: string }
+export interface OrderedMedication { product: string; dose: string; route: string; frequency: string; duration?: string }
+
+export type ChartResourceType = "DocumentReference" | "AllergyIntolerance" | "Condition" | "MedicationStatement" | "ServiceRequest" | "MedicationRequest";
 export const RESOURCE_OF: Record<ChartWriteItem["kind"], ChartResourceType> = {
   document: "DocumentReference", allergy: "AllergyIntolerance", condition: "Condition", medication: "MedicationStatement",
+  service_request: "ServiceRequest", medication_request: "MedicationRequest",
 };
 
 export interface ChartWriteOutcome {

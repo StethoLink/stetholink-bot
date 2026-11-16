@@ -26,7 +26,7 @@ const physician = { subject: "fic-sub-physician", fhirUser: "Practitioner/fic-dr
 const cardiologist = { subject: "fic-sub-cardiologist", fhirUser: "Practitioner/fic-card-1", specialistId: "77777777-7777-4777-8777-777777777771", providerId: "fictional-cardiology-service", displayName: "Dr Fictional Cardiologist" };
 const radiologist = { subject: "fic-sub-radiologist", fhirUser: "Practitioner/fic-rad-1", specialistId: "77777777-7777-4777-8777-777777777772", providerId: "fictional-radiology-service", displayName: "Dr Fictional Radiologist" };
 const nurse = { subject: "fic-sub-nurse", fhirUser: "Practitioner/fic-rn-1", clinicianId: "66666666-6666-4666-8666-666666666662" };
-const scope = "launch openid fhirUser patient/Patient.rs patient/Encounter.rs patient/Condition.rs patient/MedicationRequest.rs patient/AllergyIntolerance.rs patient/Observation.rs patient/DocumentReference.c patient/AllergyIntolerance.c patient/Condition.c";
+const scope = "launch openid fhirUser patient/Patient.rs patient/Encounter.rs patient/Condition.rs patient/MedicationRequest.rs patient/AllergyIntolerance.rs patient/Observation.rs patient/DocumentReference.c patient/AllergyIntolerance.c patient/Condition.c patient/ServiceRequest.c patient/MedicationRequest.c";
 process.env.SMART_SCOPE = scope;
 
 const ehr = await startFakeEhr({
@@ -280,6 +280,45 @@ try {
   await call(`${ordersApi}/${crypto.randomUUID()}`, 404, { cookie: doctor });
   assert.deepEqual((await call(`${ordersApi}/${orders.id}`, 200, { cookie: doctor })).json, orders);
 
+  console.log("live-ehr-flow: orders drafted from the catalog, grounded, flagged, idempotent, isolated per clinician");
+  // --- The physician decides, line by line; a non-physician cannot --------------------------
+  const decisionsApi = (id: string) => `${ordersApi}/${id}/decisions`;
+  const decisionBody = (draft: { id: string; version: number }, decisions: object[], key: string, version = draft.version) => ({ draftId: draft.id, expectedVersion: version, idempotencyKey: key, decisions });
+  const [cbcLine, amoxicillinLine] = orders.lines;
+  const overrideReason = "Fictional: tolerated before; the benefit outweighs the risk.";
+  // The clinician who is not a physician has no approving permission, even for their own draft.
+  await call(decisionsApi(nurseOrders.id), 403, { cookie: observer, body: decisionBody(nurseOrders, [{ lineId: nurseOrders.lines[0].id, decision: "approve" }], "dec-nurse-" + run) });
+  await call(decisionsApi(orders.id), 403, { cookie: observer, body: decisionBody(orders, [{ lineId: cbcLine.id, decision: "approve" }], "dec-nurse-2-" + run) });
+  // The command must be the draft's own, well formed, at its version; the allergy needs the flag acknowledged and a reason.
+  await call(decisionsApi(orders.id), 400, { cookie: doctor, body: decisionBody(nurseOrders, [{ lineId: cbcLine.id, decision: "approve" }], "dec-path-" + run) });
+  await call(decisionsApi(orders.id), 400, { cookie: doctor, body: { ...decisionBody(orders, [{ lineId: cbcLine.id, decision: "approve" }], "dec-extra-" + run), dose: "5 g" } });
+  await call(decisionsApi(orders.id), 400, { cookie: doctor, body: decisionBody(orders, [{ lineId: amoxicillinLine.id, decision: "approve" }], "dec-1-" + run) });
+  await call(decisionsApi(orders.id), 400, { cookie: doctor, body: decisionBody(orders, [{ lineId: amoxicillinLine.id, decision: "approve", acknowledged: ["allergy"], overrideReason: "ok" }], "dec-2-" + run) });
+  await call(decisionsApi(orders.id), 409, { cookie: doctor, body: decisionBody(orders, [{ lineId: cbcLine.id, decision: "approve" }], "dec-stale-" + run, 9) });
+  await call(decisionsApi(orders.id), 404, { cookie: doctor, body: decisionBody(orders, [{ lineId: crypto.randomUUID(), decision: "approve" }], "dec-unknown-" + run) });
+  assert.ok((await call(`${ordersApi}/${orders.id}`, 200, { cookie: doctor })).json.lines.every((line: { status: string }) => line.status === "pending"), "Refused commands decide nothing");
+  const approveBoth = decisionBody(orders, [{ lineId: cbcLine.id, decision: "approve" },
+    { lineId: amoxicillinLine.id, decision: "approve", acknowledged: ["allergy"], overrideReason }], "dec-3-" + run);
+  const decidedOrders = (await call(decisionsApi(orders.id), 200, { cookie: doctor, body: approveBoth })).json;
+  assert.equal(decidedOrders.version, orders.version + 1);
+  assert.deepEqual(decidedOrders.lines.map((line: { status: string; decidedBy: string }) => [line.status, line.decidedBy]), [["approved", physician.clinicianId], ["approved", physician.clinicianId]]);
+  assert.deepEqual([decidedOrders.lines[1].acknowledged, decidedOrders.lines[1].overrideReason], [["allergy"], overrideReason]);
+  assert.equal(decidedOrders.lines[0].acknowledged, undefined);
+  // A retry of the same command returns the same draft; a decided order is not decided again; the key is not for another decision.
+  assert.deepEqual((await call(decisionsApi(orders.id), 200, { cookie: doctor, body: approveBoth })).json, decidedOrders);
+  await call(decisionsApi(orders.id), 409, { cookie: doctor, body: decisionBody(decidedOrders, [{ lineId: cbcLine.id, decision: "reject" }], "dec-4-" + run) });
+  await call(decisionsApi(orders.id), 409, { cookie: doctor, body: { ...approveBoth, decisions: [{ lineId: cbcLine.id, decision: "reject" }] } });
+  // The proposals of the case are rejected: nothing about them can be written.
+  const rejectedAll = (await call(decisionsApi(proposed.id), 200, { cookie: doctor, body: decisionBody(proposed, proposed.lines.map((line: { id: string }) => ({ lineId: line.id, decision: "reject" })), "dec-5-" + run) })).json;
+  assert.ok(rejectedAll.lines.every((line: { status: string }) => line.status === "rejected"));
+  // The duplicate is approved without an override: only an allergy or a major interaction needs one.
+  const duplicate = (await call(decisionsApi(again.id), 200, { cookie: doctor, body: decisionBody(again, [{ lineId: again.lines[0].id, decision: "approve" }], "dec-6-" + run) })).json;
+  assert.equal(duplicate.lines[0].status, "approved");
+  assert.equal((await call(ordersApi, 200, { cookie: doctor })).json.find((entry: { id: string }) => entry.id === orders.id).approved, 2);
+  // The EHR has seen no order: deciding writes nothing.
+  assert.equal(ehr.state.fhirRequests.filter((entry) => entry.method !== "GET").length, 0);
+
+  console.log("live-ehr-flow: order decisions: physician only, allergy acknowledged with a reason, retries and final decisions");
   // --- Only reads reached the EHR, all for the launched patient ----------------------------
   assert.ok(ehr.state.fhirRequests.length > 0);
   assert.ok(ehr.state.fhirRequests.every((entry) => entry.method === "GET"));
@@ -445,6 +484,53 @@ try {
   // The reply of a request that was never answered cannot be written.
   assert.deepEqual((await call(`${drafts}/${freshDraft.id}/chart`, 200, { cookie: doctor })).json, []);
 
+  // === Approved orders written to the chart: only what the physician approved, once each ===========
+  const chartApi = (id: string) => `${ordersApi}/${id}/chart`;
+  const orderResources = () => ehr.state.created.filter((entry) => ["ServiceRequest", "MedicationRequest"].includes(entry.resourceType));
+  assert.equal(orderResources().length, 0, "Nothing was written before the physician asked");
+  const waiting = (await call(chartApi(orders.id), 200, { cookie: doctor })).json;
+  assert.deepEqual(waiting.map((entry: { resourceType: string; status: string }) => [entry.resourceType, entry.status]), [["ServiceRequest", "pending"], ["MedicationRequest", "pending"]]);
+  assert.ok(waiting.every((entry: { copyText?: string }) => entry.copyText), "The text to enter is offered");
+  assert.equal(orderResources().length, 0, "Reading the list writes nothing");
+  // Writing is the physician's; a clinician who is not one cannot, and cannot reach the physician's draft either.
+  await call(chartApi(orders.id), 403, { cookie: observer, method: "POST" });
+  await call(chartApi(orders.id), 404, { cookie: observer });
+  // An EHR that takes neither (as OpenEMR 7.0.3): the orders come back as text, and nothing is sent.
+  ehr.state.noCreate = new Set(["ServiceRequest", "MedicationRequest"]);
+  const unsupported = (await call(chartApi(orders.id), 200, { cookie: doctor, method: "POST" })).json;
+  assert.deepEqual(unsupported.map((entry: { status: string }) => entry.status), ["unsupported", "unsupported"]);
+  assert.ok(unsupported.every((entry: { failure: string; copyText: string }) => entry.failure.includes("does not accept") && entry.copyText));
+  assert.match(unsupported[1].copyText, /^Medication: Amoxicillin, 500 mg, oral, every 8 hours, 7 days/);
+  assert.equal(orderResources().length, 0);
+  assert.equal(ehr.state.fhirRequests.filter((entry) => entry.method === "POST" && /ServiceRequest|MedicationRequest/.test(entry.path)).length, 0, "No order was sent to an EHR that does not take it");
+  // An EHR that takes them: each approved order is created once, as a draft for the physician to sign there.
+  ehr.state.noCreate = new Set();
+  const written = (await call(chartApi(orders.id), 200, { cookie: doctor, method: "POST" })).json;
+  assert.deepEqual(written.map((entry: { resourceType: string; status: string }) => [entry.resourceType, entry.status]), [["ServiceRequest", "created"], ["MedicationRequest", "created"]]);
+  assert.ok(written.every((entry: { copyText?: string; resourceId: string }) => entry.copyText === undefined && entry.resourceId.startsWith("fic-created-")));
+  assert.equal(orderResources().length, 2);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [serviceRequest, medicationRequest] = orderResources() as Array<Record<string, any>>;
+  assert.deepEqual([serviceRequest.status, serviceRequest.intent, serviceRequest.category[0].text, serviceRequest.code.coding[0], serviceRequest.code.text],
+    ["draft", "order", "lab", { system: "urn:test", code: "CBC-1" }, "Complete blood count"]);
+  assert.deepEqual([serviceRequest.subject.reference, serviceRequest.encounter.reference, serviceRequest.requester.reference], ["Patient/fic-pt-1", "Encounter/fic-enc-1", physician.fhirUser]);
+  assert.deepEqual([medicationRequest.status, medicationRequest.intent, medicationRequest.medicationCodeableConcept.text, medicationRequest.dosageInstruction[0].text],
+    ["draft", "order", "Amoxicillin", "500 mg, oral, every 8 hours, 7 days"]);
+  assert.match(medicationRequest.note[0].text, new RegExp(`Acknowledged: allergy\\. Reason: ${overrideReason.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`));
+  assert.equal(serviceRequest.identifier[0].value, written[0].itemKey);
+  const orderWrites = ehr.state.fhirRequests.filter((entry) => entry.method === "POST" && /ServiceRequest|MedicationRequest/.test(entry.path));
+  assert.ok(orderWrites.length === 2 && orderWrites.every((entry) => entry.ifNoneExist?.startsWith("identifier=")), "Create only, always conditional");
+  // Again: nothing more is created. The rejected proposals and the order nobody asked to write are never written.
+  assert.deepEqual((await call(chartApi(orders.id), 200, { cookie: doctor, method: "POST" })).json.map((entry: { status: string }) => entry.status), ["created", "created"]);
+  assert.equal(orderResources().length, 2);
+  assert.deepEqual((await call(chartApi(proposed.id), 200, { cookie: doctor, method: "POST" })).json, []);
+  assert.equal(orderResources().length, 2);
+  assert.equal((await call(chartApi(again.id), 200, { cookie: doctor })).json[0].status, "pending", "Approved is not written until the physician writes");
+  assert.equal(orderResources().length, 2);
+  await call(chartApi("not-a-draft"), 400, { cookie: doctor });
+  assert.equal(ehr.state.fhirRequests.filter((entry) => !["GET", "POST"].includes(entry.method)).length, 0, "No update or delete was ever issued");
+
+  console.log("live-ehr-flow: approved orders written once as draft ServiceRequest and MedicationRequest; offered as text where the EHR takes no write");
   // --- The simulator route is gone; sessions and stored work survive a new server process ---
   await call(`${drafts}/${draft.id}/delivery/simulate`, 404, { cookie: doctor, body: {} });
   const beforeRestart = { draft: (await call(`${drafts}/${draft.id}`, 200, { cookie: doctor })).json, delivery: (await call(`${drafts}/${draft.id}/delivery`, 200, { cookie: doctor })).json };
@@ -455,7 +541,8 @@ try {
   assert.deepEqual((await call(`${drafts}/${draft.id}`, 200, { cookie: doctor })).json, beforeRestart.draft);
   assert.deepEqual((await call(`${drafts}/${draft.id}/delivery`, 200, { cookie: doctor })).json, beforeRestart.delivery);
   await call(`${drafts}/${draft.id}`, 404, { cookie: observer });
-  assert.deepEqual((await call(`${ordersApi}/${orders.id}`, 200, { cookie: doctor })).json, orders, "Order drafts survive a new server process");
+  assert.deepEqual((await call(`${ordersApi}/${orders.id}`, 200, { cookie: doctor })).json, decidedOrders, "Order drafts and the decisions on them survive a new server process");
+  assert.deepEqual((await call(chartApi(orders.id), 200, { cookie: doctor })).json.map((entry: { status: string }) => entry.status), ["created", "created"], "So does what was written");
   // Without the hospital's catalog order drafting is not offered, and nothing else changes.
   await stop();
   assert.equal(await start({ ORDER_CATALOG_FILE: "" }), true);
@@ -517,7 +604,7 @@ try {
   assert.equal((await call("/api/encounters/fic-enc-1", 200, { cookie: emergency })).json.status, "triaged");
   ehr.state.fhirOverride = undefined;
 
-  console.log("live-ehr-flow: passed (fake SMART issuer, fake FHIR server with conditional create, fake transcription, fake model, PostgreSQL): launch, facts, cited draft, approval, scribe consent, note, physician-approved chart writes, specialist inbox and reply, reply written to the chart");
+  console.log("live-ehr-flow: passed (fake SMART issuer, fake FHIR server with conditional create, fake transcription, fake model, PostgreSQL): launch, facts, cited draft, approval, scribe consent, note, physician-approved chart writes, specialist inbox and reply, reply written to the chart, orders drafted, decided and written");
 } finally {
   await stop();
   proxy.close();
