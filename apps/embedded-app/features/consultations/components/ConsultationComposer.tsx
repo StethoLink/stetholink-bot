@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { ConsultationClarification, ConsultationClarificationNeeded } from "@/shared/contracts";
 import { AiBadge, Alert, Button, Card, CardHeader, WorkInProgress } from "@/apps/embedded-app/components/ui";
-import { CONCERN_LABELS } from "../concern-labels";
+import { useT } from "@/apps/embedded-app/i18n/client";
 import { CancelledError, deliveryApi, DeliveryError } from "../hooks/deliveryState";
 import { ConsultationReview } from "./ConsultationReview";
 
@@ -17,22 +17,24 @@ function ClarificationPanel({ request, clarification, busy, onAnswer, onProceed,
   request: string; clarification: ConsultationClarificationNeeded; busy: boolean;
   onAnswer(answers: ConsultationClarification[]): void; onProceed(): void; onEdit(): void;
 }) {
+  const { t } = useT();
+  const c = t.work.clarification;
   const [answers, setAnswers] = useState<string[]>(() => clarification.concerns.map(() => ""));
   const given = clarification.concerns.map((entry, index) => ({ question: entry.question, answer: answers[index]?.trim() ?? "" })).filter((entry) => entry.answer);
   const canProceed = !clarification.concerns.some((entry) => entry.kind === "missing_specialty");
   return (
-    <section aria-label="The assistant questions this request" className="alert alert-warning space-y-3">
+    <section aria-label={c.aria} className="alert alert-warning space-y-3">
       <div>
-        <h3 className="text-base font-semibold text-amber-950">The assistant is questioning this request before drafting</h3>
-        <p className="text-sm text-amber-950 break-words"><span className="font-medium">Your request:</span> {request}</p>
-        <p className="text-xs text-amber-900">Nothing has been drafted or saved yet. Answer, change the request, or prepare it anyway.</p>
+        <h3 className="text-base font-semibold text-amber-950">{c.title}</h3>
+        <p className="text-sm text-amber-950 break-words"><span className="font-medium">{c.yourRequest}</span> <bdi>{request}</bdi></p>
+        <p className="text-xs text-amber-900">{c.nothingDrafted}</p>
       </div>
       {clarification.clarifications.length > 0 && (
         <div>
-          <h4 className="text-xs font-semibold tracking-wide text-amber-950 uppercase">Already answered</h4>
+          <h4 className="text-xs font-semibold tracking-wide text-amber-950 uppercase">{c.alreadyAnswered}</h4>
           <ul className="space-y-1 text-sm text-amber-950">
             {clarification.clarifications.map((entry, index) => (
-              <li key={index} className="break-words"><span className="font-medium">{entry.question}</span> {entry.answer}</li>
+              <li key={index} className="break-words" dir="auto"><span className="font-medium">{entry.question}</span> {entry.answer}</li>
             ))}
           </ul>
         </div>
@@ -40,41 +42,35 @@ function ClarificationPanel({ request, clarification, busy, onAnswer, onProceed,
       <ol className="space-y-3">
         {clarification.concerns.map((entry, index) => (
           <li key={index} className="rounded-md border border-amber-100 bg-white p-2.5">
-            <p className="text-xs font-semibold tracking-wide text-amber-900 uppercase">{CONCERN_LABELS[entry.kind]}</p>
-            <p className="text-sm font-medium break-words">{entry.concern}</p>
-            <label className="mt-1 block text-sm break-words" htmlFor={`clarification-${index}`}>{entry.question}</label>
+            <p className="text-xs font-semibold tracking-wide text-amber-900 uppercase">{t.work.concerns[entry.kind]}</p>
+            <p className="text-sm font-medium break-words" dir="auto">{entry.concern}</p>
+            <label className="mt-1 block text-sm break-words" htmlFor={`clarification-${index}`} dir="auto">{entry.question}</label>
             {clarification.canAnswer && (
               <textarea id={`clarification-${index}`} rows={2} maxLength={1000} disabled={busy} value={answers[index] ?? ""}
                 onChange={(event) => setAnswers((current) => current.map((value, i) => (i === index ? event.target.value : value)))}
-                className="field mt-1" placeholder="Your answer" />
+                className="field mt-1" placeholder={c.answerPlaceholder} dir="auto" />
             )}
           </li>
         ))}
       </ol>
-      {!clarification.canAnswer && <p className="text-sm text-amber-950">The maximum number of questions has been answered. Prepare the consultation anyway, or change the request.</p>}
+      {!clarification.canAnswer && <p className="text-sm text-amber-950">{c.maxAnswered}</p>}
       <div className="flex flex-wrap gap-2">
         {clarification.canAnswer && (
           <button type="button" disabled={busy || !given.length} onClick={() => onAnswer(given)}
             className="btn btn-primary">
-            Answer and continue
+            {c.answerContinue}
           </button>
         )}
         {canProceed && (
           <button type="button" disabled={busy} onClick={onProceed}
-            className="btn btn-warning">Prepare anyway</button>
+            className="btn btn-warning">{c.prepareAnyway}</button>
         )}
-        <button type="button" disabled={busy} onClick={onEdit} className="btn btn-secondary">Change my request</button>
+        <button type="button" disabled={busy} onClick={onEdit} className="btn btn-secondary">{c.changeRequest}</button>
       </div>
-      {canProceed && <p className="text-xs text-amber-900">If you prepare it anyway, these concerns stay visible with the draft for your review. They are not sent to the specialist.</p>}
+      {canProceed && <p className="text-xs text-amber-900">{c.keepVisible}</p>}
     </section>
   );
 }
-
-const EXAMPLES = [
-  "Prepare a cardiology consultation for this patient regarding possible acute coronary syndrome.",
-  "Prepare a radiology consultation asking whether further chest imaging is needed.",
-];
-const STEPS = ["Reading the chart", "Checking that the request fits the chart", "Writing the consultation", "Checking every statement against its source"];
 
 /** Ask the assistant for a consultation in plain language, then review what it prepared. */
 export function ConsultationComposer({ patientId, encounterId, canReview = false, canRoute = false, assistant, openDraftId, onOpenDraft }: {
@@ -82,6 +78,7 @@ export function ConsultationComposer({ patientId, encounterId, canReview = false
   /** The consultation being reviewed, when the parent controls it (for example from the History tab). */
   openDraftId?: string; onOpenDraft?(draftId: string | undefined): void;
 }) {
+  const { t } = useT();
   const [ownDraftId, setOwnDraftId] = useState<string>();
   const draftId = onOpenDraft ? openDraftId : ownDraftId;
   const setDraftId = onOpenDraft ?? setOwnDraftId;
@@ -117,27 +114,27 @@ export function ConsultationComposer({ patientId, encounterId, canReview = false
       setDraftId(result.id);
     } catch (e) {
       // After a cancel the same key is kept, so pressing the button again returns the draft if the server finished it.
-      setError(e instanceof CancelledError ? "" : e instanceof DeliveryError ? e.message : "The consultation could not be prepared. Try again.");
+      setError(e instanceof CancelledError ? "" : e instanceof DeliveryError ? e.message : t.work.composer.error);
     } finally {
       setBusy(false);
     }
   }
   if (draftId) {
     return (
-      <section aria-label="Consultation" className="space-y-3">
-        <Button variant="ghost" size="sm" onClick={() => setDraftId(undefined)}>New consultation request</Button>
+      <section aria-label={t.work.composer.sectionLabel} className="space-y-3">
+        <Button variant="ghost" size="sm" onClick={() => setDraftId(undefined)}>{t.work.composer.newRequest}</Button>
         <ConsultationReview draftId={draftId} canReview={canReview} canRoute={canRoute} />
       </section>
     );
   }
   return (
-    <Card aria-label="Consultation assistant" className="space-y-3">
-      <CardHeader title="Consultation assistant" actions={assistant ? <AiBadge>AI-assisted</AiBadge> : undefined}
+    <Card aria-label={t.work.composer.title} className="space-y-3">
+      <CardHeader title={t.work.composer.title} actions={assistant ? <AiBadge>{t.work.composer.aiAssisted}</AiBadge> : undefined}
         description={assistant
-          ? <>Drafts are written by {assistant.provider} model <span className="font-medium">{assistant.model}</span> from this chart, then every statement is checked against it.</>
+          ? <>{t.work.composer.descPre(assistant.provider)} <span className="font-medium" dir="ltr">{assistant.model}</span> {t.work.composer.descPost}</>
           : undefined} />
       {busy ? (
-        <WorkInProgress label={pending ? "Reading your answers and the chart" : "Reading the chart and drafting the consultation"} steps={STEPS} onCancel={() => abort.current?.abort()} />
+        <WorkInProgress label={pending ? t.work.composer.busyAnswers : t.work.composer.busyDrafting} steps={t.work.composer.steps} onCancel={() => abort.current?.abort()} />
       ) : pending ? (
         <ClarificationPanel key={JSON.stringify(pending.clarification)} request={pending.request} clarification={pending.clarification} busy={busy}
           onAnswer={(answers) => void prepare({ text: pending.request, clarifications: [...pending.clarification.clarifications, ...answers] })}
@@ -145,21 +142,21 @@ export function ConsultationComposer({ patientId, encounterId, canReview = false
           onEdit={() => { setRequest(pending.request); setPending(undefined); setError(""); }} />
       ) : (
         <form className="space-y-2" onSubmit={(event) => { event.preventDefault(); void prepare(); }}>
-          <label className="field-label" htmlFor="consultation-request">What consultation do you need?</label>
-          <textarea id="consultation-request" rows={3} value={request} onChange={(event) => setRequest(event.target.value)} maxLength={2000} className="field"
+          <label className="field-label" htmlFor="consultation-request">{t.work.composer.requestLabel}</label>
+          <textarea id="consultation-request" rows={3} value={request} onChange={(event) => setRequest(event.target.value)} maxLength={2000} className="field" dir="auto"
             onKeyDown={(event) => { if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) { event.preventDefault(); void prepare(); } }}
-            placeholder="Name the specialty and what you want answered, in your own words" />
+            placeholder={t.work.composer.placeholder} />
           <div className="flex flex-wrap gap-1.5">
-            {EXAMPLES.map((example) => (
+            {t.work.composer.examples.map((example) => (
               <button key={example} type="button" onClick={() => setRequest(example)}
                 className="rounded-full border border-slate-300 bg-white px-2.5 py-1 text-start text-xs text-slate-800 hover:bg-slate-100">{example}</button>
             ))}
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <button type="submit" disabled={request.trim().length < 8} className="btn btn-primary">Prepare consultation</button>
-            <span className="text-xs text-slate-600">Ctrl + Enter</span>
+            <button type="submit" disabled={request.trim().length < 8} className="btn btn-primary">{t.work.composer.prepare}</button>
+            <span className="text-xs text-slate-600" dir="ltr">{t.work.composer.ctrlEnter}</span>
           </div>
-          <p className="text-xs text-slate-700">The assistant prepares a draft for your review, and asks you first when the request does not fit the chart or is unclear. It cannot approve, send, order or change the chart.</p>
+          <p className="text-xs text-slate-700">{t.work.composer.help}</p>
         </form>
       )}
       {error && !busy && <Alert tone="danger">{error}</Alert>}

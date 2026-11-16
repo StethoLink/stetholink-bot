@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { ScribeSelection, ScribeSpeaker, SoapSection } from "@/shared/contracts";
 import { apiErrorSchema, scribeCapabilitiesSchema, scribeSessionListSchema, scribeSessionViewSchema } from "@/shared/schemas";
+import { currentMessages } from "@/apps/embedded-app/i18n/client";
 import { call, DeliveryError, describeFailure } from "@/apps/embedded-app/features/consultations/hooks/deliveryState";
 
 const base = "/api/scribe";
@@ -17,14 +18,14 @@ export const scribeApi = {
   relabel: (id: string, speakers: { id: string; speaker: ScribeSpeaker | null }[]) => call(scribeSessionViewSchema, `${one(id)}/speakers`, { speakers }, "PATCH"),
   approve: (id: string, expectedVersion: number, selection: ScribeSelection) => call(scribeSessionViewSchema, `${one(id)}/approval`, { expectedVersion, selection }),
   async discard(id: string) {
-    const response = await fetch(one(id), { method: "DELETE", credentials: "same-origin" }).catch(() => { throw new DeliveryError("The server could not be reached. Check your connection and try again."); });
+    const response = await fetch(one(id), { method: "DELETE", credentials: "same-origin" }).catch(() => { throw new DeliveryError(currentMessages().work.failures.unreachable); });
     if (!response.ok) throw new DeliveryError(describeFailure(response.status));
   },
   /** One part of the recording, sent as raw audio. The audio is not kept by the browser after a successful upload. */
   async uploadChunk(id: string, index: number, durationMs: number, audio: Blob) {
     const response = await fetch(`${one(id)}/chunks?index=${index}&durationMs=${Math.round(durationMs)}`, {
       method: "POST", credentials: "same-origin", cache: "no-store", headers: { "Content-Type": audio.type || "audio/webm" }, body: audio,
-    }).catch(() => { throw new DeliveryError("The server could not be reached."); });
+    }).catch(() => { throw new DeliveryError(currentMessages().work.failures.unreachableShort); });
     const json: unknown = await response.json().catch(() => null);
     if (!response.ok) {
       const error = apiErrorSchema.safeParse(json);

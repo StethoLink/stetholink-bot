@@ -2,12 +2,14 @@
 
 import { useRef, useState } from "react";
 import type { ConsultationDraft } from "@/shared/contracts";
+import { useT } from "@/apps/embedded-app/i18n/client";
 import { deliveryApi, DeliveryError } from "../hooks/deliveryState";
 
 const field = "field mt-1 font-normal";
 
 /** Physician edits to a draft that was returned for changes. Saving sends it back for review; it never approves. */
 export function ConsultationEditor({ draft, onSaved }: { draft: ConsultationDraft; onSaved: () => void }) {
+  const { t } = useT();
   const [summary, setSummary] = useState(draft.summary);
   const [assessment, setAssessment] = useState(draft.assessment);
   const [plan, setPlan] = useState(draft.plan.join("\n"));
@@ -27,27 +29,27 @@ export function ConsultationEditor({ draft, onSaved }: { draft: ConsultationDraf
       await deliveryApi.submit(draft.id, { expectedVersion: revised.version ?? draft.version + 1, idempotencyKey: keys.current.submit });
       onSaved();
     } catch (e) {
-      setError(e instanceof DeliveryError ? e.message : "Your edits could not be saved.");
+      setError(e instanceof DeliveryError ? e.message : t.work.editor.error);
       setBusy(false);
     }
   }
 
   return (
-    <form aria-label="Edit consultation" className="card card-pad space-y-2"
+    <form aria-label={t.work.editor.aria} className="card card-pad space-y-2"
       onSubmit={(event) => { event.preventDefault(); void save(); }}>
-      <h3 className="text-sm font-semibold">Edit consultation</h3>
-      <p className="text-xs text-slate-700">Your edits replace the wording only. The source facts and missing information stay attached.</p>
-      <label className="block text-sm font-medium">Summary
-        <textarea rows={8} required value={summary} onChange={(event) => setSummary(event.target.value)} className={field} />
+      <h3 className="text-sm font-semibold">{t.work.editor.heading}</h3>
+      <p className="text-xs text-slate-700">{t.work.editor.help}</p>
+      <label className="block text-sm font-medium">{t.work.editor.summary}
+        <textarea rows={8} required value={summary} onChange={(event) => setSummary(event.target.value)} className={field} dir="auto" />
       </label>
-      <label className="block text-sm font-medium">Assessment
-        <textarea rows={4} value={assessment} onChange={(event) => setAssessment(event.target.value)} className={field} />
+      <label className="block text-sm font-medium">{t.work.editor.assessment}
+        <textarea rows={4} value={assessment} onChange={(event) => setAssessment(event.target.value)} className={field} dir="auto" />
       </label>
-      <label className="block text-sm font-medium">Plan (one item per line)
-        <textarea rows={6} value={plan} onChange={(event) => setPlan(event.target.value)} className={field} />
+      <label className="block text-sm font-medium">{t.work.editor.plan}
+        <textarea rows={6} value={plan} onChange={(event) => setPlan(event.target.value)} className={field} dir="auto" />
       </label>
       <button type="submit" disabled={busy || !summary.trim() || !draft.version} className="btn btn-primary">
-        {busy ? "Saving…" : "Save edits and return to review"}
+        {busy ? t.work.editor.saving : t.work.editor.save}
       </button>
       {error && <p role="alert" className="text-sm text-red-800">{error}</p>}
     </form>

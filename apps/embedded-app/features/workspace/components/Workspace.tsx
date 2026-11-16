@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useT } from "@/apps/embedded-app/i18n/client";
 import type { DataClassification } from "@/shared/contracts";
@@ -71,14 +71,6 @@ export function Workspace(props: WorkspaceProps) {
       setSwitching(false);
     }
   }
-  // The texts of the three work areas are English only for now. They keep their own direction so they stay readable.
-  const english = (children: ReactNode) => locale === "en" ? children : (
-    <div lang="en" dir="ltr" className="space-y-3">
-      <p lang={locale} dir="rtl" className="text-xs text-slate-700">{t.untranslatedNote}</p>
-      {children}
-    </div>
-  );
-
   return (
     <ToastProvider>
       <div className="flex min-h-dvh w-full flex-col">
@@ -97,18 +89,18 @@ export function Workspace(props: WorkspaceProps) {
               {!props.assistantEnabled ? (
                 <Alert tone="info" title={t.readOnly.title}>{t.readOnly.text}</Alert>
               ) : tab === "scribe" ? (
-                english(<ScribePanel openSessionId={visitId} onOpenSession={setVisitId} />)
+                <ScribePanel openSessionId={visitId} onOpenSession={setVisitId} />
               ) : tab === "consultations" ? (
                 <>
-                  {english(<ConsultationComposer patientId={props.patientId} encounterId={props.encounterId} canReview={props.canReview} canRoute={props.canRoute}
-                    assistant={props.assistant} openDraftId={draftId} onOpenDraft={setDraftId} />)}
+                  <ConsultationComposer patientId={props.patientId} encounterId={props.encounterId} canReview={props.canReview} canRoute={props.canRoute}
+                    assistant={props.assistant} openDraftId={draftId} onOpenDraft={setDraftId} />
                   {!props.canReview && <p className="text-xs text-slate-700">{t.draftsOnly}</p>}
                 </>
-              ) : english(
+              ) : (
                 <>
                   <ScribeHistory onOpen={(id) => { setVisitId(id); setTab("scribe"); }} />
                   <ConsultationHistory onOpen={(id) => { setDraftId(id); setTab("consultations"); }} />
-                </>,
+                </>
               )}
             </div>
           </Tabs>

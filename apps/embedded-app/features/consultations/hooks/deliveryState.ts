@@ -1,31 +1,18 @@
 import { z } from "zod";
-import type { ConsultationClarification, ConsultationDeliveryView, DeliveryFailureCode } from "@/shared/contracts";
+import type { ConsultationClarification, ConsultationDeliveryView } from "@/shared/contracts";
+import { currentLocale, currentMessages } from "@/apps/embedded-app/i18n/client";
+import { messages, type Locale } from "@/apps/embedded-app/i18n/messages";
+import { workEn, type Work } from "@/apps/embedded-app/i18n/work";
 import { apiErrorSchema, chartWriteResultSchema, consultationDeliveryViewSchema, consultationDraftSchema, consultationListSchema, createConsultationResultSchema, eligibleProvidersSchema } from "@/shared/schemas";
 
 export type EligibleProvider = z.infer<typeof eligibleProvidersSchema>[number];
 
-const FAILURE_TEXT: Record<DeliveryFailureCode, string> = {
-  transport_error: "The provider could not be reached. Nothing was delivered. You can retry.",
-  transport_timeout: "The provider did not confirm receipt in time. You can retry; a late reply will still be linked to this consultation.",
-  invalid_acknowledgement: "The provider's confirmation could not be verified. You can retry.",
-  provider_rejected: "The provider declined this consultation. Cancel it and prepare a new consultation for another provider.",
-};
-
-const STATE_TEXT: Partial<Record<ConsultationDeliveryView["status"], string>> = {
-  approved: "Approved. Not sent yet.",
-  queued: "Queued for delivery.",
-  sent: "Delivered to the provider. Waiting for it to accept.",
-  accepted: "Accepted by the provider. Waiting for the specialist's response.",
-  responded: "The specialist has responded.",
-  failed: "Not delivered.",
-  cancelled: "Cancelled.",
-};
-
 /** One plain sentence describing where the consultation is, plus what the clinician can do about a failure. */
-export function describeDelivery(view: ConsultationDeliveryView): { state: string; problem?: string } {
+export function describeDelivery(view: ConsultationDeliveryView, texts: Work["delivery"] = workEn.delivery): { state: string; problem?: string } {
   const latest = view.attempts[0];
-  const problem = view.status === "failed" && latest?.failureCode ? FAILURE_TEXT[latest.failureCode] : undefined;
-  return { state: STATE_TEXT[view.status] ?? "Awaiting physician approval.", problem };
+  const problem = view.status === "failed" && latest?.failureCode ? texts.failure[latest.failureCode] : undefined;
+  const known = texts.state as Record<string, string>;
+  return { state: view.status !== ("fallback" as string) && known[view.status] ? known[view.status] : texts.state.fallback, problem };
 }
 
 /** Whether the panel should keep checking for a provider update. */
@@ -34,20 +21,25 @@ export function awaitingProvider(view: ConsultationDeliveryView | null | undefin
 }
 
 export class DeliveryError extends Error {}
-/** A failure in words a clinician can act on: what happened and what to do next. */
-export function describeFailure(status: number, error?: { code: string; message: string; requestId?: string }): string {
+/**
+ * A failure in words a clinician can act on: what happened and what to do next. In English the server's own
+ * explanation is used where it has one; in another language the text for the case, because the server writes English.
+ */
+export function describeFailure(status: number, error?: { code: string; message: string; requestId?: string }, locale: Locale = currentLocale()): string {
+  const t = messages[locale].work.failures;
   // A failure on the server's side carries the reference of its log line.
-  return `${failureText(status, error)}${error?.requestId ? ` Reference for your administrator: ${error.requestId}` : ""}`;
+  return `${failureText(status, t, locale === "en", error)}${error?.requestId ? ` ${t.reference(error.requestId)}` : ""}`;
 }
-function failureText(status: number, error?: { code: string; message: string }): string {
-  if (status === 401) return "Your session has ended. Reopen StethoLink from the patient's chart in the EHR.";
-  if (status === 503) return "The assistant is not available right now. Nothing was saved or sent. Wait a minute and try again; if it keeps failing, tell your StethoLink administrator.";
-  if (status === 501) return error?.message && !/not configured|not implemented/i.test(error.message) ? error.message : "This is not set up for your hospital yet. Ask your StethoLink administrator.";
-  if (status === 409) return "This consultation changed while you were working. Reload it and try again.";
-  if (status === 403) return error?.message ?? "You do not have permission for this action.";
-  if (status === 422 && error?.code === "safety_blocked") return "The result did not pass the safety checks and was not shown. Try again, or reword your request.";
-  if (status >= 500) return "Something went wrong on the server. Nothing was changed. Try again.";
-  return error?.message ?? "The request failed. Try again.";
+function failureText(status: number, t: Work["failures"], english: boolean, error?: { code: string; message: string }): string {
+  const server = english ? error?.message : undefined;
+  if (status === 401) return t.sessionEnded;
+  if (status === 503) return t.unavailable;
+  if (status === 501) return server && !/not configured|not implemented/i.test(server) ? server : t.notSetUp;
+  if (status === 409) return t.changed;
+  if (status === 403) return server ?? t.noPermission;
+  if (status === 422 && error?.code === "safety_blocked") return t.safety;
+  if (status >= 500) return t.server;
+  return server ?? t.generic;
 }
 
 /** Thrown when the clinician stops waiting. The server may still finish; the same idempotency key then returns its result. */
@@ -58,8 +50,8 @@ export async function call<T>(schema: z.ZodType<T>, url: string, body?: unknown,
     headers: body === undefined ? undefined : { "Content-Type": "application/json" },
     body: body === undefined ? undefined : JSON.stringify(body),
   }).catch(() => {
-    if (signal?.aborted) throw new CancelledError("Stopped. Nothing was changed on this screen.");
-    throw new DeliveryError("The server could not be reached. Check your connection and try again.");
+    if (signal?.aborted) throw new CancelledError(currentMessages().work.failures.stopped);
+    throw new DeliveryError(currentMessages().work.failures.unreachable);
   });
   const json: unknown = await response.json().catch(() => null);
   if (!response.ok) {
@@ -67,7 +59,7 @@ export async function call<T>(schema: z.ZodType<T>, url: string, body?: unknown,
     throw new DeliveryError(describeFailure(response.status, error.success ? error.data.error : undefined));
   }
   const parsed = schema.safeParse(json);
-  if (!parsed.success) throw new DeliveryError("The server returned an unexpected response.");
+  if (!parsed.success) throw new DeliveryError(currentMessages().work.failures.unexpected);
   return parsed.data;
 }
 

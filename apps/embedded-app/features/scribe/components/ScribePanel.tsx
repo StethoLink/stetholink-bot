@@ -3,25 +3,20 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { ScribeCapabilities, ScribeSessionView } from "@/shared/contracts";
 import { Alert, Badge, Button, Card, CardHeader, ConfirmDialog, EmptyState, Skeleton, WorkInProgress, useToast } from "@/apps/embedded-app/components/ui";
 import { CancelledError, DeliveryError } from "@/apps/embedded-app/features/consultations/hooks/deliveryState";
+import { useT } from "@/apps/embedded-app/i18n/client";
 import { scribeApi } from "../hooks/scribeApi";
-import { useRecorder, type MicrophoneProblem, type RecordedChunk } from "../hooks/useRecorder";
+import { useRecorder, type RecordedChunk } from "../hooks/useRecorder";
 import { ScribeReview } from "./ScribeReview";
 
-const PROBLEM: Record<MicrophoneProblem, { title: string; text: string }> = {
-  blocked_by_frame: { title: "The microphone is not allowed inside the EHR window", text: "Your EHR has not given this panel access to the microphone, so a visit cannot be recorded here. Ask your EHR administrator to allow the microphone for StethoLink's frame. The rest of StethoLink works as usual." },
-  denied: { title: "The microphone was not allowed", text: "Allow microphone access for this site in your browser's address bar, then start again." },
-  no_device: { title: "No microphone was found", text: "Connect a microphone, then start again." },
-  unsupported: { title: "This browser cannot record", text: "Use a current version of Chrome or Edge to record a visit." },
-};
 const clock = (ms: number) => `${String(Math.floor(ms / 60_000)).padStart(2, "0")}:${String(Math.floor(ms / 1000) % 60).padStart(2, "0")}`;
-const STEPS = ["Reading the transcript", "Writing the note", "Checking every statement against the words of the visit", "Comparing new information with the chart"];
-
 /**
  * Records a visit and turns it into a note for the physician to review. Recording starts only
  * after the clinician confirms that the patient agreed, and a clear indicator stays on while it runs.
  */
 export function ScribePanel({ openSessionId, onOpenSession }: { openSessionId?: string; onOpenSession?(id: string | undefined): void }) {
   const notify = useToast();
+  const { t } = useT();
+  const w = t.work.scribe;
   const [capabilities, setCapabilities] = useState<ScribeCapabilities>();
   const [loadError, setLoadError] = useState("");
   const [session, setSession] = useState<ScribeSessionView>();
@@ -49,28 +44,28 @@ export function ScribePanel({ openSessionId, onOpenSession }: { openSessionId?: 
         } catch (e) {
           if ((e as { final?: boolean }).final || attempt === 3) {
             setUploads((u) => ({ ...u, pending: u.pending - 1, failed: u.failed + 1 }));
-            setError(e instanceof DeliveryError ? e.message : "A part of the recording could not be sent.");
+            setError(e instanceof DeliveryError ? e.message : w.errors.chunk);
             return;
           }
           await new Promise((resolve) => setTimeout(resolve, 800 * 2 ** attempt));
         }
       }
     });
-  }, []);
+  }, [w.errors.chunk]);
   const recorder = useRecorder(onChunk);
 
   useEffect(() => {
     let active = true;
-    scribeApi.capabilities().then((value) => active && setCapabilities(value)).catch((e) => active && setLoadError(e instanceof DeliveryError ? e.message : "The scribe could not be loaded."));
+    scribeApi.capabilities().then((value) => active && setCapabilities(value)).catch((e) => active && setLoadError(e instanceof DeliveryError ? e.message : w.loadError));
     return () => { active = false; };
-  }, []);
+  }, [w.loadError]);
   // Reopening a visit from History.
   useEffect(() => {
     if (!openSessionId || openSessionId === sessionId.current) return;
     let active = true;
-    scribeApi.get(openSessionId).then((value) => { if (active) { sessionId.current = value.id; setSession(value); } }).catch((e) => active && setError(e instanceof DeliveryError ? e.message : "The visit could not be opened."));
+    scribeApi.get(openSessionId).then((value) => { if (active) { sessionId.current = value.id; setSession(value); } }).catch((e) => active && setError(e instanceof DeliveryError ? e.message : w.errors.open));
     return () => { active = false; };
-  }, [openSessionId]);
+  }, [openSessionId, w.errors.open]);
 
   async function begin() {
     setBusy("starting");
@@ -84,7 +79,7 @@ export function ScribePanel({ openSessionId, onOpenSession }: { openSessionId?: 
       else { await scribeApi.discard(started.id).catch(() => undefined); sessionId.current = undefined; setConsentOpen(false); }
       startKey.current = undefined;
     } catch (e) {
-      setError(e instanceof DeliveryError ? e.message : "The recording could not be started.");
+      setError(e instanceof DeliveryError ? e.message : w.errors.start);
       setConsentOpen(false);
     } finally { setBusy(undefined); }
   }
@@ -103,7 +98,7 @@ export function ScribePanel({ openSessionId, onOpenSession }: { openSessionId?: 
       setSession(view);
       onOpenSession?.(id);
     } catch (e) {
-      if (!(e instanceof CancelledError)) setError(e instanceof DeliveryError ? e.message : "The note could not be written. Try again.");
+      if (!(e instanceof CancelledError)) setError(e instanceof DeliveryError ? e.message : w.errors.note);
       await scribeApi.get(id).then(setSession).catch(() => undefined);
     } finally { setBusy(undefined); }
   }
@@ -111,7 +106,7 @@ export function ScribePanel({ openSessionId, onOpenSession }: { openSessionId?: 
     const id = sessionId.current;
     if (!id) return;
     if (recorder.state.phase === "recording" || recorder.state.phase === "paused") recorder.stop();
-    await scribeApi.discard(id).then(() => notify("The recording and its transcript were deleted.", "info")).catch((e) => setError(e instanceof DeliveryError ? e.message : "The visit could not be discarded."));
+    await scribeApi.discard(id).then(() => notify(w.deleted, "info")).catch((e) => setError(e instanceof DeliveryError ? e.message : w.errors.discard));
     sessionId.current = undefined;
     setSession(undefined);
     onOpenSession?.(undefined);
@@ -119,68 +114,66 @@ export function ScribePanel({ openSessionId, onOpenSession }: { openSessionId?: 
   function reset() { sessionId.current = undefined; setSession(undefined); setError(""); onOpenSession?.(undefined); }
 
   if (loadError) return <Alert tone="danger">{loadError}</Alert>;
-  if (!capabilities) return <Card><Skeleton label="Loading the scribe" lines={3} /></Card>;
-  if (!capabilities.enabled) return <EmptyState title="Scribe is not switched on">{capabilities.reason ?? "Recording a visit is not set up for this hospital yet."}</EmptyState>;
+  if (!capabilities) return <Card><Skeleton label={w.loading} lines={3} /></Card>;
+  if (!capabilities.enabled) return <EmptyState title={w.offTitle}>{capabilities.reason ?? w.offFallback}</EmptyState>;
 
   const live = recorder.state.phase === "recording" || recorder.state.phase === "paused";
-  const problem = recorder.state.problem ? PROBLEM[recorder.state.problem] : undefined;
+  const problem = recorder.state.problem ? w.problems[recorder.state.problem] : undefined;
   const nearLimit = recorder.state.elapsedMs > (capabilities.maxMinutes - 2) * 60_000;
 
   if (session && !live && busy !== "generating" && session.status !== "recording") {
     return <ScribeReview session={session} canApprove={capabilities.canApprove} onChange={setSession} onDiscard={() => void discard()} onNew={reset} />;
   }
   return (
-    <Card aria-label="Visit scribe" className="space-y-3">
-      <CardHeader title="Visit scribe" description={`Records the visit, then drafts a note for you to review. Spoken language: ${capabilities.spokenLanguage}. Note language: ${capabilities.noteLanguage === "ar" ? "Arabic" : "English"}.`} />
+    <Card aria-label={w.title} className="space-y-3">
+      <CardHeader title={w.title} description={w.description(capabilities.spokenLanguage, w.languageName[capabilities.noteLanguage === "ar" ? "ar" : "en"])} />
       {problem && (
         <Alert tone="danger" title={problem.title}>{problem.text}</Alert>
       )}
       {busy === "generating" ? (
-        <WorkInProgress label="Writing the note from the visit" steps={STEPS} expectedSeconds={40} onCancel={() => abort.current?.abort()} />
+        <WorkInProgress label={w.working} steps={w.steps} expectedSeconds={40} onCancel={() => abort.current?.abort()} />
       ) : live ? (
         <div className="space-y-3">
           <div role="status" aria-live="polite" className={`flex flex-wrap items-center gap-3 rounded-md border p-3 ${recorder.state.phase === "recording" ? "border-red-700 bg-red-50" : "border-slate-400 bg-slate-50"}`}>
             <span aria-hidden="true" className={`size-3 rounded-full ${recorder.state.phase === "recording" ? "animate-pulse bg-red-700" : "bg-slate-500"}`} />
-            <span className="text-sm font-semibold text-slate-900">{recorder.state.phase === "recording" ? "Recording" : "Paused. Not recording"}</span>
-            <span className="text-sm tabular-nums text-slate-800" aria-label="Recorded time">{clock(recorder.state.elapsedMs)}</span>
+            <span className="text-sm font-semibold text-slate-900">{recorder.state.phase === "recording" ? w.recording : w.paused}</span>
+            <span className="text-sm tabular-nums text-slate-800" aria-label={w.recordedTime}>{clock(recorder.state.elapsedMs)}</span>
             <span aria-hidden="true" className="h-1.5 w-20 overflow-hidden rounded-full bg-slate-200"><span className="block h-full bg-red-700" style={{ width: `${Math.round(recorder.state.level * 100)}%` }} /></span>
           </div>
           <div className="flex flex-wrap gap-2">
-            {recorder.state.phase === "recording" ? <Button onClick={recorder.pause}>Pause</Button> : <Button onClick={recorder.resume}>Resume</Button>}
-            <Button variant="primary" onClick={() => void finish()}>End visit and write note</Button>
-            <Button variant="ghost" onClick={() => void discard()}>Discard recording</Button>
+            {recorder.state.phase === "recording" ? <Button onClick={recorder.pause}>{w.pause}</Button> : <Button onClick={recorder.resume}>{w.resume}</Button>}
+            <Button variant="primary" onClick={() => void finish()}>{w.endVisit}</Button>
+            <Button variant="ghost" onClick={() => void discard()}>{w.discardRecording}</Button>
           </div>
           <p className="text-xs text-slate-700">
-            {uploads.sent} part{uploads.sent === 1 ? "" : "s"} transcribed{uploads.pending ? `, ${uploads.pending} being sent` : ""}{uploads.failed ? `, ${uploads.failed} could not be sent` : ""}.
-            {" "}The audio is not kept: each part is turned into text and dropped.
+            {w.uploads(uploads.sent, uploads.pending, uploads.failed)}
+            {" "}{w.audioNotKept}
           </p>
-          {nearLimit && <Alert tone="warning">Recording stops being accepted at {capabilities.maxMinutes} minutes. End the visit to write the note.</Alert>}
+          {nearLimit && <Alert tone="warning">{w.nearLimit(capabilities.maxMinutes)}</Alert>}
         </div>
       ) : (
         <div className="space-y-2">
-          <Button variant="primary" onClick={() => { setAgreed(false); setError(""); setConsentOpen(true); }}>Start recording</Button>
+          <Button variant="primary" onClick={() => { setAgreed(false); setError(""); setConsentOpen(true); }}>{w.start}</Button>
           <ul className="list-disc space-y-0.5 ps-5 text-xs text-slate-700">
-            <li>You confirm the patient&apos;s agreement before anything is recorded.</li>
-            <li>The audio is never stored. The transcript is deleted when the note is in the chart, or after {capabilities.transcriptRetentionDays} days.</li>
-            <li>The note is a draft. Nothing reaches the chart until the physician approves it.</li>
+            <li>{w.bullet1}</li>
+            <li>{w.bullet2(capabilities.transcriptRetentionDays)}</li>
+            <li>{w.bullet3}</li>
           </ul>
-          {session?.status === "recording" && <Alert tone="info" action={<Button size="sm" onClick={() => void finish()}>Write the note from what was recorded</Button>}>A recording of this visit was interrupted.</Alert>}
+          {session?.status === "recording" && <Alert tone="info" action={<Button size="sm" onClick={() => void finish()}>{w.writeFromRecorded}</Button>}>{w.interrupted}</Alert>}
         </div>
       )}
       {error && <Alert tone="danger">{error}</Alert>}
-      <ConfirmDialog open={consentOpen} onClose={() => setConsentOpen(false)} onConfirm={() => void begin()} title="Before you record" confirmLabel="Start recording" busy={busy === "starting"} canConfirm={agreed}>
-        <p>Tell the patient that the visit will be recorded to write the clinical note, and ask whether they agree.</p>
+      <ConfirmDialog open={consentOpen} onClose={() => setConsentOpen(false)} onConfirm={() => void begin()} title={w.consentTitle} confirmLabel={w.start} busy={busy === "starting"} canConfirm={agreed}>
+        <p>{w.consentIntro}</p>
         <label className="flex items-start gap-2 rounded-md border border-slate-300 p-2.5">
           <input type="checkbox" className="mt-0.5 size-4" checked={agreed} onChange={(event) => setAgreed(event.target.checked)} />
-          <span className="font-medium">The patient agreed verbally to this visit being recorded.</span>
+          <span className="font-medium">{w.consentCheck}</span>
         </label>
         <ul className="list-disc space-y-0.5 ps-5 text-slate-800">
-          <li>Your confirmation is saved with the visit, with the time and your name.</li>
-          <li>A red &quot;Recording&quot; indicator stays visible. You can pause or stop at any time.</li>
-          <li>If the patient does not agree, do not record. Close this window.</li>
+          {w.consentBullets.map((line) => <li key={line}>{line}</li>)}
         </ul>
       </ConfirmDialog>
-      {session && <p className="text-xs text-slate-600"><Badge tone="neutral">Visit in progress</Badge></p>}
+      {session && <p className="text-xs text-slate-600"><Badge tone="neutral">{w.inProgress}</Badge></p>}
     </Card>
   );
 }

@@ -3,14 +3,17 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { ChartWriteResult, ConsultationDeliveryView } from "@/shared/contracts";
 import { Alert, Badge, Button, ConfirmDialog } from "@/apps/embedded-app/components/ui";
+import { useT } from "@/apps/embedded-app/i18n/client";
+import { formatDateTime } from "@/apps/embedded-app/i18n/format";
 import { awaitingProvider, deliveryApi, DeliveryError, describeDelivery } from "../hooks/deliveryState";
-
-const when = (iso: string) => new Date(iso).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
 
 /** Delivery to the approved destination, its state and the specialist's reply. */
 export function ConsultationDelivery({ draftId, canRoute, onChanged, onView }: {
   draftId: string; canRoute: boolean; onChanged?: () => void; onView?: (view: ConsultationDeliveryView | null) => void;
 }) {
+  const { t, locale } = useT();
+  const d = t.work.delivery;
+  const when = (iso: string) => formatDateTime(iso, locale);
   const [view, setView] = useState<ConsultationDeliveryView | null>();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -24,7 +27,7 @@ export function ConsultationDelivery({ draftId, canRoute, onChanged, onView }: {
     setChartBusy(true);
     setError("");
     try { setChart(await deliveryApi.writeToChart(draftId, chart.filter((entry) => entry.status !== "created" && entry.status !== "existing").map((entry) => entry.item as "consultation" | "report"))); }
-    catch (e) { setError(e instanceof DeliveryError ? e.message : "The chart could not be updated. Try again."); }
+    catch (e) { setError(e instanceof DeliveryError ? e.message : d.errors.chart); }
     finally { setChartBusy(false); setCharting(false); }
   }
   // One key per send intent: a retry after a network failure cannot create a second request.
@@ -43,9 +46,9 @@ export function ConsultationDelivery({ draftId, canRoute, onChanged, onView }: {
       apply(await deliveryApi.view(draftId));
       setError("");
     } catch (e) {
-      setError(e instanceof DeliveryError ? e.message : "Delivery status is unavailable.");
+      setError(e instanceof DeliveryError ? e.message : d.errors.status);
     }
-  }, [apply, draftId]);
+  }, [apply, draftId, d.errors.status]);
 
   useEffect(() => { void refresh(); }, [refresh]);
 
@@ -63,7 +66,7 @@ export function ConsultationDelivery({ draftId, canRoute, onChanged, onView }: {
       apply(await action());
       sendKey.current = undefined;
     } catch (e) {
-      setError(e instanceof DeliveryError ? e.message : "The action failed. Try again.");
+      setError(e instanceof DeliveryError ? e.message : d.errors.action);
       await refresh();
     } finally {
       setBusy(false);
@@ -71,59 +74,57 @@ export function ConsultationDelivery({ draftId, canRoute, onChanged, onView }: {
     }
   }
 
-  if (view === undefined) return <p className="text-sm text-slate-700" aria-busy="true">Loading delivery status…</p>;
-  if (view === null) return <p className="text-sm text-slate-700" role="status">Delivery is not available in this environment (no durable storage configured).</p>;
+  if (view === undefined) return <p className="text-sm text-slate-700" aria-busy="true">{d.loading}</p>;
+  if (view === null) return <p className="text-sm text-slate-700" role="status">{d.unavailable}</p>;
 
-  const { state, problem } = describeDelivery(view);
+  const { state, problem } = describeDelivery(view, d);
   const target = view.provider?.id ?? "";
   const send = () => run(() => deliveryApi.send(draftId, {
     providerId: target, expectedVersion: view.version, idempotencyKey: sendKey.current ??= crypto.randomUUID(),
   }));
 
   return (
-    <section aria-label="Routing and specialist response" className="card card-pad space-y-3">
-      <h3 className="text-sm font-semibold">Routing and specialist response</h3>
+    <section aria-label={d.heading} className="card card-pad space-y-3">
+      <h3 className="text-sm font-semibold">{d.heading}</h3>
       <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-sm">
-        <dt className="font-medium">Delivery state</dt>
+        <dt className="font-medium">{d.deliveryState}</dt>
         <dd role="status">{state}</dd>
-        <dt className="font-medium">Recipient</dt>
+        <dt className="font-medium">{d.recipient}</dt>
         <dd>
-          {view.provider ? view.provider.displayName : "Not approved yet"}
+          {view.provider ? <bdi>{view.provider.displayName}</bdi> : d.notApprovedYet}
         </dd>
       </dl>
 
       {problem && <p role="alert" className="alert alert-danger">{problem}</p>}
 
       {(view.canSend || view.canRetry) && !canRoute && (
-        <p role="status" className="text-sm text-slate-700">Only a physician with routing permission can send this consultation.</p>
+        <p role="status" className="text-sm text-slate-700">{d.onlyPhysician}</p>
       )}
       {(view.canSend || view.canRetry) && canRoute && (
         <Button variant="primary" disabled={busy || !target} onClick={() => setConfirming(true)}>
-          {view.canRetry ? "Retry delivery to the same provider" : "Send approved consultation"}
+          {view.canRetry ? d.retry : d.send}
         </Button>
       )}
       <ConfirmDialog open={confirming} onClose={() => setConfirming(false)} onConfirm={() => void send()} busy={busy}
-        title={`Send to ${view.provider?.displayName ?? "the approved provider"}?`} confirmLabel="Send now">
-        <p className="font-medium">What the specialist receives</p>
+        title={d.sendTitle(view.provider?.displayName ?? d.theApprovedProvider)} confirmLabel={d.sendNow}>
+        <p className="font-medium">{d.receivesHeading}</p>
         <ul className="list-disc space-y-0.5 ps-5 text-slate-800">
-          <li>The approved consultation text, exactly as you approved it.</li>
-          <li>The patient&apos;s age and sex, and the chart facts the text cites.</li>
+          {d.receives.map((line) => <li key={line}>{line}</li>)}
         </ul>
-        <p className="font-medium">What is not sent</p>
+        <p className="font-medium">{d.notSentHeading}</p>
         <ul className="list-disc space-y-0.5 ps-5 text-slate-800">
-          <li>The patient&apos;s name, birth date and record numbers.</li>
-          <li>Chart facts the consultation does not cite.</li>
+          {d.notSent.map((line) => <li key={line}>{line}</li>)}
         </ul>
-        <p className="text-xs text-slate-700">Sending cannot be undone. Pressing the button twice never sends twice.</p>
+        <p className="text-xs text-slate-700">{d.sendWarning}</p>
       </ConfirmDialog>
 
       {view.attempts.length > 0 && (
         <div>
-          <h4 className="text-sm font-medium">Request history</h4>
+          <h4 className="text-sm font-medium">{d.history}</h4>
           <ol className="text-sm">
             {[...view.attempts].reverse().map((attempt) => (
               <li key={attempt.requestId}>
-                Attempt {attempt.number}: {attempt.status} · {when(attempt.updatedAt)} · request {attempt.requestId.slice(0, 8)}
+                {d.attempt(attempt.number, d.attemptStatus[attempt.status], when(attempt.updatedAt), attempt.requestId.slice(0, 8))}
               </li>
             ))}
           </ol>
@@ -131,20 +132,19 @@ export function ConsultationDelivery({ draftId, canRoute, onChanged, onView }: {
       )}
 
       {view.responses.filter((response) => response.kind === "rejected").map((response) => (
-        <p key={response.responseId} className="text-sm">Provider declined: {response.reason ?? "no reason given"}</p>
+        <p key={response.responseId} className="text-sm" dir="auto">{d.declined(response.reason ?? d.noReason)}</p>
       ))}
 
       {view.report?.report && (
-        <article aria-label="Specialist response" className="alert alert-success space-y-2">
-          <h4 className="font-semibold">Specialist response</h4>
+        <article aria-label={d.responseHeading} className="alert alert-success space-y-2">
+          <h4 className="font-semibold">{d.responseHeading}</h4>
           <p className="text-xs text-slate-700">
-            From {view.report.report.responder} via {view.provider?.displayName ?? view.report.providerId} · received {when(view.report.receivedAt)}
-            {" "}· request {view.report.requestId.slice(0, 8)}
+            {d.from(view.report.report.responder, view.provider?.displayName ?? view.report.providerId, when(view.report.receivedAt), view.report.requestId.slice(0, 8))}
           </p>
-          <p className="whitespace-pre-wrap">{view.report.report.summary}</p>
+          <p className="whitespace-pre-wrap" dir="auto">{view.report.report.summary}</p>
           {view.report.report.recommendations.length > 0 && (
             <ul className="list-disc ps-5">
-              {view.report.report.recommendations.map((item, index) => <li key={index}>{item}</li>)}
+              {view.report.report.recommendations.map((item, index) => <li key={index} dir="auto">{item}</li>)}
             </ul>
           )}
         </article>
@@ -152,39 +152,39 @@ export function ConsultationDelivery({ draftId, canRoute, onChanged, onView }: {
 
       <div className="flex flex-wrap gap-2">
         {view.attempts.length > 0 && (
-          <Button disabled={busy} onClick={() => void refresh()}>Refresh status</Button>
+          <Button disabled={busy} onClick={() => void refresh()}>{d.refresh}</Button>
         )}
       </div>
       {chart.length > 0 && (
-        <div className="space-y-2 border-t border-slate-200 pt-3" role="group" aria-label="Patient chart">
-          <h4 className="text-sm font-medium">In the patient&apos;s chart</h4>
+        <div className="space-y-2 border-t border-slate-200 pt-3" role="group" aria-label={d.chartGroup}>
+          <h4 className="text-sm font-medium">{d.chartHeading}</h4>
           <ul className="space-y-1.5">
             {chart.map((entry) => {
               const done = entry.status === "created" || entry.status === "existing";
               return (
                 <li key={entry.itemKey} className="flex flex-wrap items-center gap-2 text-sm">
-                  <span>{entry.item === "report" ? "Specialist reply" : "Consultation request"}</span>
-                  {done ? <Badge tone="success" dot>In the chart</Badge> : entry.status === "pending" ? <Badge tone="neutral" dot>Not written yet</Badge>
-                    : <Badge tone={entry.status === "failed" ? "danger" : "warning"} dot>Not written: copy it</Badge>}
-                  {!done && entry.status !== "pending" && entry.copyText && <Button size="sm" onClick={() => void navigator.clipboard.writeText(entry.copyText!)}>Copy to chart</Button>}
-                  {entry.failure && <span className="w-full text-xs text-slate-700">{entry.failure}.</span>}
+                  <span>{entry.item === "report" ? d.items.report : d.items.consultation}</span>
+                  {done ? <Badge tone="success" dot>{d.inChart}</Badge> : entry.status === "pending" ? <Badge tone="neutral" dot>{d.notWrittenYet}</Badge>
+                    : <Badge tone={entry.status === "failed" ? "danger" : "warning"} dot>{d.notWrittenCopy}</Badge>}
+                  {!done && entry.status !== "pending" && entry.copyText && <Button size="sm" onClick={() => void navigator.clipboard.writeText(entry.copyText!)}>{d.copyToChart}</Button>}
+                  {entry.failure && <span className="w-full text-xs text-slate-700" dir="auto">{entry.failure}.</span>}
                 </li>
               );
             })}
           </ul>
           {canRoute && chart.some((entry) => entry.status !== "created" && entry.status !== "existing") && (
-            <Button disabled={chartBusy} onClick={() => setCharting(true)}>Write to chart</Button>
+            <Button disabled={chartBusy} onClick={() => setCharting(true)}>{d.writeToChart}</Button>
           )}
-          <ConfirmDialog open={charting} onClose={() => setCharting(false)} onConfirm={() => void writeChart()} busy={chartBusy} title="Write to the patient's chart?" confirmLabel="Write to chart">
-            <p className="font-medium">This is added to the chart in the EHR, as clinical notes for this visit under your name:</p>
+          <ConfirmDialog open={charting} onClose={() => setCharting(false)} onConfirm={() => void writeChart()} busy={chartBusy} title={d.writeTitle} confirmLabel={d.writeConfirm}>
+            <p className="font-medium">{d.writeIntro}</p>
             <ul className="list-disc space-y-0.5 ps-5 text-slate-800">
-              {chart.filter((entry) => entry.status !== "created" && entry.status !== "existing").map((entry) => <li key={entry.itemKey}>{entry.item === "report" ? "The specialist's reply, as received" : "The consultation request you approved"}</li>)}
+              {chart.filter((entry) => entry.status !== "created" && entry.status !== "existing").map((entry) => <li key={entry.itemKey}>{entry.item === "report" ? d.writeItems.report : d.writeItems.consultation}</li>)}
             </ul>
-            <p className="text-xs text-slate-700">Nothing already in the chart is changed. Each note is written once. If the EHR does not accept a note, you get its text to copy.</p>
+            <p className="text-xs text-slate-700">{d.writeNote}</p>
           </ConfirmDialog>
         </div>
       )}
-      {error && <Alert tone="danger">{error}</Alert>}
+      {error && <Alert tone="danger"><span dir="auto">{error}</span></Alert>}
     </section>
   );
 }

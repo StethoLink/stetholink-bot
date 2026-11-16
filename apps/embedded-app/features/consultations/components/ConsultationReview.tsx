@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import type { StethoLinkApiClient } from "@/shared/api-client";
 import type { ConsultationDeliveryView } from "@/shared/contracts";
+import { useT } from "@/apps/embedded-app/i18n/client";
 import { useConsultationDraft } from "../hooks/useConsultationDraft";
 import { deliveryApi, type EligibleProvider } from "../hooks/deliveryState";
 import { ConsultationDelivery } from "./ConsultationDelivery";
@@ -21,6 +22,7 @@ export function ConsultationReview({ draftId, client, canReview = false, canRout
   canReview?: boolean;
   canRoute?: boolean;
 }) {
+  const { t } = useT();
   const { state, reload, refresh, decide } = useConsultationDraft(draftId, { client });
   const [destinations, setDestinations] = useState<EligibleProvider[]>();
   const [delivery, setDelivery] = useState<ConsultationDeliveryView | null>();
@@ -35,9 +37,9 @@ export function ConsultationReview({ draftId, client, canReview = false, canRout
   }, [canReview, pending, draftId]);
 
   return (
-    <section aria-label="Consultation review" className="card card-pad">
+    <section aria-label={t.work.review.sectionLabel} className="card card-pad">
       {(state.status === "idle" || state.status === "loading") && (
-        <div role="status" aria-busy="true" aria-label="Loading consultation draft" className="space-y-3">
+        <div role="status" aria-busy="true" aria-label={t.work.review.loading} className="space-y-3">
           <div className="skeleton h-5 w-1/3" />
           <div className="skeleton h-16" />
           <div className="skeleton h-16" />
@@ -45,9 +47,9 @@ export function ConsultationReview({ draftId, client, canReview = false, canRout
       )}
       {state.status === "error" && (
         <div role="alert" className="space-y-2">
-          <p className="text-sm text-red-800">{state.error}</p>
+          <p className="text-sm text-red-800" dir="auto">{state.error}</p>
           <button type="button" onClick={reload} className="btn btn-secondary btn-sm">
-            Retry
+            {t.common.retry}
           </button>
         </div>
       )}
@@ -74,7 +76,7 @@ export function ConsultationReview({ draftId, client, canReview = false, canRout
               onDecide={(decision, recipientId) => void decide(decision, recipientId)}
             />
           ) : pending && (
-            <p role="status" className="text-sm text-slate-700">A physician must review this draft before it can be sent.</p>
+            <p role="status" className="text-sm text-slate-700">{t.work.review.mustReview}</p>
           )}
         </div>
       )}

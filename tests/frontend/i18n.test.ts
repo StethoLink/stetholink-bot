@@ -27,7 +27,7 @@ describe("interface languages", () => {
   });
 
   it("writes every Arabic text in Arabic, except product names and key names", () => {
-    const allowed = /^(appName|language\.other|shortcuts\.items\[\d\]\[0\])$/;
+    const allowed = /^(appName|language\.other|shortcuts\.items\[\d\]\[0\]|work\.composer\.ctrlEnter)$/;
     expect(leaves(ar).filter(([path, text]) => !allowed.test(path) && !ARABIC.test(text)).map(([path]) => path)).toEqual([]);
     expect(leaves(en).filter(([path, text]) => path !== "language.other" && ARABIC.test(text)).map(([path]) => path)).toEqual([]);
   });

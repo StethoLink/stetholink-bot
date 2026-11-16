@@ -1,5 +1,6 @@
 import { ApiClientError, type StethoLinkApiClient } from "@/shared/api-client";
 import type { ApprovalRequest, ConsultationDraft, CreateConsultationDraftRequest } from "@/shared/contracts";
+import { currentLocale, currentMessages } from "@/apps/embedded-app/i18n/client";
 
 export type DraftState =
   | { status: "idle" }
@@ -34,7 +35,13 @@ export function draftReducer(state: DraftState, action: DraftAction): DraftState
 }
 
 /** The server's explanation, with the reference it logged when the failure was on its side. */
-const message = (e: unknown, fallback: string) => (e instanceof ApiClientError ? `${e.message}${e.requestId ? ` (reference ${e.requestId})` : ""}` : fallback);
+const message = (e: unknown, fallback: string) => {
+  if (!(e instanceof ApiClientError)) return fallback;
+  const t = currentMessages();
+  // In English the server's own explanation; in another language the text for the error code, because the server writes English.
+  const text = currentLocale() === "en" ? e.message : t.errors[e.code];
+  return e.requestId ? t.work.failures.withReference(text, e.requestId) : text;
+};
 
 /** True when no further clinician decision can be recorded. */
 export function isFinalStatus(status: ConsultationDraft["status"]): boolean {
@@ -46,7 +53,7 @@ export async function loadDraft(client: StethoLinkApiClient, dispatch: (a: Draft
   try {
     dispatch({ type: "loaded", draft: await client.getConsultationDraft(draftId) });
   } catch (e) {
-    dispatch({ type: "loadFailed", error: message(e, "Could not load the consultation draft.") });
+    dispatch({ type: "loadFailed", error: message(e, currentMessages().work.draftErrors.load) });
   }
 }
 
@@ -59,13 +66,13 @@ export async function createDraft(
   try {
     const result = await client.createConsultationDraft(request);
     if ("outcome" in result) {
-      dispatch({ type: "loadFailed", error: `The assistant has questions before drafting: ${result.concerns.map((entry) => entry.question).join(" ")}` });
+      dispatch({ type: "loadFailed", error: currentMessages().work.draftErrors.questions(result.concerns.map((entry) => entry.question).join(" ")) });
       return undefined;
     }
     dispatch({ type: "loaded", draft: result });
     return result;
   } catch (e) {
-    dispatch({ type: "loadFailed", error: message(e, "Could not generate a consultation draft.") });
+    dispatch({ type: "loadFailed", error: message(e, currentMessages().work.draftErrors.generate) });
     return undefined;
   }
 }
@@ -79,6 +86,6 @@ export async function decideDraft(
   try {
     dispatch({ type: "submitted", draft: await client.submitApproval(args) });
   } catch (e) {
-    dispatch({ type: "submitFailed", error: message(e, "Could not submit your decision.") });
+    dispatch({ type: "submitFailed", error: message(e, currentMessages().work.draftErrors.submit) });
   }
 }

@@ -3,13 +3,10 @@
 import { useEffect, useId, useState } from "react";
 import type { ApprovalDecision, ConsultationStatus } from "@/shared/contracts";
 import { Alert, Button, ConfirmDialog, type ButtonVariant } from "@/apps/embedded-app/components/ui";
+import { useT } from "@/apps/embedded-app/i18n/client";
 import { isFinalStatus } from "../hooks/draftState";
 
-const ACTION_LABEL: Record<ApprovalDecision, string> = { approve: "Approve", reject: "Reject", request_changes: "Edit" };
 const VARIANT: Record<ApprovalDecision, ButtonVariant> = { approve: "success", reject: "danger", request_changes: "secondary" };
-const TITLE: Record<ApprovalDecision, string> = {
-  approve: "Approve this consultation?", reject: "Reject this draft?", request_changes: "Reopen this draft for editing?",
-};
 
 export interface ApprovalControlsProps {
   status: ConsultationStatus;
@@ -24,6 +21,7 @@ export interface ApprovalControlsProps {
 
 /** The physician's decision. Each one is confirmed in a dialog that states exactly what it does. */
 export function ApprovalControls({ status, submitting, error, destinations = [], destinationsLoading = false, onDecide }: ApprovalControlsProps) {
+  const { t } = useT();
   const [pending, setPending] = useState<ApprovalDecision>();
   const [recipient, setRecipient] = useState("");
   const id = useId();
@@ -40,49 +38,46 @@ export function ApprovalControls({ status, submitting, error, destinations = [],
   if (final) {
     return (
       <p className="text-sm text-slate-700" role="status">
-        {status === "rejected" ? "This draft was rejected. No further action is available." : "The physician's decision has been recorded."}
+        {status === "rejected" ? t.work.approval.rejectedFinal : t.work.approval.decided}
       </p>
     );
   }
 
   return (
     <section aria-labelledby={`${id}-title`} className="space-y-2 border-t border-slate-200 pt-3" aria-busy={submitting}>
-      <h3 id={`${id}-title`} className="text-sm font-semibold">Clinician decision</h3>
+      <h3 id={`${id}-title`} className="text-sm font-semibold">{t.work.approval.heading}</h3>
       {!destinationsLoading && destinations.length === 0 && (
-        <Alert tone="warning">No allowed provider offers the requested specialty, so this consultation cannot be approved for sending.</Alert>
+        <Alert tone="warning">{t.work.approval.noProvider}</Alert>
       )}
       <div className="flex flex-wrap gap-2">
-        {(Object.keys(ACTION_LABEL) as ApprovalDecision[]).map((d) => (
+        {(Object.keys(t.work.approval.actions) as ApprovalDecision[]).map((d) => (
           <Button key={d} variant={VARIANT[d]} disabled={submitting || (d === "approve" && destinations.length === 0)} onClick={() => setPending(d)}>
-            {ACTION_LABEL[d]}
+            {t.work.approval.actions[d]}
           </Button>
         ))}
       </div>
-      <ConfirmDialog open={!!pending} onClose={() => setPending(undefined)} title={pending ? TITLE[pending] : ""} variant={pending ? VARIANT[pending] : "primary"}
-        confirmLabel={pending ? `Confirm ${ACTION_LABEL[pending].toLowerCase()}` : "Confirm"} busy={submitting} canConfirm={canConfirm} error={error}
+      <ConfirmDialog open={!!pending} onClose={() => setPending(undefined)} title={pending ? t.work.approval.titles[pending] : ""} variant={pending ? VARIANT[pending] : "primary"}
+        confirmLabel={pending ? t.work.approval.confirm[pending] : t.work.approval.confirmDefault} busy={submitting} canConfirm={canConfirm} error={error}
         onConfirm={() => { if (pending && canConfirm) onDecide(pending, pending === "approve" ? recipient : undefined); }}>
         {pending === "approve" && (
           <>
             <div>
-              <label className="field-label" htmlFor={`${id}-destination`}>Destination</label>
+              <label className="field-label" htmlFor={`${id}-destination`}>{t.work.approval.destination}</label>
               <select id={`${id}-destination`} className="field" value={recipient} required onChange={(e) => setRecipient(e.target.value)}>
-                <option value="">Choose a destination</option>
+                <option value="">{t.work.approval.chooseDestination}</option>
                 {destinations.map((d) => <option key={d.id} value={d.id}>{d.displayName}</option>)}
               </select>
             </div>
             <div>
-              <p className="font-medium">What happens when you confirm</p>
+              <p className="font-medium">{t.work.approval.whatHappens}</p>
               <ul className="mt-1 list-disc space-y-0.5 ps-5 text-slate-800">
-                <li>This version of the consultation is recorded as approved by you.</li>
-                <li>The approved consultation can only be sent to this provider.</li>
-                <li>Nothing is sent yet. Sending is a separate step that you confirm.</li>
-                <li>The wording can no longer be changed. To change it, a new consultation is prepared.</li>
+                {t.work.approval.approveBullets.map((line) => <li key={line}>{line}</li>)}
               </ul>
             </div>
           </>
         )}
-        {pending === "reject" && <p>The draft is closed and marked as rejected by you. Nothing is sent, and it cannot be reopened.</p>}
-        {pending === "request_changes" && <p>The draft reopens so you can edit its text. After you save, it returns to review and must be approved again. Nothing is sent.</p>}
+        {pending === "reject" && <p>{t.work.approval.rejectText}</p>}
+        {pending === "request_changes" && <p>{t.work.approval.changesText}</p>}
       </ConfirmDialog>
       {error && !pending && <Alert tone="danger">{error}</Alert>}
     </section>

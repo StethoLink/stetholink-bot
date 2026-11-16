@@ -1,4 +1,6 @@
+"use client";
 import type { ConsultationStatus, DeliveryAttemptStatus } from "@/shared/contracts";
+import { useT } from "@/apps/embedded-app/i18n/client";
 import { consultationTracker } from "../hooks/statusTracker";
 
 const DOT = {
@@ -10,15 +12,16 @@ const TEXT = { done: "text-slate-800", current: "font-semibold text-sky-900", up
 
 /** Where the consultation is, as recorded by the server. */
 export function StatusTracker({ status, latestAttempt }: { status: ConsultationStatus; latestAttempt?: DeliveryAttemptStatus }) {
-  const tracker = consultationTracker(status, latestAttempt);
+  const { t } = useT();
+  const tracker = consultationTracker(status, latestAttempt, t.work.tracker);
   return (
-    <div aria-label="Consultation progress" className="space-y-2">
+    <div aria-label={t.work.tracker.label} className="space-y-2">
       <ol className="flex flex-wrap gap-x-3 gap-y-1 text-xs">
         {tracker.steps.map((step) => (
           <li key={step.key} aria-current={step.state === "current" ? "step" : undefined} className={`inline-flex items-center gap-1.5 ${TEXT[step.state]}`}>
             <span aria-hidden="true" className={`size-2 rounded-full border ${DOT[step.state]}`} />
             {step.label}
-            <span className="sr-only">: {step.state === "done" ? "completed" : step.state === "current" ? "in progress" : "not yet"}</span>
+            <span className="sr-only">: {t.work.tracker.state[step.state === "done" ? "done" : step.state === "current" ? "current" : "upcoming"]}</span>
           </li>
         ))}
       </ol>

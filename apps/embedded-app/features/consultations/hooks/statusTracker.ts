@@ -1,4 +1,5 @@
 import type { ConsultationStatus, DeliveryAttemptStatus } from "@/shared/contracts";
+import { workEn, type Work } from "@/apps/embedded-app/i18n/work";
 
 export type StepState = "done" | "current" | "upcoming";
 export interface TrackerStep { key: string; label: string; state: StepState }
@@ -8,14 +9,7 @@ export interface Tracker {
   stopped?: { label: string; detail: string };
 }
 
-const STEPS = [
-  { key: "prepared", label: "Prepared" },
-  { key: "approved", label: "Approved" },
-  { key: "sending", label: "Sending" },
-  { key: "delivered", label: "Delivered" },
-  { key: "accepted", label: "Accepted" },
-  { key: "responded", label: "Responded" },
-] as const;
+const STEP_KEYS = ["prepared", "approved", "sending", "delivered", "accepted", "responded"] as const;
 
 // The step each stored status corresponds to.
 const POSITION: Partial<Record<ConsultationStatus, number>> = {
@@ -26,14 +20,14 @@ const POSITION: Partial<Record<ConsultationStatus, number>> = {
  * Progress of a consultation, derived only from the status the server stored and the latest
  * delivery attempt it recorded. Nothing here advances a status.
  */
-export function consultationTracker(status: ConsultationStatus, latestAttempt?: DeliveryAttemptStatus): Tracker {
+export function consultationTracker(status: ConsultationStatus, latestAttempt?: DeliveryAttemptStatus, texts: Work["tracker"] = workEn.tracker): Tracker {
+  const STEPS = STEP_KEYS.map((key) => ({ key, label: texts.steps[key] }));
+  const stoppedText = texts.stopped;
   const terminal: Partial<Record<ConsultationStatus, Tracker["stopped"]>> = {
-    rejected: { label: "Rejected", detail: "The physician rejected this draft. Nothing was sent." },
-    cancelled: { label: "Cancelled", detail: latestAttempt ? "The consultation was cancelled." : "The consultation was cancelled before it was sent." },
-    archived: { label: "Archived", detail: "This consultation is archived." },
-    failed: latestAttempt === "rejected"
-      ? { label: "Declined", detail: "The provider declined this consultation." }
-      : { label: "Not delivered", detail: "The provider did not receive this consultation." },
+    rejected: stoppedText.rejected,
+    cancelled: latestAttempt ? stoppedText.cancelledAfterSend : stoppedText.cancelledBeforeSend,
+    archived: stoppedText.archived,
+    failed: latestAttempt === "rejected" ? stoppedText.declined : stoppedText.notDelivered,
   };
   const stopped = terminal[status];
   if (stopped) {

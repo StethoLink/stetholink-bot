@@ -3,15 +3,15 @@
 import { useRef, useState } from "react";
 import type { ConsultationDraft } from "@/shared/contracts";
 import { Alert, WorkInProgress } from "@/apps/embedded-app/components/ui";
+import { useT } from "@/apps/embedded-app/i18n/client";
 import { CancelledError, deliveryApi, DeliveryError } from "../hooks/deliveryState";
-
-const EXAMPLES = ["Make it shorter and focus on the ECG findings.", "Leave out the medications.", "Lead with the presenting symptoms."];
 
 /**
  * Natural-language revision. The assistant can reword and reselect documented facts; it cannot
  * add facts, and the revised draft always comes back for the physician's decision.
  */
 export function ModelRevision({ draft, onRevised }: { draft: ConsultationDraft; onRevised: () => void }) {
+  const { t } = useT();
   const [instruction, setInstruction] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -35,7 +35,7 @@ export function ModelRevision({ draft, onRevised }: { draft: ConsultationDraft; 
       setDone(true);
       onRevised();
     } catch (e) {
-      setError(e instanceof CancelledError ? "" : e instanceof DeliveryError ? e.message : "The draft could not be revised. Try again.");
+      setError(e instanceof CancelledError ? "" : e instanceof DeliveryError ? e.message : t.work.revision.error);
       onRevised();
     } finally {
       setBusy(false);
@@ -43,23 +43,23 @@ export function ModelRevision({ draft, onRevised }: { draft: ConsultationDraft; 
   }
 
   return (
-    <form aria-label="Ask the assistant to revise" className="space-y-2 rounded-md border border-slate-200 bg-slate-50 p-3"
+    <form aria-label={t.work.revision.aria} className="space-y-2 rounded-md border border-slate-200 bg-slate-50 p-3"
       onSubmit={(event) => { event.preventDefault(); void revise(); }}>
-      <label className="block text-sm font-semibold" htmlFor={`revise-${draft.id}`}>Ask the assistant to revise this draft</label>
+      <label className="block text-sm font-semibold" htmlFor={`revise-${draft.id}`}>{t.work.revision.label}</label>
       <textarea id={`revise-${draft.id}`} rows={2} maxLength={1000} value={instruction} disabled={busy}
-        onChange={(event) => setInstruction(event.target.value)} placeholder="For example: make it shorter and focus on the ECG findings"
+        onChange={(event) => setInstruction(event.target.value)} placeholder={t.work.revision.placeholder}
         onKeyDown={(event) => { if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) { event.preventDefault(); void revise(); } }}
-        className="field" />
+        className="field" dir="auto" />
       <div className="flex flex-wrap gap-1">
-        {EXAMPLES.map((example) => (
+        {t.work.revision.examples.map((example) => (
           <button key={example} type="button" disabled={busy} onClick={() => setInstruction(example)}
             className="rounded-full border border-sky-200 bg-white px-2.5 py-1 text-xs text-sky-900 hover:bg-sky-50 disabled:opacity-50">{example}</button>
         ))}
       </div>
-      <button type="submit" disabled={busy || instruction.trim().length < 3} className="btn btn-primary">Revise draft</button>
-      <p className="text-xs text-slate-700">The assistant can change wording and which documented facts are included. It cannot add facts, and you review the result before anything is sent.</p>
-      {busy && <WorkInProgress label="Rewriting the draft and re-checking every statement against the chart" onCancel={() => abort.current?.abort()} />}
-      {done && <p role="status" className="text-sm text-emerald-800">Draft revised. Review the new version below.</p>}
+      <button type="submit" disabled={busy || instruction.trim().length < 3} className="btn btn-primary">{t.work.revision.button}</button>
+      <p className="text-xs text-slate-700">{t.work.revision.note}</p>
+      {busy && <WorkInProgress label={t.work.revision.busy} onCancel={() => abort.current?.abort()} />}
+      {done && <p role="status" className="text-sm text-emerald-800">{t.work.revision.done}</p>}
       {error && <Alert tone="danger">{error}</Alert>}
     </form>
   );

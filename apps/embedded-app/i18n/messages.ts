@@ -1,4 +1,5 @@
 import type { ApiErrorCode } from "@/shared/contracts";
+import { workAr, workEn } from "./work";
 
 /**
  * Interface texts, English and Arabic. `ar` must have every key of `en` (the type enforces it).
@@ -43,8 +44,6 @@ export const en = {
   draftsOnly: "This session can prepare drafts only. Approving and sending need a verified physician session.",
   footer: "StethoLink prepares drafts. A clinician decides.",
   language: { label: "Interface language", other: "العربية" },
-  /** Screens whose texts are not translated yet are shown in English, left to right. */
-  untranslatedNote: "",
   common: { retry: "Retry", cancel: "Cancel", close: "Close", working: "Working…", dismiss: "Dismiss", reference: "Reference for your administrator" },
   data: { live: "Real patient data", synthetic: "Synthetic data", aiGenerated: "AI-generated" },
   progress: {
@@ -95,6 +94,8 @@ export const en = {
     location: "Location",
     started: "Started",
     loadingEncounter: "Loading encounter…",
+    loadEncounterError: "Could not load encounter details.",
+    loadPatientError: "Could not load patient context.",
   },
   /** Shown in place of the server's English explanation when the interface is not in English. */
   errors: {
@@ -117,6 +118,7 @@ export const en = {
     again: "Launch StethoLink from the patient's chart again. If it keeps failing, give the reference below to your system administrator.",
     detail: "Details from the server",
   },
+  work: workEn,
 };
 export type Messages = typeof en;
 
@@ -146,7 +148,6 @@ export const ar: Messages = {
   draftsOnly: "هذه الجلسة تُعِدّ المسودات فقط. الاعتماد والإرسال يتطلبان جلسة طبيب موثَّقة.",
   footer: "StethoLink يُعِدّ المسودات، والقرار للطبيب.",
   language: { label: "لغة الواجهة", other: "English" },
-  untranslatedNote: "نصوص هذا القسم لم تُترجم بعد وتُعرض بالإنجليزية.",
   common: { retry: "أعد المحاولة", cancel: "إلغاء", close: "إغلاق", working: "جارٍ التنفيذ…", dismiss: "إخفاء", reference: "المرجع لمسؤول النظام" },
   data: { live: "بيانات مريض حقيقية", synthetic: "بيانات تجريبية", aiGenerated: "من إعداد الذكاء الاصطناعي" },
   progress: {
@@ -197,6 +198,8 @@ export const ar: Messages = {
     location: "المكان",
     started: "البداية",
     loadingEncounter: "جارٍ تحميل الزيارة…",
+    loadEncounterError: "تعذّر تحميل تفاصيل الزيارة.",
+    loadPatientError: "تعذّر تحميل ملف المريض.",
   },
   errors: {
     invalid_request: "تعذّر تنفيذ الطلب.",
@@ -218,6 +221,7 @@ export const ar: Messages = {
     again: "شغِّل StethoLink مرة أخرى من ملف المريض. إن تكرر الفشل فأعطِ المرجع أدناه لمسؤول النظام.",
     detail: "تفاصيل من الخادم",
   },
+  work: workAr,
 };
 
 export const messages: Record<Locale, Messages> = { en, ar };
