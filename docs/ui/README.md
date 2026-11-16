@@ -41,12 +41,23 @@ Wide (the full width of OpenEMR's dialog): ![](after/workspace-wide.png)
 | --- | --- | --- | --- |
 | ![](after/draft-questions-420.png) | ![](after/draft-420.png) | ![](after/approve-dialog-420.png) | ![](after/approved-420.png) |
 
+**The work areas in Arabic, 420 px.** The same sequence as above with the panel in Arabic: the request typed in Arabic, the real model's questions, "Prepare anyway", the draft, the approval dialog (the destination list is the tenant's own, so its name is data), the delivery panel after approval, the History tab, and the microphone refusal. The model answered an Arabic request with English questions and suggestions; they are shown as it wrote them, left to right inside the right-to-left page (see the findings below).
+
+| Composer | The assistant's questions | The draft | Approval dialog |
+| --- | --- | --- | --- |
+| ![](after/workspace-ar-420.png) | ![](after/draft-questions-ar-420.png) | ![](after/draft-ar-420.png) | ![](after/approve-dialog-ar-420.png) |
+
+| After approval | History | Microphone not allowed in the frame |
+| --- | --- | --- |
+| ![](after/approved-ar-420.png) | ![](after/history-ar-420.png) | ![](after/scribe-blocked-ar-420.png) |
+
 **What these screenshots do not show, and what they show wrongly**
 
 - **Not shot inside OpenEMR:** recording and the scribe's note, the specialist's inbox and reply, the send confirmation, writing to the chart. They need a specialist session, a microphone allowed in the frame and the write-back, which is T7's run. The older screenshots of those screens are in `archive-staging/` (synthetic staging, before T3) and are not evidence about a real EHR.
 - **The chart looks emptier than the EHR's.** In these shots "Active problems" and "Medications" read "None recorded" and the draft says that active medication orders are "not recorded", but the test patient has two active problems and a medication in OpenEMR. StethoLink asks `Condition?clinical-status=active` and `MedicationRequest?status=active&_include=MedicationRequest:medication`; OpenEMR 7.0.3 answers `200` with an empty bundle (it does not support `clinical-status` on `Condition`, and the medication search was also empty over HTTP). This is a fault of the chart reads, found while taking these screenshots and **not fixed** here; see the handoff. The allergy list loaded.
 - **"Reviewed by" shows the clinician's identifier** (the UUID from `SMART_CLINICIAN_MAP`), not a name. Noticed, not changed.
-- The Scribe, Consultations and History work areas are English even when the shell is Arabic (see "What changed").
+- **The model writes in English.** Asked in Arabic, the model's questions, its missing-information sentences and its suggestions came back in English. They are data and are shown as written; whether the prompt should ask it to answer in the physician's language is a product decision that was not made here.
+- The scribe's recording and note, the specialist's inbox and the send confirmation are translated and covered by tests, but were not shot inside OpenEMR (see above).
 
 ```bash
 OPENEMR_URL=https://localhost:9300 OPENEMR_USER=admin OPENEMR_PASS=<password> APP_ORIGIN=https://127.0.0.1:3082 APP_NAME=StethoLink \
@@ -80,7 +91,7 @@ node tests/e2e/browser/openemr-frame.mjs        # DRAFT=1, SCRIBE=1, EXPECT=no-v
 | Waiting | Progress with elapsed time, the current step, a skeleton of the result and Cancel. A cancelled request can be repeated safely (same idempotency key). |
 | Errors | Say what happened and what to do next (session ended, assistant unavailable, not set up for this hospital, changed elsewhere). |
 | Keyboard | Alt+1/2/3 switch tabs, Ctrl+Enter submits the text being typed, Esc closes a dialog, `?` lists the shortcuts. Tabs follow the WAI-ARIA pattern. |
-| Language and right to left | English or Arabic. The panel shell, the chart views, the launch error page and the error texts are translated; the clinician switches with the button at the bottom of the panel (remembered in a cookie) and `UI_DEFAULT_LOCALE` sets the hospital's default. `dir` is on the root element, every spacing and border is logical (a test fails on a physical `left`/`right`), and names, chart entries and references keep their own direction (`bdi`, `dir="auto"`, `dir="ltr"` for references and keys). The Scribe, Consultations and History work areas are still English (a note says so in Arabic). |
+| Language and right to left | English or Arabic. The panel shell, the chart views, the launch error page and the error texts are translated; the clinician switches with the button at the bottom of the panel (remembered in a cookie) and `UI_DEFAULT_LOCALE` sets the hospital's default. `dir` is on the root element, every spacing and border is logical (a test fails on a physical `left`/`right`), and names, chart entries and references keep their own direction (`bdi`, `dir="auto"`, `dir="ltr"` for references and keys). The three work areas (Scribe, Consultations with the approval and delivery panels, History) and the specialist's inbox are translated too (`apps/embedded-app/i18n/work.ts`); a test fails if a text a person reads is written in a component instead of the dictionary, and the sentences StethoLink's own connector and core write into the chart view and the draft (fact labels, chart notes, the missing-information lines, the age) are translated by `i18n/chart-text.ts` and pinned to the real connector output. What the model, the EHR or a specialist wrote stays as written. |
 | States | Loading (skeleton, then progress with Cancel), no open visit (the launch page, with its reference), a part of the chart the EHR did not grant (named, in the patient bar and the chart), an error from the server (the explanation and, for a server-side failure, the reference of its log line), a microphone the EHR frame does not allow. |
 | Inside the EHR | No popup, window or tab: the scribe's "Open in a new window" button is gone. Every response carries `frame-ancestors <EHR origin>` and a policy that lets the page load and call only its own origin. See [openemr.md, 5a](../openemr.md). |
 

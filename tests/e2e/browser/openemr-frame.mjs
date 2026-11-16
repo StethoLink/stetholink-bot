@@ -141,6 +141,20 @@ if (env.UI === "ar") {
   await frame.locator("html[dir=rtl]").waitFor();
 }
 const rtl = env.UI === "ar";
+/** The names of the controls the script presses, in the language of the panel (the words of apps/embedded-app/i18n/work.ts). */
+const L = rtl ? {
+  start: "بدء التسجيل", refusal: /الميكروفون غير مسموح به داخل نافذة النظام الطبي/, newWindow: /نافذة جديدة/,
+  prepare: "إعداد الاستشارة", clinicalQuestion: "السؤال السريري", questions: "المساعد يستوضح هذا الطلب", answerPlaceholder: "إجابتك",
+  answerContinue: "أجب وتابع", prepareAnyway: "أعدّها على أي حال", approve: "اعتماد", confirmApprove: "تأكيد الاعتماد",
+  request: "جهّز استشارة قلبية لهذا المريض: هل يحتاج ألم الصدر إلى تقييم عاجل لمتلازمة الشريان التاجي الحادة وما الخطوة الأولى؟",
+  answer: "تقييم عاجل: هل تذهب إلى قسم الطوارئ الآن، وما الفحوص التي تأتي أولًا؟",
+} : {
+  start: "Start recording", refusal: /microphone is not allowed inside the EHR window/i, newWindow: /new window/i,
+  prepare: "Prepare consultation", clinicalQuestion: "Clinical question", questions: "The assistant questions this request", answerPlaceholder: "Your answer",
+  answerContinue: "Answer and continue", prepareAnyway: "Prepare anyway", approve: "Approve", confirmApprove: "Confirm approve",
+  request: "Prepare a cardiology consultation for this patient asking whether the chest pain needs urgent evaluation for acute coronary syndrome and what to do first.",
+  answer: "Urgent evaluation: should she go to the emergency department now, and which tests come first?",
+};
 const name = (base) => `${base}${rtl ? "-ar" : ""}-${width || "wide"}`;
 if (expectState === "no-visit") {
   const alert = frame.locator("[data-state=no-open-visit]");
@@ -177,14 +191,14 @@ if (expectState === "no-visit") {
     // The recorder inside OpenEMR's frame. OpenEMR does not put allow="microphone" on it, so the browser refuses the
     // microphone: the panel must say so and offer no new window (it used to offer one).
     await frame.getByRole("tab").nth(0).click();
-    await frame.getByRole("button", { name: "Start recording" }).first().click();
+    await frame.getByRole("button", { name: L.start }).first().click();
     await frame.getByRole("checkbox").check();
-    await frame.getByRole("dialog").getByRole("button", { name: "Start recording" }).click();
-    const refusal = frame.getByText(/microphone is not allowed inside the EHR window/i);
+    await frame.getByRole("dialog").getByRole("button", { name: L.start }).click();
+    const refusal = frame.getByText(L.refusal);
     if (attributes.allow && /microphone/.test(attributes.allow)) await frame.getByText(/Recording|Pause/).first().waitFor();
     else {
       await refusal.waitFor({ timeout: 20000 });
-      assert.equal(await frame.getByText(/new window/i).count(), 0, "the panel still offers a new window");
+      assert.equal(await frame.getByText(L.newWindow).count(), 0, "the panel still offers a new window");
       await shot(element, name("scribe-blocked"));
     }
     assert.equal(popups.length, 0, "recording opened a window");
@@ -196,35 +210,42 @@ if (expectState === "no-visit") {
     const chartToggle = frame.locator("button[aria-controls=chart-summary]");
     if (await chartToggle.getAttribute("aria-expanded") === "true") await chartToggle.click();
     await frame.getByRole("tab").nth(1).click();
-    await frame.getByRole("textbox").first().fill(env.DRAFT_REQUEST ?? "Prepare a cardiology consultation for this patient regarding the chest pain.");
-    await frame.getByRole("button", { name: "Prepare consultation" }).click();
+    await frame.getByRole("textbox").first().fill(env.DRAFT_REQUEST ?? L.request);
+    await frame.getByRole("button", { name: L.prepare }).click();
     await shot(element, name("draft-working"));
-    const draftHeading = frame.locator('h3:has-text("Clinical question")');
-    const questions = frame.locator('section[aria-label="The assistant questions this request"]');
+    const draftHeading = frame.locator(`h3:has-text("${L.clinicalQuestion}")`);
+    const questions = frame.locator(`section[aria-label="${L.questions}"]`);
     await draftHeading.or(questions).or(frame.locator("[role=alert].alert-danger")).first().waitFor({ timeout: 110000 });
     let outcome = await draftHeading.count() ? "draft" : await questions.count() ? "questions" : "alert";
     // The model asks before it drafts a vague request. Answer once, then accept what it still doubts ("Prepare anyway").
     for (let round = 0; round < 2 && outcome === "questions"; round++) {
       console.log("DRAFT questions");
       await shot(element, name(`draft-questions${round || ""}`));
-      const answer = frame.getByPlaceholder("Your answer").first();
+      const answer = frame.getByPlaceholder(L.answerPlaceholder).first();
       if (round === 0 && await answer.count()) {
-        await answer.fill("Urgent evaluation: should she go to the emergency department now, and which tests come first?");
-        await frame.getByRole("button", { name: "Answer and continue" }).click();
-      } else await frame.getByRole("button", { name: "Prepare anyway" }).click();
+        await answer.fill(L.answer);
+        await frame.getByRole("button", { name: L.answerContinue }).click();
+      } else await frame.getByRole("button", { name: L.prepareAnyway }).click();
       await draftHeading.or(questions).or(frame.locator("[role=alert].alert-danger")).first().waitFor({ timeout: 110000 });
       outcome = await draftHeading.count() ? "draft" : await questions.count() ? "questions" : "alert";
     }
     if (outcome === "draft") {
-      await frame.locator('h3:has-text("Clinical question")').scrollIntoViewIfNeeded();
+      await draftHeading.scrollIntoViewIfNeeded();
       await shot(element, name("draft"));
-      await frame.getByRole("button", { name: "Approve", exact: true }).click();
+      await frame.getByRole("button", { name: L.approve, exact: true }).click();
       await frame.getByRole("dialog").locator("select").selectOption({ index: 1 });
       await shot(element, name("approve-dialog"));
-      await frame.getByRole("button", { name: "Confirm approve" }).click();
+      await frame.getByRole("button", { name: L.confirmApprove }).click();
       await frame.getByRole("heading", { name: /Send to/ }).or(frame.getByRole("button", { name: /^Send/ })).first().waitFor({ timeout: 30000 }).catch(() => undefined);
       await shot(element, name("approved"));
     }
+  }
+  if (env.HISTORY === "1") {
+    // The History tab: the consultations of this visit (after DRAFT=1 there is one) and the recorded visits.
+    await frame.getByRole("tab").nth(2).click();
+    await frame.locator("section[aria-label], [role=tabpanel] ul, [role=tabpanel] [role=status]").first().waitFor({ timeout: 20000 });
+    await page.waitForTimeout(800);
+    await shot(element, name("history"));
   }
   if (env.BREAK_HOOK) {
     // The caller stops a dependency now (for example the database: `docker stop <db>`), within BREAK_HOOK milliseconds.

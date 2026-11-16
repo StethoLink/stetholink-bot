@@ -5,6 +5,7 @@ import { MISSING_INFORMATION_TITLE, SUGGESTION_PREFIX, citedEvidenceIds, parseRe
 import { AiBadge, Badge, DataBadge } from "@/apps/embedded-app/components/ui";
 import { useT } from "@/apps/embedded-app/i18n/client";
 import { formatDateTime } from "@/apps/embedded-app/i18n/format";
+import { ageText, factLabel, missingLine, planNote } from "@/apps/embedded-app/i18n/chart-text";
 import type { Messages } from "@/apps/embedded-app/i18n/messages";
 import { DraftStatusBadge } from "./DraftStatusBadge";
 
@@ -17,14 +18,14 @@ const anchor = (draftId: string, factId: string) => `source-${draftId}-${factId}
 const tag = "rounded-full border px-2 py-px text-xs font-medium";
 
 function SourceLinks({ draftId, ids, facts }: { draftId: string; ids: string[]; facts: Map<string, ClinicalFact> }) {
-  const { t } = useT();
+  const { t, locale } = useT();
   if (!ids.length) return <span className={`${tag} border-amber-700 bg-amber-50 text-amber-900`}>{t.work.draft.noChartSource}</span>;
   return (
     <>
       {ids.map((id) => facts.has(id) ? (
-        <a key={id} href={`#${anchor(draftId, id)}`} onClick={() => document.getElementById(anchor(draftId, id))?.closest("details")?.setAttribute("open", "")} title={`${facts.get(id)!.label}: ${factValue(facts.get(id)!, t.chart)}`}
+        <a key={id} href={`#${anchor(draftId, id)}`} onClick={() => document.getElementById(anchor(draftId, id))?.closest("details")?.setAttribute("open", "")} title={`${factLabel(facts.get(id)!.label, locale)}: ${factValue(facts.get(id)!, t.chart)}`}
           className={`${tag} border-sky-800 bg-sky-50 text-sky-900 underline-offset-2 hover:underline`}>
-          <bdi>{t.work.draft.source(facts.get(id)!.label)}</bdi>
+          <bdi>{t.work.draft.source(factLabel(facts.get(id)!.label, locale))}</bdi>
         </a>
       ) : (
         <span key={id} className={`${tag} border-red-700 bg-red-50 text-red-800`}><bdi dir="ltr">{t.work.draft.unknownSource(id)}</bdi></span>
@@ -102,7 +103,7 @@ function ReferralView({ draft }: { draft: ConsultationDraft }) {
       )}
 
       {draft.grounding?.patient && (
-        <p className="text-sm"><span className="font-medium">{w.patient}</span> {draft.grounding.patient.age ?? w.ageNotRecorded}, {draft.grounding.patient.sex === "unknown" ? w.sexNotRecorded : (w.sex[draft.grounding.patient.sex] ?? draft.grounding.patient.sex)}
+        <p className="text-sm"><span className="font-medium">{w.patient}</span> {draft.grounding.patient.age ? ageText(draft.grounding.patient.age, locale) : w.ageNotRecorded}, {draft.grounding.patient.sex === "unknown" ? w.sexNotRecorded : (w.sex[draft.grounding.patient.sex] ?? draft.grounding.patient.sex)}
           <span className="text-xs text-slate-700"> {w.patientNote}</span></p>
       )}
 
@@ -148,7 +149,7 @@ function ReferralView({ draft }: { draft: ConsultationDraft }) {
         <h3 className="text-sm font-semibold text-amber-950">{w.missingTitle} <span className="font-normal">{w.missingSub}</span></h3>
         {missing.length ? (
           <ul className="list-disc ps-5 text-sm text-amber-950">
-            {missing.map((item, index) => <li key={index} className="break-words" dir="auto">{item.text}</li>)}
+            {missing.map((item, index) => <li key={index} className="break-words" dir="auto">{missingLine(item.text, locale)}</li>)}
           </ul>
         ) : <p className="text-sm">{w.noneRecorded}</p>}
         <p className="mt-1 text-xs text-amber-950">{w.missingNote}</p>
@@ -163,7 +164,7 @@ function ReferralView({ draft }: { draft: ConsultationDraft }) {
         ) : <p className="text-sm text-violet-950">{w.noSuggestions}</p>}
       </section>
 
-      {notes.length > 0 && <ul className="text-xs text-slate-700">{notes.map((note, index) => <li key={index} dir="auto">{note}</li>)}</ul>}
+      {notes.length > 0 && <ul className="text-xs text-slate-700">{notes.map((note, index) => <li key={index} dir="auto">{planNote(note, locale)}</li>)}</ul>}
 
       <details className="rounded-md border border-slate-200 p-2.5">
         <summary className="cursor-pointer text-sm font-semibold">
@@ -172,7 +173,7 @@ function ReferralView({ draft }: { draft: ConsultationDraft }) {
         <ul className="mt-2 space-y-1">
           {[...facts.values()].map((fact) => (
             <li key={fact.id} id={anchor(draft.id, fact.id)} className="rounded px-1 py-0.5 text-sm target:bg-sky-100 target:outline target:outline-sky-600">
-              <bdi className="font-medium">{fact.label}:</bdi>{" "}
+              <bdi className="font-medium">{factLabel(fact.label, locale)}:</bdi>{" "}
               <bdi className={fact.status === "unknown" ? "text-amber-900 italic" : undefined}>{factValue(fact, t.chart)}</bdi>{" "}
               {fact.status === "known" && !cited.has(fact.id) && <span className={`${tag} border-slate-500 text-slate-700`}>{w.notUsed}</span>}
               <span className="block text-xs text-slate-600"><bdi dir="ltr">{w.evidenceMeta(fact.source.reference, formatDateTime(fact.timestamp, locale), fact.id)}</bdi></span>
@@ -236,7 +237,7 @@ export function ConsultationDraftView({ draft }: { draft: ConsultationDraft }) {
         <p>{w.prepared(formatDateTime(draft.createdAt, locale))}{draft.updatedAt !== draft.createdAt && w.lastChanged(formatDateTime(draft.updatedAt, locale))}</p>
         {draft.reviewedBy && draft.reviewedAt && (
           <p className="font-medium text-slate-900">
-            <bdi>{w.reviewedBy(draft.reviewedBy, formatDateTime(draft.reviewedAt, locale))}</bdi>
+            <bdi>{w.reviewedBy(locale === "ar" ? `\u2066${draft.reviewedBy}\u2069` : draft.reviewedBy, formatDateTime(draft.reviewedAt, locale))}</bdi>
           </p>
         )}
       </footer>

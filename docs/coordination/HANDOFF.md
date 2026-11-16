@@ -2,10 +2,10 @@
 
 Written at the end of each working session so the next one starts from this file instead of re-reading the whole history. Update it, commit it and push it before handing off. Newest state only; the detail is in [WORKBOARD.md](WORKBOARD.md).
 
-## Where things stand (2026-11-16, after sub-step 1 of T5 of the OpenEMR brief)
+## Where things stand (2026-11-16, after T5 of the OpenEMR brief)
 
-- **Brief in progress:** [fable-openemr-privacy-orders.md](../agent-handoffs/fable-openemr-privacy-orders.md), tasks T1 to T9, one per conversation (its "Rule zero"). On the workboard they are `O-T1` to `O-T9`. **T1 to T4 are done. T5 is split: sub-step 1 is done, sub-step 2 is next (below), then T6.**
-- **Branch:** all work of this brief is on `claude/wizardly-ptolemy-wyp0dh`, which is `main` (`6e0afdc`) plus the brief, T1 to T4 and T5 sub-step 1. **It is not on `main`.** `AGENTS.md` says to push to `main`; these sessions were started on this branch and push there only. Keep working on this branch; T9 merges it.
+- **Brief in progress:** [fable-openemr-privacy-orders.md](../agent-handoffs/fable-openemr-privacy-orders.md), tasks T1 to T9, one per conversation (its "Rule zero"). On the workboard they are `O-T1` to `O-T9`. **T1 to T5 are done. Next is T6.**
+- **Branch:** all work of this brief is on `claude/wizardly-ptolemy-wyp0dh`, which is `main` (`6e0afdc`) plus the brief and T1 to T5. **It is not on `main`.** `AGENTS.md` says to push to `main`; these sessions were started on this branch and push there only. Keep working on this branch; T9 merges it.
 - **The earlier brief** (live MVP, workboard T1 to T19) is complete and on `main`; its details are in the workboard log.
 - **T1** (commit `88ae344`): every SMART launch failure has a reason code, logged once with the correlation ID the error page shows. Reasons and what to check: `docs/openemr.md`, "When a launch fails".
 
@@ -45,10 +45,6 @@ Written at the end of each working session so the next one starts from this file
 - **Left as it was:** free-text chat still answers 501 for every session. It would pass through the layer if switched on (it uses `getModelProvider`), but the model client only runs the three structured tasks; whether to offer chat is the owner's decision, not made here.
 - **Small things noticed, not changed:** a date written in two forms in one request comes back in the form seen first; a lower-case transliteration variant of a short name (under six letters, for example "sami" for a patient Sami) is not replaced unless capitalised, so that words like "same" survive; the exact spelling is always replaced.
 
-## Blocker for the owner: the next session was not started
-
-The session that finished T5 sub-step 1 tried to start the next one (`create_session`, as the AUTO-CONTINUE instruction says) and the call was **denied by the environment's permission check**. Nothing was started and nothing was worked around. The chain is stopped until the owner either (a) pastes [next-session-prompt.md](../agent-handoffs/next-session-prompt.md) (below its line) into a new session with model `claude-fable-5-2` on this branch, or (b) allows `mcp__claude-code-remote__create_session` in the settings and asks for the session to be started. The prompt is for T5 sub-step 2 and carries the AUTO-CONTINUE section, so it goes on to T6 by itself.
-
 ## T5 sub-step 1 done: StethoLink runs inside the EHR's frame, English and Arabic shell, states
 
 - **Commits:** `a100a8f` (claim), `012f844` and `b60821c` (code, tests, script, runbook), and the commit that wrote this section (docs, screenshots, board).
@@ -63,15 +59,17 @@ The session that finished T5 sub-step 1 tried to start the next one (`create_ses
   3. "Reviewed by" in the approved draft shows the clinician's UUID, not a name.
 - **Small things noticed, not changed:** the Scribe tab's capability line shows `ar-SA` raw; the model asks questions before it drafts a vague request (two rounds in the run), which is right but takes three model calls.
 
-## Next: T5 sub-step 2 (the three work areas in Arabic), then T6
+## T5 sub-step 2 done: the work areas in Arabic
 
-Do the rest of T5 as written in the brief ("Arabic and English with correct RTL", the screenshots). What is left:
+- **Commits:** `47b07cd` (claim), `0e8562f` (code and tests), and the commit that wrote this section (docs, screenshots, board). The owner asked this session to carry on in the same conversation (the call to start a new one had been refused), so sub-step 2 and the start of T6 happened here.
+- **Where it is:** `apps/embedded-app/i18n/work.ts` (all work-area texts, `workEn` and `workAr`), `i18n/chart-text.ts` (translation of the connector's and core's own English sentences: fact labels, chart notes, missing lines, the plan note, the age), `i18n/format.ts`, `i18n/client.tsx` (`useT()`, and `currentMessages()` for code outside components). Components read `t.work.*`; the pure helpers (`describeFailure`, `describeDelivery`, `consultationTracker`) take the language as an optional last argument.
+- **Verified:** `npm run check` (638 passed, 31 skipped opt-in), `npm run build`, smoke tests, `bash tests/e2e/run-ci.sh` with `LIVE_E2E_BROWSER=1`; and inside real OpenEMR 7.0.3, in Arabic: composer, real-model consultation from an Arabic request, approval, delivery panel, History, microphone refusal, chart (`docs/ui/README.md`).
+- **Not verified:** the scribe's recording and note, the specialist's inbox and reply, the send confirmation and write-back inside OpenEMR (T7); Firefox and Safari; a screen reader.
+- **Found, not fixed:** the model answers an Arabic request with English questions, missing-information sentences and suggestions (shown as written). Whether the prompt should ask for the physician's language is a product decision. The unused `features/assistant` chat UI (the chat route answers 501) was not translated.
 
-- **Translate the Scribe, Consultations and History work areas** (`features/consultations/**`, `features/scribe/**`, `features/specialist/SpecialistInbox.tsx`, the texts in `hooks/deliveryState.ts`, `hooks/draftState.ts`, `hooks/statusTracker.ts`, `concern-labels.ts`, `features/assistant` if it stays) into the dictionary in `apps/embedded-app/i18n/messages.ts` (add keys to `en` and `ar`; `tests/frontend/i18n.test.ts` already fails if `ar` lacks one or holds English). Use `useT()` in components; functions that build texts outside a component take `Messages`. Then delete the `english()` wrapper and `untranslatedNote` in `features/workspace/components/Workspace.tsx`. What the model or the specialist wrote stays as written, with `dir="auto"` or `<bdi>`. Add a test that renders each work area in Arabic and fails on any ASCII UI sentence left (names, codes and references excepted).
-- **Retake the screenshots** of those areas in the OpenEMR frame with `tests/e2e/browser/openemr-frame.mjs` (`UI=ar`, `DRAFT=1`): the composer, the questions, the draft with sources, the approval dialog and the delivery panel in Arabic. The scribe's recording and note, the inbox and the specialist's reply still need T7's set-up (a microphone the frame allows, a specialist sign-in); say so in `docs/ui/README.md` as it does now.
-- If a text does not fit in 360 px in Arabic, fix the layout, not the text.
+## Next: T6 (draft orders)
 
-Then T6 as the brief says. Order the work so that finding 1 above is fixed before T6 builds on chart reads.
+Do the brief's T6. Before it relies on chart reads, **fix finding 1 above** (OpenEMR 7.0.3 answers `Condition?clinical-status=active` and `MedicationRequest?status=active&_include=...` with an empty bundle), because T6 flags allergies, duplicates of active orders and interactions from those facts. Every new UI text goes into both languages (`i18n/work.ts`); the test `tests/frontend/work-areas-ar.test.ts` fails if one is written in a component.
 
 ## Running a real OpenEMR here (about 10 minutes)
 

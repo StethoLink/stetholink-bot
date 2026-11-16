@@ -1,6 +1,7 @@
 "use client";
 import type { PatientContext } from "@/shared/contracts";
 import { useT } from "@/apps/embedded-app/i18n/client";
+import { chartNote } from "@/apps/embedded-app/i18n/chart-text";
 import { ChartFacts, NotSharedNotice, partsNotShared } from "./ChartFacts";
 import { LiveBadge, SyntheticBadge } from "./StateViews";
 
@@ -26,7 +27,7 @@ function List({ items, empty }: { items: string[]; empty: string }) {
 
 /** Patient summary. Allergies come first and are never truncated. */
 export function PatientContextView({ patient, compact = false }: { patient: PatientContext; compact?: boolean }) {
-  const { t } = useT();
+  const { t, locale } = useT();
   const p = patient;
   const hasAllergies = p.allergies.length > 0;
   const notShared = partsNotShared(p.clinicalFacts);
@@ -71,7 +72,7 @@ export function PatientContextView({ patient, compact = false }: { patient: Pati
         <div role="note" aria-label={t.chart.notesLabel} className="alert alert-warning mt-3">
           <p className="font-semibold">{t.chart.notesTitle}</p>
           <ul className="mt-1 list-disc space-y-0.5 ps-5">
-            {p.chartNotes.map((note) => <li key={note} dir="auto" className="break-words">{note}</li>)}
+            {p.chartNotes.map((note) => <li key={note} dir="auto" className="break-words">{chartNote(note, locale)}</li>)}
           </ul>
         </div>
       )}

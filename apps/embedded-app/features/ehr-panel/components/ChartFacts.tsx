@@ -2,6 +2,7 @@
 import type { ClinicalFact, ClinicalFactCategory } from "@/shared/contracts";
 import { useT } from "@/apps/embedded-app/i18n/client";
 import type { ChartPart, Messages } from "@/apps/embedded-app/i18n/messages";
+import { factLabel } from "@/apps/embedded-app/i18n/chart-text";
 
 const GROUPS: { key: keyof Messages["chart"]["groups"]; categories: ClinicalFactCategory[] }[] = [
   { key: "symptoms", categories: ["symptom"] },
@@ -34,7 +35,7 @@ export function factValue(fact: ClinicalFact, t: Messages["chart"]) {
 
 /** The normalized chart record the assistant reads. Unknown items are shown as unknown, never as normal. */
 export function ChartFacts({ facts }: { facts: ClinicalFact[] }) {
-  const { t } = useT();
+  const { t, locale } = useT();
   if (!facts.length) return null;
   const unavailable = facts.filter((fact) => fact.status === "unknown").length;
   return (
@@ -50,7 +51,7 @@ export function ChartFacts({ facts }: { facts: ClinicalFact[] }) {
               <ul className="text-sm">
                 {items.map((fact) => (
                   <li key={fact.id} className="break-words">
-                    <bdi className="font-medium">{fact.label}:</bdi>{" "}
+                    <bdi className="font-medium">{factLabel(fact.label, locale)}:</bdi>{" "}
                     <bdi className={fact.status === "unknown" ? "text-amber-900 italic" : undefined}>{factValue(fact, t.chart)}</bdi>
                   </li>
                 ))}
