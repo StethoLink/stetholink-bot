@@ -67,6 +67,9 @@ On the same page, the button labelled "Disable EHR Launch Authorization Flow" ma
 | `SMART_SCOPE` | The registered scope list. A resource the EHR does not grant is shown as "could not be loaded" |
 | `SMART_CLINICIAN_MAP` | Server-side JSON list of `subject`, `fhirUser`, `clinicianId` (UUID) and `role` (`clinician` or `physician`) |
 | `NODE_EXTRA_CA_CERTS` | PEM file with the CA of OpenEMR's certificate, when it is not a public CA |
+| `COOKIE_MODE` | `lax` when StethoLink is on the same site as OpenEMR (preferred), `embedded` when it is on another site. See 5a |
+| `EHR_FRAME_ORIGINS` | Optional. Only if OpenEMR's pages are on another origin than its sign-in. See 5a |
+| `UI_DEFAULT_LOCALE` | Optional. `en` (default) or `ar` |
 
 ### The clinician map
 
@@ -88,9 +91,62 @@ Every mapped clinician can draft; only a mapped `physician` can approve and send
 
 **Server to OpenEMR.** StethoLink's server fetches discovery, the token endpoint, the signing keys and the chart. It trusts Node's public CAs plus the file in `NODE_EXTRA_CA_CERTS`, which Node reads once at start and ignores without an error if it is unreadable. With OpenEMR's self-signed or hospital-CA certificate missing from that file, the launch stops with `discovery_unreachable`. Do not start the app with `next dev --experimental-https`: it replaces this setting, so the server can no longer verify OpenEMR. Serve the app over HTTPS from a reverse proxy in front of `next start` instead, and keep `NODE_EXTRA_CA_CERTS` in the server's own environment.
 
-**Browser to StethoLink.** OpenEMR opens StethoLink in a frame inside its own page. A browser offers no "accept this certificate" page inside a frame, so with a certificate the browser does not trust the window stays empty. Give the app a certificate the clinicians' browsers already trust (a public CA, or the hospital CA installed on the workstations). For a local trial only: open `https://<app-host>/api/health` in its own tab, accept the certificate, then launch.
+**Browser to StethoLink.** OpenEMR opens StethoLink in a frame inside its own page. A browser offers no "accept this certificate" page inside a frame, so with a certificate the browser does not trust the frame stays empty, and nothing in StethoLink can change that. Give the app a certificate the clinicians' browsers already trust (a public CA, or the hospital CA installed on the workstations). StethoLink never works around it with a new tab or window.
 
-**Cookies.** The pending launch and the session are cookies set inside that frame. With the default `SameSite=Lax` they are sent only when StethoLink and OpenEMR are on the same site (for example `stetholink.hospital.example` and `emr.hospital.example`); otherwise the callback ends with `launch_session_missing`. Serving StethoLink same-site with the EHR is the supported setup. `COOKIE_MODE=embedded` (`SameSite=None; Secure; Partitioned`) exists for a cross-site frame and was not run against OpenEMR.
+## 5a. Inside the OpenEMR window: frame, cookies, nothing outside
+
+StethoLink runs in the frame OpenEMR opens for it and never leaves it: it opens no popup, no new window and no tab, and the only address it sends the frame to outside itself is OpenEMR's own sign-in page during the launch.
+
+**Who may frame it.** Every response carries `Content-Security-Policy: ... frame-ancestors <EHR origin>`. The origin is the one of `SMART_AUTHORIZATION_URL` (OpenEMR's Site Address). No other site can put StethoLink in a frame. If the EHR's pages are served from another origin than its sign-in, list the origins in `EHR_FRAME_ORIGINS` (HTTPS origins separated by spaces; no path, no wildcard; the server refuses to start on anything else).
+
+**What the page may load or call.** The same header allows scripts, styles, fonts, images, requests, media and workers from StethoLink's own origin only. There is no font service, analytics, error tracker or CDN, and the browser would block one. `tests/backend/no-third-party-runtime.test.ts` fails the build if code for one is added.
+
+**Cookies.** The pending launch and the session are cookies set inside the frame. Two setups work; choose by where StethoLink is served.
+
+| Setup | `COOKIE_MODE` | Cookies | When |
+| --- | --- | --- | --- |
+| **Same site as the EHR (preferred)** | `lax` (default) | `SameSite=Lax; Secure; HttpOnly` | StethoLink and OpenEMR share a registrable domain, for example `stetholink.hospital.example` and `emr.hospital.example`, behind the hospital's reverse proxy |
+| Another site | `embedded` | `SameSite=None; Secure; HttpOnly; Partitioned` | StethoLink is hosted on a different domain than the EHR |
+
+With `lax` on another site the browser withholds the cookies in the frame and the callback ends with `launch_session_missing`. `Partitioned` cookies need a current Chrome or Edge (114 or later), Firefox 131 or later, or Safari 18.4 or later; on an older browser use the same-site setup.
+
+**Same site behind the hospital's reverse proxy.** Give StethoLink a host name under the hospital's domain and terminate TLS at the proxy with the hospital's certificate. Forward the `Host` header unchanged (StethoLink compares it with the request's origin) and do not cache. For nginx:
+
+```nginx
+server {
+  listen 443 ssl;
+  server_name stetholink.hospital.example;              # same registrable domain as emr.hospital.example
+  ssl_certificate     /etc/ssl/hospital/stetholink.crt;  # a certificate the workstations already trust
+  ssl_certificate_key /etc/ssl/hospital/stetholink.key;
+  client_max_body_size 30m;                              # scribe audio is uploaded in parts
+  location / {
+    proxy_pass http://127.0.0.1:3000;                    # the StethoLink container
+    proxy_set_header Host $host;                         # required: the same-origin check reads it
+    proxy_set_header X-Forwarded-Proto https;
+    proxy_http_version 1.1;
+    proxy_read_timeout 180s;                             # a draft can take up to two minutes
+    proxy_buffering off;
+  }
+}
+```
+
+Set `SMART_REDIRECT_URI=https://stetholink.hospital.example/api/smart/callback`, register the same address in OpenEMR, keep `COOKIE_MODE=lax`. The proxy must not add `X-Frame-Options` and must not replace the `Content-Security-Policy` header.
+
+**Microphone.** OpenEMR 7.0.3 creates the frame without `allow="microphone"`, so the browser refuses the microphone there and the scribe says so instead of recording. StethoLink does not open a window to get around it. Recording inside OpenEMR needs OpenEMR to add `allow="microphone"` to the frame it opens for SMART apps; consultations and the chart work without it.
+
+**Language.** The panel is in English or Arabic (right to left). `UI_DEFAULT_LOCALE=en|ar` sets the hospital's default; a clinician switches with the button at the bottom of the panel and the choice is remembered in a cookie (`stetholink_locale`, holding `en` or `ar`).
+
+### Checking the embedded frame
+
+`tests/e2e/browser/openemr-frame.mjs` drives a real OpenEMR in Chromium (Playwright; not a project dependency and not part of `npm run check`). It signs in, opens the chart of a patient **created in that OpenEMR for testing**, opens or creates a visit, presses the app's Launch button and then checks: StethoLink is in a frame of the OpenEMR page; no window or tab was opened; every StethoLink response carries the policy with OpenEMR's origin; no StethoLink page asked for anything outside its own origin; the panel is not wider than its frame; the application's own font loaded; the first Tab lands on a visible focus ring. It prints the session cookie's attributes as the browser stored them.
+
+```sh
+OPENEMR_URL=https://localhost:9300 OPENEMR_USER=admin OPENEMR_PASS=<password> APP_ORIGIN=https://127.0.0.1:3082 \
+APP_NAME=StethoLink OPENEMR_PID=1 VISIT=<encounter number, "none", or empty to create one> FRAME_WIDTH=360 UI=ar SHOTS=out \
+NODE_PATH=/opt/node-tools/node_modules node tests/e2e/browser/openemr-frame.mjs
+```
+
+`EXPECT=no-visit` (with `VISIT=none`) expects the "open a visit" page with its reference; `EXPECT=not-shared` expects the notice for records the registration does not grant. `localhost` and `127.0.0.1` are different sites to a browser, so one machine can run the cross-site case.
 
 ## 6. Preflight
 

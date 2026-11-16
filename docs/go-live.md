@@ -50,7 +50,7 @@ Limits you must know before telling anyone "the model never sees patient data":
 
   StethoLink only creates; it never asks for update or delete. A resource the EHR does not grant is shown to the clinician as "could not be loaded" (reads) or offered as text to copy (writes).
 - **Launch context:** patient and encounter for clinicians. For specialists, a second launch point without a patient (the application list, or a standalone launch) that opens the inbox.
-- **Embedding:** if StethoLink runs inside an iframe, the EHR must (a) allow it to be framed and (b) put `allow="microphone"` on the iframe for the scribe. Without it the scribe tells the clinician to open StethoLink in its own window. Set `COOKIE_MODE=embedded` for the iframe; keep `lax` for a top-level window.
+- **Embedding:** StethoLink runs inside the EHR's frame and opens no window of its own. Every response allows framing by the EHR's origin only (`frame-ancestors`, from `SMART_AUTHORIZATION_URL`, or `EHR_FRAME_ORIGINS`) and lets the page load and call nothing but its own origin. Serve it on the same site as the EHR behind the hospital's reverse proxy with `COOKIE_MODE=lax` (preferred), or on another site with `COOKIE_MODE=embedded`. The certificate must be one the workstations already trust: a frame cannot show the browser's certificate warning. For the scribe the EHR must put `allow="microphone"` on the frame; without it recording is refused and the panel says so. Details and the proxy configuration: [openemr.md, section 5a](openemr.md).
 - Take from the EHR: FHIR base URL, authorization and token endpoints, OIDC issuer, JWKS URL, client id.
 
 ## 3. Database
@@ -79,7 +79,8 @@ Set as environment variables or secrets of the container. Values in angle bracke
 NODE_ENV=production
 TENANT_ID=<hospital-id>
 CLINICAL_DATA_SOURCE=fhir
-COOKIE_MODE=embedded
+COOKIE_MODE=lax                      # embedded when StethoLink is on another site than the EHR
+UI_DEFAULT_LOCALE=en                 # or ar
 
 STETHOLINK_DATABASE_URL=postgres://stetholink_runtime:<password>@<db-host>/stetholink
 STETHOLINK_DATABASE_CA=<PEM of the database CA, if it is not a public one>

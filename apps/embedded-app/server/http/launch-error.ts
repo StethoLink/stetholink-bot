@@ -30,7 +30,7 @@ async function launchError(request: Request, failure: NextResponse, correlationI
   // The server explains in English. In Arabic the explanation for the case is shown, with the server's words under it.
   const explanation = locale === "en"
     ? `<p>${escape(error.message)}</p>`
-    : `<p>${escape(fixable ? t.visit : t.generic)}</p>${fixable ? `<p class="detail"><span>${escape(t.detail)}:</span> <bdi lang="en" dir="ltr">${escape(error.message)}</bdi></p>` : ""}`;
+    : `<p>${escape(fixable ? t.visit : t.generic)}</p>${fixable && error.message !== messages.en.launch.visit ? `<p class="detail">${escape(t.detail)}:<bdi lang="en" dir="ltr">${escape(error.message)}</bdi></p>` : ""}`;
   // Colours and sizes are the design tokens of app/globals.css; system fonts, because this page loads no file at all.
   const page = `<!doctype html>
 <html lang="${locale}" dir="${dirOf(locale)}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
@@ -42,6 +42,7 @@ main{max-width:30rem;margin:0 auto;padding:1rem .75rem}
 h1{font-size:1rem;margin:0 0 .375rem}
 p{margin:.375rem 0;overflow-wrap:anywhere}
 .detail{font-size:.8125rem;color:#3c4452}
+.detail bdi{display:block}
 .ref{margin-top:.75rem;padding:.5rem .75rem;border:1px solid #c9cfd8;border-radius:.375rem;background:#f6f7f9;font-size:.8125rem;color:#3c4452}
 code{font:600 .9375rem ui-monospace,Consolas,monospace;color:#171b23;user-select:all}
 </style></head>
