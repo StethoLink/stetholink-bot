@@ -2,10 +2,10 @@
 
 Written at the end of each working session so the next one starts from this file instead of re-reading the whole history. Update it, commit it and push it before handing off. Newest state only; the detail is in [WORKBOARD.md](WORKBOARD.md).
 
-## Where things stand (2026-11-15, after T3 of the OpenEMR brief)
+## Where things stand (2026-11-16, after T4 of the OpenEMR brief)
 
-- **Brief in progress:** [fable-openemr-privacy-orders.md](../agent-handoffs/fable-openemr-privacy-orders.md), tasks T1 to T9, one per conversation (its "Rule zero"). On the workboard they are `O-T1` to `O-T9`. **T1, T2 and T3 are done. Next is T4.**
-- **Branch:** all work of this brief is on `claude/wizardly-ptolemy-wyp0dh`, which is `main` (`6e0afdc`) plus the brief, T1, T2 and T3. **It is not on `main`.** `AGENTS.md` says to push to `main`; these sessions were started on this branch and push there only. Keep working on this branch; T9 merges it.
+- **Brief in progress:** [fable-openemr-privacy-orders.md](../agent-handoffs/fable-openemr-privacy-orders.md), tasks T1 to T9, one per conversation (its "Rule zero"). On the workboard they are `O-T1` to `O-T9`. **T1 to T4 are done. Next is T5.**
+- **Branch:** all work of this brief is on `claude/wizardly-ptolemy-wyp0dh`, which is `main` (`6e0afdc`) plus the brief and T1 to T4. **It is not on `main`.** `AGENTS.md` says to push to `main`; these sessions were started on this branch and push there only. Keep working on this branch; T9 merges it.
 - **The earlier brief** (live MVP, workboard T1 to T19) is complete and on `main`; its details are in the workboard log.
 - **T1** (commit `88ae344`): every SMART launch failure has a reason code, logged once with the correlation ID the error page shows. Reasons and what to check: `docs/openemr.md`, "When a launch fails".
 
@@ -34,15 +34,25 @@ Written at the end of each working session so the next one starts from this file
 - **Unverified:** nothing was run against a real OpenEMR, a real model or a real transcription service after this change. The launch code changed little (the registration check and where the classification comes from), but that is a reading, not a run. T7 runs it.
 - **Left in place on purpose:** the classification value `synthetic`, the transport kind `mock`, `ProviderDescriptor.synthetic` and the "No AI inference" / "Synthetic data" labels driven by a stored record's own provenance. No deployment can produce such records any more; fixtures and rows from earlier versions carry them. The database column `consultation_delivery_attempts.transport` still defaults to `'mock'` (needs a migration to rename; nobody displays it). Free-text chat (`/api/chat`, `getChat`) now answers 501 for every session, because it was allowed only on synthetic charts; T4 may decide whether pseudonymization makes it acceptable. The provider callback route refuses everything until a provider with a secret exists.
 
-## Next: T4 (pseudonymize patient data before it reaches the model provider)
+## T4 done: the model receives de-identified text only
 
-Do the brief's T4 as written. Notes from T3:
+- **Commits:** `d0b8044` (claim), `11f753a` (code, tests, docs), and the commit that wrote this section (board, handoff).
+- **Where it is:** `core/privacy/` (`pseudonymizer.ts` the replacement and the way back, `names.ts` stand-in pools and the list of common given names, `ports.ts`, `provider.ts` the wrapper), `platform/privacy/vault.ts` (the map, in process memory per session), `platform/tenants/model-provider.ts` (`getModelProvider(privacy, task)`: the only builder, for consultations and the scribe note), `integrations/fhir/connector.ts` (`getIdentity()`), `apps/embedded-app/server/index.ts` (`modelPrivacy`). Interface details are on the workboard.
+- **How it behaves:** names become stand-in names (same sex and culture, Arabic or Latin as written, one stand-in per person across both scripts); numbers and addresses the EHR supplies, and anything shaped like an identifier, become `ID-A`, `PHONE-A`, `EMAIL-A`, `URL-A`; dates become `T-3d` (day offset from the visit start; a Hijri date becomes `DATE-A`). JSON numbers, fact ids and clinical text are not touched. The answer is mapped back before `validateReferral` / `validateNote`, so validators and the physician see real text. Nothing is sent if the Patient record cannot be read or a known identifier survives.
+- **Verified:** unit tests on fictional people in `tests/fixtures/identities.ts` (the exact HTTP body that would leave, for a consultation, a revision and a scribe note; Arabic spellings with particles and diacritics; round trips; unchanged clinical values; date intervals; map expiry; nothing logged), repeated 60 times because stand-ins are random; `bash tests/e2e/run-ci.sh`; one real model call on a fictional visit (`tests/backend/pseudonymization-live.test.ts`, opt-in).
+- **Unverified:** real clinical text; a real EHR's answers to the `RelatedPerson` and `Practitioner` reads (they are optional and skipped when refused; OpenEMR was not run in this session); the consultation path on a real model; how often a name the EHR does not supply is missed.
+- **Known limits (also in `docs/go-live.md`):** audio is not de-identified, so the scribe is not de-identified end to end; names the EHR does not supply are found by rules (common given names, titles, a family name or patronymic after a name); a street address typed in free text and a person recognisable from the story are not handled; the map is per server process, so two instances or a restart give a session new stand-ins (each call maps its own answer back, so nothing breaks).
+- **Left as it was:** free-text chat still answers 501 for every session. It would pass through the layer if switched on (it uses `getModelProvider`), but the model client only runs the three structured tasks; whether to offer chat is the owner's decision, not made here.
+- **Small things noticed, not changed:** a date written in two forms in one request comes back in the form seen first; a lower-case transliteration variant of a short name (under six letters, for example "sami" for a patient Sami) is not replaced unless capitalised, so that words like "same" survive; the exact spelling is always replaced.
 
-- The single boundary is `getModelProvider()` in `platform/tenants/model-provider.ts`. **The scribe builds a second provider itself** (`getNoteProvider()` in `apps/embedded-app/server/scribe.ts`, same `createOpenAIProvider`, other model): route it through the same layer or T4's "no call path can bypass it" is false.
-- Today the consultation request already leaves out the name, birth date and record ids (`core/consultation/authoring.ts`, checked in `live-ehr-flow.mts` and `tests/backend/live-clinical-path.test.ts`); free text (the physician's request, chart notes, the transcript) is where names can still travel.
-- Tests of the layer use the fixtures in `tests/fixtures`; add Arabic-script names there, never in product code.
-- OpenEMR's FHIR API reports a visit as `finished` while it is open in the chart; the header then reads "Outpatient visit, finished". Left as is (T5 or T7 may want other wording).
-- For T5: in the frame, cookies worked only because both were on `localhost`. For T7: use OpenEMR 7.0.3 unless OpenEMR has fixed 8.x.
+## Next: T5 (make the embedded UI live inside the hospital system)
+
+Do the brief's T5 as written. Notes for it:
+
+- "No patient data goes anywhere except the EHR, StethoLink's database and the de-identified model call": the model call is now covered by T4; the scribe's audio to the transcription provider is the remaining outbound patient data and is documented, not removed. T5 still has to check for third-party fonts, analytics and CDNs at runtime.
+- In the T2 run the frame worked because StethoLink and OpenEMR were both on `localhost` (same-site cookies). Cross-site was never tried.
+- OpenEMR's FHIR API reports a visit as `finished` while it is open in the chart; the header then reads "Outpatient visit, finished".
+- For T6: order drafting must call `getModelProvider(modelPrivacy(session, adapter))`; the layer then applies with no further work. For T7: use OpenEMR 7.0.3 unless OpenEMR has fixed 8.x, and check `getIdentity()` against it (which of `RelatedPerson` and `Practitioner` it grants).
 
 ## Running a real OpenEMR here (about 10 minutes)
 
