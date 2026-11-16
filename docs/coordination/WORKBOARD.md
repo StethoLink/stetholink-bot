@@ -56,7 +56,7 @@ Brief: [fable-openemr-privacy-orders.md](../agent-handoffs/fable-openemr-privacy
 | O-T2 | Real OpenEMR launch end to end: preflight script, clinician mapping forms, ACL bug research, `docs/openemr.md` runbook | done (claude) |
 | O-T3 | Remove synthetic and mock behaviour from the product | done (claude) |
 | O-T4 | Pseudonymize patient data before the model provider | done (claude) |
-| O-T5 | Embedded UI inside the hospital system | in progress (claude): sub-step 1 done; **sub-step 2 open** (Arabic for the Scribe, Consultations and History work areas, and their screenshots) |
+| O-T5 | Embedded UI inside the hospital system | in progress (claude): sub-step 1 done; **sub-step 2 claimed** (Arabic for the Scribe, Consultations and History work areas, and their screenshots) |
 | O-T6 | Order drafting | open |
 | O-T7 | Verify the whole flow on real systems | open |
 | O-T8 | Final report to the owner | open |
