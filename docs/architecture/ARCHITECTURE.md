@@ -4,6 +4,7 @@
 apps/embedded-app/       Embedded UI, HTTP contracts and service composition
 core/auth/               Provider-neutral clinician authorization context
 core/agent/              Model interfaces, prompts, orchestration and safety checks
+core/privacy/            De-identification before the model and the way back (ports: IdentitySource, SurrogateVault)
 core/consultation/       Draft generation, grounding and approval
 core/routing/            Provider registry, router, transport port and callback ingestion
 core/patient-context/    Patient-context service
@@ -62,6 +63,12 @@ A tenant routes only to the receiving services in its own configuration (`PROVID
 `core/consultation/authoring.ts` turns a physician's natural-language request, the normalized chart facts and the patient's age and sex into a consultation draft. The model first reviews the request and, when it does not fit the chart or is unclear, returns questions instead of a draft; the physician answers, proceeds anyway or rewrites the request. The model returns one structured JSON object and has no tools. Every statement must cite documented facts and is checked against them; unsupported statements are removed and counted, missing information is written from the chart, and suggestions are kept apart. Revision reuses the same checks and the recorded lifecycle, so a revised draft is again awaiting physician review. The OpenAI adapter enforces a per-call cost bound, a per-instance daily limit, a deadline and bounded retries, and reports tokens, estimated cost and latency. There is no fallback: the deterministic stand-in exists only under `tests/fixtures`, and the server does not start without a configured model. [Assistant guide](../ai/consultation-assistant.md)
 
 Provider-specific logic sits behind `ProviderAdapter` in `integrations/providers/`. No real provider is connected. [Provider integration](../providers/integration.md)
+
+## De-identification at the model boundary
+
+`getModelProvider(privacy, task)` in `platform/tenants/model-provider.ts` is the only place a model client is built, for consultations and for the scribe's note. It returns `createPseudonymizingProvider` (`core/privacy/provider.ts`) around the client, never the client itself, and the client refuses any request not marked by that layer (`ModelRequest.pseudonymized`). A test fails if product code outside those two files constructs the client.
+
+The layer reads who the chart names through the `IdentitySource` port (`getIdentity()` on the FHIR connector: Patient, its contacts, RelatedPerson, the signed-in Practitioner, the visit start), replaces names, identifiers and dates in every message (`core/privacy/pseudonymizer.ts`), checks the result independently for any identifier the chart supplied, sends it, and maps the answer back before the caller's own validation runs. Callers and validators therefore keep working on real chart text. The stand-in map is held through the `SurrogateVault` port; the only implementation is process memory keyed by session and dropped at session expiry (`platform/privacy/vault.ts`). Clinical values are not touched: JSON numbers, fact ids and anything that is not a name, an identifier or a calendar date pass unchanged. Audio is outside this layer; see `docs/go-live.md`.
 
 ## One mode, and where test data lives
 

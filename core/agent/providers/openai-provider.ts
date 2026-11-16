@@ -102,6 +102,8 @@ export function createOpenAIProvider(config: OpenAIProviderConfig, request: type
       if (!input.dataClassification || !task || !(OPENAI_STRUCTURED_TASKS as readonly string[]).includes(task)) {
         throw new RouteError("forbidden", "OpenAI is restricted to classified, structured consultation drafting");
       }
+      // Nothing leaves that did not pass through the de-identification layer, whoever built this provider.
+      if (input.pseudonymized !== true) throw new RouteError("forbidden", "A model request must be de-identified before it is sent");
       // Live data is sent only to a deployment the operator approved for it. No fallback.
       if (input.dataClassification === "live" && !settings.liveDataApproved) {
         throw new RouteError("provider_unavailable", "The model provider is not approved for live clinical data (MODEL_LIVE_DATA_APPROVED)");

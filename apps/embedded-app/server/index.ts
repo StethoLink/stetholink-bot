@@ -7,6 +7,7 @@ import { clinicalSafetyGuard } from "@/core/agent/safety/guard";
 import { createConsultationRepository } from "@/platform/persistence";
 import { createConsultationService } from "@/core/consultation/service";
 import type { VerifiedLaunch } from "@/platform/auth/identity";
+import type { ModelPrivacy } from "@/core/privacy/ports";
 import { getEnv } from "@/platform/tenants/env";
 import { RouteError } from "@/core/errors";
 import { getTenant } from "@/platform/tenants";
@@ -25,6 +26,19 @@ import { parseStatement } from "@/shared/utils/referral-text";
 export function getClinicalServices(session: VerifiedLaunch) {
   const adapter = getClinicalDataAdapter(session);
   return { adapter, patientContext: createPatientContextService(adapter) };
+}
+
+/**
+ * What the model boundary needs to de-identify this session's requests: the people and numbers
+ * the EHR names, read once per request cycle, and a key that ends with the session.
+ */
+export function modelPrivacy(session: VerifiedLaunch, adapter: ReturnType<typeof getClinicalDataAdapter>): ModelPrivacy {
+  const { tenantId, clinicianId, patientId, encounterId, expiresAt } = session.context;
+  let identity: ReturnType<typeof adapter.getIdentity> | undefined;
+  return {
+    sessionKey: [tenantId, clinicianId, patientId, encounterId ?? "", expiresAt].join("|"), expiresAt,
+    identity: () => identity ??= adapter.getIdentity(),
+  };
 }
 
 /**
@@ -47,7 +61,7 @@ export function getChat(session: VerifiedLaunch) {
   // Product decision: free-text chat would send the whole patient summary to the model, so it stays off for real patients.
   if (session.context.dataClassification === "live") throw new RouteError("not_implemented", "Free-text chat is not available with real patient data. Use a consultation request instead.");
   return createChatOrchestrator({
-    provider: getModelProvider(), safety: clinicalSafetyGuard, dataClassification: session.context.dataClassification,
+    provider: getModelProvider(modelPrivacy(session, adapter)), safety: clinicalSafetyGuard, dataClassification: session.context.dataClassification,
     loadPatientContext: (id) => patientContext.getContext(id),
   });
 }
@@ -68,7 +82,7 @@ export function getConsultations(session: VerifiedLaunch) {
   const { adapter } = getClinicalServices(session);
   requireAssistantData(session, adapter);
   const service = createConsultationService({
-    repository, provider: getModelProvider(), safety: clinicalSafetyGuard, adapter, dataClassification: actor.dataClassification,
+    repository, provider: getModelProvider(modelPrivacy(session, adapter)), safety: clinicalSafetyGuard, adapter, dataClassification: actor.dataClassification,
     // The model is asked to use the spelling of specialties this tenant can actually route to.
     specialties: [...new Set(tenant.directory.filter((provider) => provider.active && tenant.recipients.has(provider.id)).flatMap((provider) => provider.specialties))],
   });

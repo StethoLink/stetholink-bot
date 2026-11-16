@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { createOpenAIProvider } from "@/core/agent/providers/openai-provider";
+import { deidentified } from "../helpers/privacy";
 import { mockProvider } from "@/tests/fixtures/mock-provider";
 import type { ModelProvider } from "@/core/agent/providers/types";
 import { clinicalSafetyGuard } from "@/core/agent/safety/guard";
@@ -10,6 +11,9 @@ import { createFhirConnector } from "@/integrations/fhir/connector";
 import { encounterContextSchema, patientContextSchema } from "@/shared/schemas";
 import { citedEvidenceIds } from "@/shared/utils/referral-text";
 import { evaluationCases, evaluationFhir } from "../helpers/evaluation-cases";
+
+// As in the product: the provider is reached only through the de-identification layer.
+const liveProvider = (...args: Parameters<typeof createOpenAIProvider>) => deidentified(createOpenAIProvider(...args));
 
 // Twelve fictional charts in FHIR shape (core/agent/evaluations/consultation/cases.json).
 // Always on: each chart goes through the real connector and the drafting service with a stand-in
@@ -52,7 +56,7 @@ describe("consultation evaluation charts through the connector (stand-in model)"
 
 const live = process.env.RUN_CONSULTATION_LIVE_EVAL === "1" && Boolean(process.env.OPENAI_API_KEY);
 describe.skipIf(!live)("consultation evaluation charts (live model)", () => {
-  const provider = () => createOpenAIProvider({ apiKey: process.env.OPENAI_API_KEY, model: process.env.OPENAI_MODEL ?? "gpt-5", timeoutMs: 28_000, maxRetries: 0, maxInputTokens: 32_000, maxOutputTokens: 8000, maxCostUsd: 0.5,
+  const provider = () => liveProvider({ apiKey: process.env.OPENAI_API_KEY, model: process.env.OPENAI_MODEL ?? "gpt-5", timeoutMs: 28_000, maxRetries: 0, maxInputTokens: 32_000, maxOutputTokens: 8000, maxCostUsd: 0.5,
     reasoningEffort: (process.env.OPENAI_REASONING_EFFORT as "low" | undefined) ?? "low", inputUsdPerMillion: Number(process.env.OPENAI_INPUT_USD_PER_MILLION ?? 1.25), outputUsdPerMillion: Number(process.env.OPENAI_OUTPUT_USD_PER_MILLION ?? 10), liveDataApproved: true });
   it.each(evaluationCases.map((evaluation) => [evaluation.id, evaluation] as const))("%s", async (_id, evaluation) => {
     const result = await service(evaluation, provider()).create({ patientId: "fic-pt-1", encounterId: "fic-enc-1", request: evaluation.request }, actor);

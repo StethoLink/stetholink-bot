@@ -18,6 +18,6 @@ export function getClinicalDataAdapter(session: VerifiedLaunch) {
     throw new AuthError("forbidden", "Chart access denied");
   }
   // EHR adapters stay pinned to the patient and encounter of the verified launch.
-  const grant = { baseUrl, accessToken: session.ehrAccessToken, patientId: context.patientId, encounterId: context.encounterId };
+  const grant = { baseUrl, accessToken: session.ehrAccessToken, patientId: context.patientId, encounterId: context.encounterId, practitionerReference: session.ehrUser };
   return connector === "openemr" ? createOpenEmrConnector(grant) : createFhirConnector(grant);
 }

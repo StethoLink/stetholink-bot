@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { drafted } from "@/tests/helpers/drafted";
 import { createOpenAIProvider } from "@/core/agent/providers/openai-provider";
+import { deidentified } from "../helpers/privacy";
 import { createSpendingLimiter } from "@/core/agent/providers/spending";
 import { clinicalSafetyGuard } from "@/core/agent/safety/guard";
 import { createConsultationService } from "@/core/consultation/service";
@@ -11,6 +12,9 @@ import type { ClinicalFact, ConsultationDraft } from "@/shared/contracts";
 import { omarClinicalFacts, omarEncounter, omarPatient } from "@/tests/fixtures/synthetic-data";
 import { consultationDraftSchema } from "@/shared/schemas";
 import { citedEvidenceIds, parseReferralText } from "@/shared/utils/referral-text";
+
+// As in the product: the provider is reached only through the de-identification layer.
+const liveProvider = (...args: Parameters<typeof createOpenAIProvider>) => deidentified(createOpenAIProvider(...args));
 
 // LIVE MODEL TESTS. These make paid calls to the configured model with synthetic charts only.
 // They run only with RUN_OPENAI_REFERRAL_LIVE_TEST=1, a server-side key and operator cost bounds:
@@ -25,7 +29,7 @@ const known = new Set(omarClinicalFacts.filter((fact) => fact.status === "known"
 function liveService(adapter: ClinicalDataAdapter = syntheticClinicalAdapter) {
   const env = getEnv();
   const calls: unknown[] = [];
-  const provider = createOpenAIProvider({
+  const provider = liveProvider({
     apiKey: env.OPENAI_API_KEY, model: env.OPENAI_MODEL, timeoutMs: env.OPENAI_TIMEOUT_MS, maxRetries: env.OPENAI_MAX_RETRIES,
     maxInputTokens: env.OPENAI_MAX_INPUT_TOKENS, maxOutputTokens: env.OPENAI_MAX_OUTPUT_TOKENS, maxCostUsd: env.OPENAI_MAX_COST_USD,
     reasoningEffort: env.OPENAI_REASONING_EFFORT, inputUsdPerMillion: env.OPENAI_INPUT_USD_PER_MILLION, outputUsdPerMillion: env.OPENAI_OUTPUT_USD_PER_MILLION,

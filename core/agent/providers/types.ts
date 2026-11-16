@@ -15,6 +15,12 @@ export interface ModelRequest {
    * whose classification it is not configured for.
    */
   dataClassification?: DataClassification;
+  /**
+   * Set only by the de-identification layer (`core/privacy/provider.ts`) once names, identifiers
+   * and dates were replaced. A provider that sends data outside the hospital refuses a request
+   * without it.
+   */
+  pseudonymized?: true;
   structuredOutput?: {
     name: string;
     schema: Record<string, unknown>;

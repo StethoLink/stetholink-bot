@@ -17,11 +17,12 @@ interface ObservationValue {
   interpretation?: Concept[];
   referenceRange?: Array<{ low?: Quantity; high?: Quantity; text?: string }>;
 }
+export interface HumanName { text?: string; given?: string[]; family?: string }
 export interface FhirResource extends ObservationValue {
   resourceType?: string;
   id?: string;
   meta?: { lastUpdated?: string };
-  name?: Array<{ text?: string; given?: string[]; family?: string }>;
+  name?: HumanName[];
   gender?: string;
   birthDate?: string;
   subject?: Reference;
@@ -59,6 +60,12 @@ export interface FhirResource extends ObservationValue {
   effectiveInstant?: string;
   issued?: string;
   component?: ObservationValue[];
+  // Read only to learn which names and numbers identify someone (de-identification); never shown or stored.
+  identifier?: Array<{ value?: string }>;
+  telecom?: Array<{ value?: string }>;
+  address?: Array<{ line?: string[]; postalCode?: string }>;
+  contact?: Array<{ name?: HumanName; telecom?: Array<{ value?: string }>; gender?: string }>;
+  participant?: Array<{ individual?: Reference; actor?: Reference }>;
 }
 
 interface Loaded { resources: FhirResource[]; included: FhirResource[]; truncated: boolean; failed: boolean }

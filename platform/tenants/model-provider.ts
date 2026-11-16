@@ -4,6 +4,9 @@ import { createOpenAIProvider, type ModelCallEvent } from "@/core/agent/provider
 import { createSpendingLimiter } from "@/core/agent/providers/spending";
 import { createLedgerLimiter } from "@/platform/persistence/spend-ledger";
 import type { ModelProvider, SpendingLimiter } from "@/core/agent/providers/types";
+import type { ModelPrivacy } from "@/core/privacy/ports";
+import { createPseudonymizingProvider } from "@/core/privacy/provider";
+import { createMemoryVault } from "@/platform/privacy/vault";
 
 export type { ModelProvider, ModelRequest, ModelResult, ModelMessage } from "@/core/agent/providers/types";
 
@@ -24,20 +27,30 @@ function observe(event: ModelCallEvent) {
 }
 
 /**
- * The only place a concrete provider is chosen. Add new providers here. There is no stand-in:
- * server configuration is refused at startup without the provider's key and rates.
+ * The only place a concrete provider is built, for every model task (consultation drafting and the
+ * scribe's note). What it returns is always the de-identification layer around the provider:
+ * there is no way to get the bare provider from here, and the provider itself refuses a request
+ * that did not pass through the layer. There is no stand-in: server configuration is refused at
+ * startup without the provider's key and rates.
  */
-export function getModelProvider(): ModelProvider {
+export function getModelProvider(privacy: ModelPrivacy, task: "consultation" | "scribe_note" = "consultation"): ModelProvider {
   const env = getEnv();
-  return createOpenAIProvider({
-    apiKey: env.OPENAI_API_KEY, model: env.OPENAI_MODEL,
+  const scribe = task === "scribe_note";
+  const provider = createOpenAIProvider({
+    apiKey: env.OPENAI_API_KEY, model: scribe ? env.SCRIBE_NOTE_MODEL : env.OPENAI_MODEL,
     ...(env.OPENAI_BASE_URL ? { baseUrl: env.OPENAI_BASE_URL } : {}), allowLoopbackHttp: env.NODE_ENV !== "production",
     timeoutMs: env.OPENAI_TIMEOUT_MS, maxRetries: env.OPENAI_MAX_RETRIES,
-    maxInputTokens: env.OPENAI_MAX_INPUT_TOKENS, maxOutputTokens: env.OPENAI_MAX_OUTPUT_TOKENS,
-    maxCostUsd: env.OPENAI_MAX_COST_USD, reasoningEffort: env.OPENAI_REASONING_EFFORT,
-    inputUsdPerMillion: env.OPENAI_INPUT_USD_PER_MILLION, outputUsdPerMillion: env.OPENAI_OUTPUT_USD_PER_MILLION,
+    // A visit transcript is larger than a consultation request; the note has its own, cheaper model and bounds. One call per visit.
+    ...(scribe ? {
+      maxInputTokens: 120_000, maxOutputTokens: 12_000, maxCostUsd: Math.min(1, env.SCRIBE_MAX_VISIT_USD), reasoningEffort: env.SCRIBE_NOTE_REASONING_EFFORT,
+      inputUsdPerMillion: env.SCRIBE_NOTE_INPUT_USD_PER_MILLION ?? env.OPENAI_INPUT_USD_PER_MILLION, outputUsdPerMillion: env.SCRIBE_NOTE_OUTPUT_USD_PER_MILLION ?? env.OPENAI_OUTPUT_USD_PER_MILLION,
+    } : {
+      maxInputTokens: env.OPENAI_MAX_INPUT_TOKENS, maxOutputTokens: env.OPENAI_MAX_OUTPUT_TOKENS, maxCostUsd: env.OPENAI_MAX_COST_USD, reasoningEffort: env.OPENAI_REASONING_EFFORT,
+      inputUsdPerMillion: env.OPENAI_INPUT_USD_PER_MILLION, outputUsdPerMillion: env.OPENAI_OUTPUT_USD_PER_MILLION,
+    }),
     liveDataApproved: env.MODEL_LIVE_DATA_APPROVED === "true",
   }, fetch, { budget: budget(), observe });
+  return createPseudonymizingProvider(provider, privacy, createMemoryVault());
 }
 
 /** What the interface may say about the configured assistant. No secrets. */

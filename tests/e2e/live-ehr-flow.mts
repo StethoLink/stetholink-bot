@@ -249,6 +249,15 @@ try {
   const scribeModel = ehr.state.modelRequests.filter((entry) => entry.task === "scribe_soap_note");
   assert.equal(scribeModel.length, 1, "One model call per visit");
   for (const secret of ["Faisal", "Fictional-Example", "1970-01-01", "fic-pt-1", "fic-enc-1", "alg-penicillin", "Practitioner"]) assert.equal(scribeModel[0].body.includes(secret), false, `The note model must not see ${secret}`);
+  // What was said aloud is de-identified before the note model (brief T4): the patient's spoken name, another doctor's name and a spoken phone number.
+  const sentToNoteModel = JSON.parse(JSON.parse(scribeModel[0].body).input[0].content).transcript.segments.map((segment: { text: string }) => segment.text).join("\n");
+  for (const spoken of ["فيصل", "سلمان", "الحربي", "0550007788"]) assert.equal(sentToNoteModel.includes(spoken), false, `The note model must not see ${spoken}`);
+  assert.ok(sentToNoteModel.includes("PHONE-A") && sentToNoteModel.includes("sulfa") && sentToNoteModel.includes("خمسمية ملي مرتين في اليوم"), "Identifiers are replaced, clinical content is not");
+  assert.ok(JSON.parse(scribeModel[0].body).instructions.includes("stand-ins"));
+  // The physician reads the real words again, in the transcript and in the note drafted from the model's answer.
+  const noteText = JSON.stringify(drafted.note.sections);
+  for (const spoken of ["فيصل", "سلمان الحربي", "0550007788"]) assert.ok(noteText.includes(spoken) && JSON.stringify(drafted.segments).includes(spoken), `The physician sees ${spoken}`);
+  assert.equal(drafted.note.rejectedStatements, 0, "Every statement still matches the words of the visit after mapping back");
   assert.equal(ehr.state.created.length, 0, "Nothing is written before the physician approves");
 
   // Approval: refused for an item that is already in the chart; nothing recorded, nothing written.

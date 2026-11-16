@@ -10,13 +10,31 @@ Read with: [data map](data-map.md), [sandbox checks](sandbox.md), [architecture]
 | --- | --- | --- |
 | Hospital approval to process patient data in StethoLink (privacy and security review, PDPL) | Hospital, with you | Everything |
 | Where it runs: hospital servers or a cloud region inside the Kingdom | Hospital IT | Hosting |
-| Agreement and processing location for the language model | You and the vendor | `MODEL_LIVE_DATA_APPROVED=true` |
-| Agreement and processing location for transcription | You and the vendor | `TRANSCRIPTION_LIVE_DATA_APPROVED=true` |
+| Agreement and processing location for the language model (it receives de-identified text; see below) | You and the vendor | `MODEL_LIVE_DATA_APPROVED=true` |
+| Data processing agreement and processing location for transcription, or a transcription service inside the hospital. **It receives the visit audio, which cannot be de-identified** | You and the vendor | `TRANSCRIPTION_LIVE_DATA_APPROVED=true` |
 | Patient-consent wording for recording a visit, approved by the hospital | Hospital | The scribe |
 | Note type and status the hospital wants for scribe notes (default: progress note, `preliminary`, signed in the EHR) | Hospital medical records | `FHIR_NOTE_TYPE_CODE`, `FHIR_NOTE_DOC_STATUS` |
 | List of pilot clinicians and their roles; list of receiving specialist services and their specialists | Hospital | Mappings |
 
 If the model or transcription provider processes data outside the Kingdom and that is not approved, leave its switch `false`. The server then refuses live mode. A deployment of the same models inside the Kingdom, or a self-hosted model with a compatible API, is configured with `OPENAI_BASE_URL` and `TRANSCRIPTION_BASE_URL`.
+
+### What leaves the hospital, and what does not
+
+Text sent to the language model is de-identified first, on the StethoLink server (`core/privacy/`, wrapped around the model at `platform/tenants/model-provider.ts`; there is no other way to reach the model, and the model client refuses a request that did not pass through it):
+
+- Names of people (the patient, relatives, staff, anyone named in a request or a transcript) are replaced with stand-in names of the same sex and naming culture, in Arabic or Latin script as written. Names the EHR supplies are replaced in every spelling the layer knows (attached Arabic particles, diacritics, common transliterations). Names the EHR does not supply are found by a list of common given names, by titles ("Dr", "الدكتور") and by the family name or patronymic that follows a name.
+- Record numbers, national and residence numbers, insurance numbers, phone numbers, e-mail addresses, URLs, EHR record references and any run of eight or more digits become tokens (`ID-A`, `PHONE-A`).
+- Calendar dates become day offsets from the visit (`T-3d`), so intervals stay true. A Hijri date is hidden whole.
+- Age (90 and over is reported as "90 years or older"), sex, vital signs, laboratory values and units, diagnoses, medicines and doses, allergies and durations are sent unchanged.
+- The model's answer is mapped back on the server, so the physician reads the real names, numbers and dates. The map from stand-in to real value exists only in the memory of the StethoLink server process, for one signed-in session; it is not written to the database, to a log or to any response, and it is dropped when the session expires.
+- Nothing is sent if the patient's record cannot be read to learn the identifiers, or if a known identifier is still present after replacement.
+
+Limits you must know before telling anyone "the model never sees patient data":
+
+- **Audio cannot be de-identified.** With the scribe on, the recording of the visit goes to the transcription provider (`TRANSCRIPTION_PROVIDER`: OpenAI or ElevenLabs) as it was spoken: the patient's voice, and any name, number or address said aloud. The transcript is de-identified before the note model sees it, but the transcription provider has already received the audio. **The scribe is therefore not de-identified end to end.** Use it only with a data processing agreement and processing location the hospital approved for patient speech (`TRANSCRIPTION_LIVE_DATA_APPROVED`), or with a transcription service running inside the hospital (`TRANSCRIPTION_BASE_URL` pointing at an OpenAI-compatible transcription endpoint the hospital hosts), or leave `SCRIBE_ENABLED=false`.
+- **Names the EHR does not supply are found by rules, not with certainty.** An uncommon name said or typed without a title, a name outside the Arabic and common English forms, a nickname, or a street address typed in free text can pass through. A person can also be recognised from the clinical story itself (a rare condition, an unusual event), which no replacement removes. De-identification lowers the risk; it does not make the data anonymous, and the agreement with the model vendor (`MODEL_LIVE_DATA_APPROVED`) is still required.
+- To learn the names of relatives and of the signed-in clinician the server reads `RelatedPerson` and `Practitioner` from the EHR when the EHR grants them (add `patient/RelatedPerson.read` and `user/Practitioner.read`, or their v2 forms, to the registered scope if the EHR offers them). Without them those names are found only by the rules above.
+- Text the physician types into a request is the physician's own: a name typed there is hidden from the model, and it is restored in the draft the physician reviews and may send to the specialist.
 
 ## 2. Register the SMART application in the EHR
 
@@ -172,4 +190,5 @@ Clinical, before real patients:
 - Refresh of the EHR token: a session ends after 15 minutes and the clinician reopens from the chart.
 - A real email service for specialist sign-in codes (`EMAIL_PROVIDER` has only the development printer). Specialists sign in from the EHR.
 - A partner API to an outside provider (`integrations/providers/http-partner.ts` exists and is not registered).
+- De-identification was verified on fictional data only: unit tests, the end-to-end flow with fake servers, and one real model call on a fictional Arabic visit. It has not been measured on real clinical text, and its miss rate for names the EHR does not supply is unknown.
 - Verification against the hospital's own EHR; so far a fake SMART server and a real HAPI FHIR server were used ([sandbox checks](sandbox.md)).

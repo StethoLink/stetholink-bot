@@ -1,7 +1,8 @@
 import { createHmac } from "node:crypto";
 import { ChartUnavailableError, type ClinicalDataAdapter } from "../../core/tools/connector.ts";
 import type { ClinicalFact, EncounterContext, PatientContext } from "../../shared/contracts/index.ts";
-import { normalizeChart, type FhirResource } from "./facts.ts";
+import type { ChartIdentity, IdentitySource, PersonIdentity } from "../../core/privacy/ports.ts";
+import { normalizeChart, type FhirResource, type HumanName } from "./facts.ts";
 
 /** A single-resource read the EHR refused. Carries the HTTP status only. */
 export class FhirReadError extends Error {
@@ -20,6 +21,8 @@ export interface FhirLaunchGrant {
   accessToken: string;
   patientId: string;
   encounterId?: string;
+  /** "Practitioner/<id>" of the signed-in clinician, when the launch verified one. Read for its name only. */
+  practitionerReference?: string;
 }
 
 export interface FhirConnectorOptions {
@@ -58,7 +61,7 @@ const ENCOUNTER_STATUS: Record<string, EncounterContext["status"]> = {
 
 interface Loaded { resources: FhirResource[]; included: FhirResource[]; truncated: boolean; failed: boolean }
 
-export function createFhirConnector(grant: FhirLaunchGrant, request: typeof fetch = fetch, options: FhirConnectorOptions = {}): ClinicalDataAdapter {
+export function createFhirConnector(grant: FhirLaunchGrant, request: typeof fetch = fetch, options: FhirConnectorOptions = {}): ClinicalDataAdapter & IdentitySource {
   const base = trustedBase(grant.baseUrl);
   if (!grant.accessToken || !isFhirId(grant.patientId) || (grant.encounterId && !isFhirId(grant.encounterId))) {
     throw new Error("Invalid FHIR launch grant");
@@ -200,6 +203,55 @@ export function createFhirConnector(grant: FhirLaunchGrant, request: typeof fetc
         encounterId: id, patientId: grant.patientId, type, status, startedAt: new Date(start).toISOString(),
         ...(reasonForVisit ? { reasonForVisit } : {}),
       };
+    },
+    /**
+     * Who the chart names, for de-identification. The patient record must be readable: without it
+     * nothing can be removed reliably, and the caller sends nothing. Relatives, the clinician and
+     * the visit are read when the EHR grants them and skipped when it does not.
+     */
+    async getIdentity(): Promise<ChartIdentity> {
+      const patient = await read(`Patient/${encodeURIComponent(grant.patientId)}`);
+      if (patient?.resourceType !== "Patient" || patient.id !== grant.patientId) throw new FhirReadError(404);
+      const sexOf = (gender: string | undefined) => gender === "male" || gender === "female" ? gender : undefined;
+      const names = (list: Array<HumanName | undefined> | undefined) => (list ?? []).filter((name): name is HumanName => !!name);
+      const people: PersonIdentity[] = [{ role: "patient", sex: sexOf(patient.gender), names: names(patient.name) }];
+      const identifiers = new Set<string>([grant.patientId, ...(grant.encounterId ? [grant.encounterId] : [])]);
+      const addresses = new Set<string>();
+      const collect = (resource: FhirResource) => {
+        for (const value of [...(resource.identifier ?? []), ...(resource.telecom ?? []), ...(resource.contact ?? []).flatMap((contact) => contact.telecom ?? [])]) {
+          if (value.value?.trim()) identifiers.add(value.value.trim());
+        }
+        for (const address of resource.address ?? []) for (const line of [...(address.line ?? []), address.postalCode]) if (line?.trim()) addresses.add(line.trim());
+      };
+      collect(patient);
+      for (const contact of patient.contact ?? []) if (contact.name) people.push({ role: "relative", sex: sexOf(contact.gender), names: [contact.name] });
+      const optional = async <T>(load: () => Promise<T>): Promise<T | undefined> => { try { return await load(); } catch { return undefined; } };
+      const [related, practitioner, encounter] = await Promise.all([
+        search("RelatedPerson", {}),
+        grant.practitionerReference && /^Practitioner\/[A-Za-z0-9.-]{1,64}$/.test(grant.practitionerReference)
+          ? optional(async () => (await get(`${root}/${grant.practitionerReference}`)).body) : undefined,
+        grant.encounterId ? optional(async () => (await get(`${root}/Encounter/${encodeURIComponent(grant.encounterId!)}`)).body) : undefined,
+      ]);
+      for (const person of related.resources) {
+        people.push({ role: "relative", sex: sexOf(person.gender), names: names(person.name) });
+        if (person.id) identifiers.add(person.id);
+        collect(person);
+      }
+      if (practitioner?.resourceType === "Practitioner") {
+        people.push({ role: "staff", sex: sexOf(practitioner.gender), names: names(practitioner.name) });
+        if (practitioner.id) identifiers.add(practitioner.id);
+        collect({ identifier: practitioner.identifier, telecom: practitioner.telecom });
+      }
+      let anchorDate: string | undefined;
+      if (encounter?.resourceType === "Encounter" && encounter.id === grant.encounterId) {
+        const start = (encounter.period ?? encounter.actualPeriod)?.start ?? encounter.plannedStartDate;
+        if (start && Number.isFinite(Date.parse(start))) anchorDate = new Date(start).toISOString();
+        for (const participant of encounter.participant ?? []) {
+          const display = (participant.individual ?? participant.actor)?.display?.trim();
+          if (display) people.push({ role: "staff", names: [{ text: display }] });
+        }
+      }
+      return { people: people.filter((person) => person.names.length), identifiers: [...identifiers], addresses: [...addresses], ...(anchorDate ? { anchorDate } : {}) };
     },
   };
 }

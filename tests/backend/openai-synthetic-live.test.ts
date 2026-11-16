@@ -1,5 +1,6 @@
 import { expect, it } from "vitest";
 import { createOpenAIProvider } from "@/core/agent/providers/openai-provider";
+import { deidentified } from "../helpers/privacy";
 import { createConsultationService } from "@/core/consultation/service";
 import { clinicalSafetyGuard } from "@/core/agent/safety/guard";
 import { syntheticClinicalAdapter } from "@/tests/fixtures/clinical-adapter";
@@ -7,12 +8,15 @@ import { ahmedConsultationRequest } from "@/tests/fixtures/synthetic-data";
 import { getEnv } from "@/platform/tenants/env";
 import { consultationDraftSchema } from "@/shared/schemas";
 
+// As in the product: the provider is reached only through the de-identification layer.
+const liveProvider = (...args: Parameters<typeof createOpenAIProvider>) => deidentified(createOpenAIProvider(...args));
+
 // Explicitly opt in to a paid call using an existing server-side key. Skipped is
 // BLOCKED/unverified, never a successful live-provider criterion.
 const enabled = process.env.RUN_OPENAI_SYNTHETIC_LIVE_TEST === "1" && Boolean(process.env.OPENAI_API_KEY);
 it.skipIf(!enabled)("LIVE: typed grounded synthetic Ahmed consultation (requires secure credentials and explicit opt-in)", async () => {
   const env = getEnv();
-  const provider = createOpenAIProvider({
+  const provider = liveProvider({
     apiKey: env.OPENAI_API_KEY, model: env.OPENAI_MODEL,
     timeoutMs: env.OPENAI_TIMEOUT_MS, maxRetries: env.OPENAI_MAX_RETRIES,
     maxInputTokens: env.OPENAI_MAX_INPUT_TOKENS, maxOutputTokens: env.OPENAI_MAX_OUTPUT_TOKENS,

@@ -1,5 +1,4 @@
 import "server-only";
-import { createOpenAIProvider } from "@/core/agent/providers/openai-provider";
 import { clinicalSafetyGuard } from "@/core/agent/safety/guard";
 import { RouteError } from "@/core/errors";
 import { createScribeService, type ScribeConfig } from "@/core/scribe/service";
@@ -11,9 +10,9 @@ import type { VerifiedLaunch } from "@/platform/auth/identity";
 import { createChartWriteLedger, createScribeRepository } from "@/platform/persistence/scribe";
 import { getTenant } from "@/platform/tenants";
 import { getEnv, scribeProblems } from "@/platform/tenants/env";
-import { spendingLimiter } from "@/platform/tenants/model-provider";
+import { getModelProvider, spendingLimiter } from "@/platform/tenants/model-provider";
 import { getChartWriter } from "./chart-writer";
-import { getClinicalServices, requireAssistantData } from "./index";
+import { getClinicalServices, modelPrivacy, requireAssistantData } from "./index";
 
 const globals = globalThis as typeof globalThis & { stetholinkScribeHints?: Map<string, readonly string[]> };
 /** Metrics only. Audio, transcript text, note text and credentials are never logged. */
@@ -27,18 +26,6 @@ export function getTranscriptionProvider(): TranscriptionProvider {
     case "openai": return createOpenAITranscription({ ...shared, apiKey: env.OPENAI_API_KEY, baseUrl: env.TRANSCRIPTION_BASE_URL ?? env.OPENAI_BASE_URL, allowLoopbackHttp: env.NODE_ENV !== "production" }, fetch, { budget, observe });
     case "elevenlabs": return createElevenLabsTranscription({ ...shared, apiKey: env.ELEVENLABS_API_KEY }, fetch, { budget, observe });
   }
-}
-
-/** The note model: its own, cheaper model setting, the same provider gate and cost bounds. One call per visit. */
-function getNoteProvider() {
-  const env = getEnv();
-  return createOpenAIProvider({
-    apiKey: env.OPENAI_API_KEY, model: env.SCRIBE_NOTE_MODEL, ...(env.OPENAI_BASE_URL ? { baseUrl: env.OPENAI_BASE_URL } : {}), allowLoopbackHttp: env.NODE_ENV !== "production",
-    timeoutMs: env.OPENAI_TIMEOUT_MS, maxRetries: env.OPENAI_MAX_RETRIES, maxInputTokens: 120_000, maxOutputTokens: 12_000, maxCostUsd: Math.min(1, env.SCRIBE_MAX_VISIT_USD),
-    reasoningEffort: env.SCRIBE_NOTE_REASONING_EFFORT,
-    inputUsdPerMillion: env.SCRIBE_NOTE_INPUT_USD_PER_MILLION ?? env.OPENAI_INPUT_USD_PER_MILLION, outputUsdPerMillion: env.SCRIBE_NOTE_OUTPUT_USD_PER_MILLION ?? env.OPENAI_OUTPUT_USD_PER_MILLION,
-    liveDataApproved: env.MODEL_LIVE_DATA_APPROVED === "true",
-  }, fetch, { budget: spendingLimiter("model"), observe: (event) => console.info(JSON.stringify({ action: "model.call", ...event, at: new Date().toISOString() })) });
 }
 
 export function scribeConfig(): ScribeConfig {
@@ -62,7 +49,7 @@ export function getScribe(session: VerifiedLaunch) {
   const config = scribeConfig();
   const hints = globals.stetholinkScribeHints ??= new Map();
   const service = createScribeService({
-    repository: createScribeRepository(actor), ledger: createChartWriteLedger(actor), transcription: getTranscriptionProvider(), noteProvider: getNoteProvider(),
+    repository: createScribeRepository(actor), ledger: createChartWriteLedger(actor), transcription: getTranscriptionProvider(), noteProvider: getModelProvider(modelPrivacy(session, adapter), "scribe_note"),
     safety: clinicalSafetyGuard, adapter, writer: getChartWriter(session), dataClassification: actor.dataClassification, config,
     hints: { get: (id) => hints.get(id), set: (id, value) => { if (hints.size > 500) hints.clear(); hints.set(id, value); } },
     audit: auditConsultation,

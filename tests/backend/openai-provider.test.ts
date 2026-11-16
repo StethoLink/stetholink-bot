@@ -10,7 +10,7 @@ import { SYSTEM_INSTRUCTIONS } from "@/core/agent/prompts/system";
 // Explicit limits: these tests check how the bounds behave, independent of the shipped defaults.
 const config: OpenAIProviderConfig = { apiKey: "synthetic-test-key", model: "synthetic-test-model", inputUsdPerMillion: 1, outputUsdPerMillion: 2, maxRetries: 1,
   maxOutputTokens: 2048, maxCostUsd: 0.1, timeoutMs: 30_000 };
-const input: ModelRequest = { instructions: SYSTEM_INSTRUCTIONS, messages: [{ role: "user", content: '{"facts":[],"eligibleEvidenceIds":[]}' }], dataClassification: "synthetic", structuredOutput: selectionFormat };
+const input: ModelRequest = { instructions: SYSTEM_INSTRUCTIONS, messages: [{ role: "user", content: '{"facts":[],"eligibleEvidenceIds":[]}' }], dataClassification: "synthetic", pseudonymized: true, structuredOutput: selectionFormat };
 const envelope = () => ({ status: "completed", model: config.model, output: [{ type: "message", role: "assistant", status: "completed", content: [{ type: "output_text", text: '{"evidenceIds":[]}' }] }], usage: { input_tokens: 100, output_tokens: 20 } });
 afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks(); });
 

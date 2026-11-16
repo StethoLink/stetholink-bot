@@ -202,7 +202,7 @@ describe("model provider and live data", () => {
   const reply = () => Response.json({ status: "completed", model: config.model, usage: { input_tokens: 100, output_tokens: 20 },
     output: [{ type: "message", role: "assistant", status: "completed", content: [{ type: "output_text", text: '{"evidenceIds":[]}' }] }] });
   const input = (dataClassification: ModelRequest["dataClassification"]): ModelRequest => ({
-    instructions: "i", messages: [{ role: "user", content: '{"facts":[],"eligibleEvidenceIds":[]}' }], dataClassification,
+    instructions: "i", messages: [{ role: "user", content: '{"facts":[],"eligibleEvidenceIds":[]}' }], dataClassification, pseudonymized: true,
     structuredOutput: { name: "consultation_evidence_selection", schema: { type: "object" } },
   });
 

@@ -57,10 +57,10 @@ function fakeReferral(input: AuthoringInput) {
   };
 }
 
-/** FICTIONAL visit that the fake transcription endpoint "hears", one part per call, whatever audio it is sent. */
+/** FICTIONAL visit that the fake transcription endpoint "hears", one part per call, whatever audio it is sent. The patient is called by name, another (fictional) doctor is named and a made-up phone number is spoken, as happens in a real visit. */
 const FAKE_VISIT = [
-  "هلا بك. كيف السكر معك هالفترة؟ والله يا دكتور القراءات الصبح بين مية وستين ومية وثمانين.",
-  "عندك حساسية من أدوية؟ الشهر اللي فات أخذت مضاد حيوي فيه sulfa وطلع لي طفح جلدي قوي وحكة، والطوارئ قالوا لي عندك حساسية منه.",
+  "هلا بك يا فيصل، كيف السكر معك هالفترة؟ والله يا دكتور القراءات الصبح بين مية وستين ومية وثمانين.",
+  "عندك حساسية من أدوية؟ الشهر اللي فات أخذت مضاد حيوي فيه sulfa وطلع لي طفح جلدي قوي وحكة، والدكتور سلمان الحربي في الطوارئ قال لي عندك حساسية منه، ورقم جوالي 0550007788 لو احتجتوني.",
   "تاخذ metformin بانتظام؟ إيه، خمسمية ملي مرتين في اليوم مع الأكل.",
   "وآخر HbA1c كان ثمانية فاصلة واحد. بنعيد HbA1c بعد ثلاث شهور.",
 ];

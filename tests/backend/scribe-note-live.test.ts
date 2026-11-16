@@ -1,11 +1,15 @@
 import { appendFileSync, readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { createOpenAIProvider } from "@/core/agent/providers/openai-provider";
+import { deidentified } from "../helpers/privacy";
 import { clinicalSafetyGuard } from "@/core/agent/safety/guard";
 import { generateScribeNote } from "@/core/scribe/generate";
 import { renderNoteText } from "@/core/scribe/note";
 import { toSentences } from "@/core/scribe/segments";
 import type { ClinicalFact, TranscriptSegment } from "@/shared/contracts";
+
+// As in the product: the provider is reached only through the de-identification layer.
+const liveProvider = (...args: Parameters<typeof createOpenAIProvider>) => deidentified(createOpenAIProvider(...args));
 
 // LIVE MODEL EVALUATION of the scribe on the ten fictional visits in core/agent/evaluations/scribe.
 // Paid calls with fictional data only. Opt in:
@@ -23,7 +27,7 @@ const recognized: Record<string, string> = process.env.SCRIBE_EVAL_TRANSCRIPTS
     .filter((row) => row.model === (process.env.SCRIBE_EVAL_TRANSCRIPT_MODEL ?? "gpt-transcribe") && row.transcript).map((row) => [row.dialogue, row.transcript!]))
   : {};
 
-const provider = () => createOpenAIProvider({
+const provider = () => liveProvider({
   apiKey: process.env.OPENAI_API_KEY, model: process.env.SCRIBE_NOTE_MODEL ?? "gpt-5-mini", timeoutMs: 28_000, maxRetries: 0, maxInputTokens: 60_000, maxOutputTokens: 6000, maxCostUsd: 0.2,
   reasoningEffort: (process.env.SCRIBE_REASONING_EFFORT as "minimal" | "low" | undefined) ?? "low",
   inputUsdPerMillion: Number(process.env.SCRIBE_INPUT_USD_PER_MILLION ?? 0.25), outputUsdPerMillion: Number(process.env.SCRIBE_OUTPUT_USD_PER_MILLION ?? 2),
