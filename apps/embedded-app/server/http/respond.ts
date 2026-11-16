@@ -64,9 +64,9 @@ export function handleRouteError(err: unknown, trace?: Trace) {
   if (err instanceof ChartUnavailableError) return errorResponse(err.code, err.message, trace);
   if (err instanceof postgres.PostgresError) {
     if (err.code === "P0002") return errorResponse("not_found", "Draft not found", trace);
-    if (err.code === "P0001") return errorResponse("conflict", "Consultation command conflicts with its state, version or idempotency key", trace);
-    if (err.code === "22023") return errorResponse("invalid_request", "Invalid consultation command", trace);
-    if (["23505", "40001", "40P01", "55P03"].includes(err.code)) return errorResponse("conflict", "Consultation changed; retry with the same idempotency key or reload");
+    if (err.code === "P0001") return errorResponse("conflict", "The command conflicts with the record's state, version or idempotency key", trace);
+    if (err.code === "22023") return errorResponse("invalid_request", "Invalid command", trace);
+    if (["23505", "40001", "40P01", "55P03"].includes(err.code)) return errorResponse("conflict", "The record changed; retry with the same idempotency key or reload");
     if (err.code === "42501") return errorResponse("forbidden", "Access denied", trace);
     return errorResponse("provider_unavailable", "Database is temporarily unavailable", trace);
   }

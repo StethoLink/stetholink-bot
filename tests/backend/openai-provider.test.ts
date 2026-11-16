@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { createOpenAIProvider, type ModelCallEvent, type OpenAIProviderConfig } from "@/core/agent/providers/openai-provider";
+import { OPENAI_STRUCTURED_TASKS, createOpenAIProvider, type ModelCallEvent, type OpenAIProviderConfig } from "@/core/agent/providers/openai-provider";
+import { ORDERS_TASK, ORDER_INSTRUCTIONS, orderFormat } from "@/core/orders/authoring";
 import { createSpendingLimiter } from "@/core/agent/providers/spending";
 import { referralFormat } from "@/core/consultation/authoring";
 import type { ModelRequest } from "@/core/agent/providers/types";
@@ -181,6 +182,30 @@ describe("server-side OpenAI structured synthetic provider (fake transport)", ()
       const logged = JSON.stringify(events);
       for (const secret of ["synthetic-test-key", "sensitive", "evidenceIds", SYSTEM_INSTRUCTIONS]) expect(logged).not.toContain(secret);
     });
+  });
+});
+
+describe("the order drafting task", () => {
+  const orderInput: ModelRequest = { instructions: ORDER_INSTRUCTIONS, messages: [{ role: "user", content: '{"request":"CBC","catalog":{"items":[],"sets":[]}}' }], dataClassification: "live", structuredOutput: orderFormat };
+  const orderEnvelope = () => ({ ...envelope(), output: [{ type: "message", role: "assistant", status: "completed", content: [{ type: "output_text", text: '{"mode":"unclear","items":[],"unmatched":[]}' }] }] });
+
+  it("is one of the structured tasks the client runs, with strict structured output, and only for a de-identified request", async () => {
+    expect(OPENAI_STRUCTURED_TASKS).toContain(ORDERS_TASK);
+    const request = vi.fn().mockResolvedValue(Response.json(orderEnvelope()));
+    const live = { ...config, liveDataApproved: true };
+    // Not de-identified: nothing is sent.
+    await expect(createOpenAIProvider(live, request).generate(orderInput)).rejects.toMatchObject({ code: "forbidden" });
+    expect(request).not.toHaveBeenCalled();
+    await expect(createOpenAIProvider(live, request).generate({ ...orderInput, pseudonymized: true })).resolves.toMatchObject({ provider: "openai" });
+    const body = JSON.parse(request.mock.calls[0][1].body);
+    expect(body).toMatchObject({ store: false, text: { format: { type: "json_schema", name: "order_drafting", strict: true, schema: orderFormat.schema } } });
+  });
+
+  it("refuses a request that is over its input limit, so a catalog larger than the limit is never sent", async () => {
+    const request = vi.fn();
+    const big = { ...orderInput, pseudonymized: true as const, messages: [{ role: "user" as const, content: "x".repeat(20_000) }] };
+    await expect(createOpenAIProvider({ ...config, liveDataApproved: true, maxInputTokens: 16_000 }, request).generate(big)).rejects.toMatchObject({ code: "provider_unavailable", message: expect.stringContaining("input token limit") });
+    expect(request).not.toHaveBeenCalled();
   });
 });
 

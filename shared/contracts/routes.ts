@@ -23,6 +23,12 @@ export const apiRoutes = {
     method: "POST",
     path: (draftId: string) => `/api/consultations/drafts/${encodeURIComponent(draftId)}/approval`,
   },
+  createOrderDraft: { method: "POST", path: () => "/api/orders/drafts" },
+  listOrderDrafts: { method: "GET", path: () => "/api/orders/drafts" },
+  getOrderDraft: {
+    method: "GET",
+    path: (draftId: string) => `/api/orders/drafts/${encodeURIComponent(draftId)}`,
+  },
 } as const;
 
 export interface CreateConsultationDraftRequest {

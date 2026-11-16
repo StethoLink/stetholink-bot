@@ -1,7 +1,11 @@
 import assert from "node:assert/strict";
 import { spawn, type ChildProcess } from "node:child_process";
 import { once } from "node:events";
+import { mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { setTimeout } from "node:timers/promises";
+import { ORDER_CATALOG } from "../fixtures/order-catalog.ts";
 import { startFakeEhr } from "./fakes/ehr.mts";
 import { ensureTrustedLocalhost, startTlsProxy } from "./fakes/tls.mts";
 
@@ -32,6 +36,12 @@ const ehr = await startFakeEhr({
 });
 const proxy = await startTlsProxy(tls, httpsPort, appPort);
 let app: ChildProcess | undefined;
+// The hospital's own order catalog is a file it owns; here the fictional test catalog is written out as one.
+const orderDirectory = mkdtempSync(join(tmpdir(), "stetholink-e2e-orders-"));
+const orderCatalogFile = join(orderDirectory, "orders.json");
+writeFileSync(orderCatalogFile, JSON.stringify(ORDER_CATALOG));
+const malformedCatalogFile = join(orderDirectory, "malformed.json");
+writeFileSync(malformedCatalogFile, JSON.stringify({ ...ORDER_CATALOG, items: [{ ...ORDER_CATALOG.items[0], medication: { product: "x", dose: "1", route: "o", frequency: "d" } }] }));
 
 const liveEnv: Record<string, string> = {
   NODE_ENV: "production", TENANT_ID: "ci-live-hospital", AUTH_MODE: "smart", CLINICAL_DATA_SOURCE: "fhir",
@@ -51,6 +61,8 @@ const liveEnv: Record<string, string> = {
   // Scribe and EHR write-back, against the fake transcription endpoint and the fake FHIR server.
   SCRIBE_ENABLED: "true", TRANSCRIPTION_PROVIDER: "openai", TRANSCRIPTION_MODEL: "fictional-transcribe-1", TRANSCRIPTION_USD_PER_MINUTE: "0.0045",
   TRANSCRIPTION_LIVE_DATA_APPROVED: "true", SCRIBE_NOTE_MODEL: "fictional-model-1", SCRIBE_NOTE_INPUT_USD_PER_MILLION: "0.25", SCRIBE_NOTE_OUTPUT_USD_PER_MILLION: "2",
+  // Order drafting, from the hospital's catalog file.
+  ORDER_CATALOG_FILE: orderCatalogFile,
   EHR_WRITE_ENABLED: "true", SESSION_ENCRYPTION_KEY: Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString("base64"),
 };
 
@@ -115,6 +127,8 @@ try {
     ["with the staging sign-in", { AUTH_MODE: "staging", STAGING_LAUNCH_SECRET: "x".repeat(64) }],
     ["with the stand-in transcription", { TRANSCRIPTION_PROVIDER: "mock" }],
     ["with simulated specialists", { MOCK_RECIPIENT_IDS: "synthetic-cardiology" }],
+    ["with an order catalog that is not valid", { ORDER_CATALOG_FILE: malformedCatalogFile }],
+    ["with an order catalog that cannot be read", { ORDER_CATALOG_FILE: join(orderDirectory, "missing.json") }],
   ] as const) {
     assert.equal(await start(change), false, `The server must not start ${why}`);
     await stop();
@@ -202,6 +216,69 @@ try {
   assert.equal(approved.approvedRecipientId, "fictional-cardiology-service");
   const history = (await call(`${drafts}/${draft.id}/history`, 200, { cookie: doctor })).json;
   assert.ok(history.events.some((event: { toStatus: string }) => event.toStatus === "approved"));
+
+  // === Orders: drafted from the hospital's catalog, grounded in the chart, none approved by drafting ===
+  const ordersApi = "/api/orders/drafts";
+  await call(ordersApi, 401, { body: { request: "Prepare a CBC", idempotencyKey: "orders-anon-" + run } });
+  await call(ordersApi, 400, { cookie: doctor, body: { request: "x".repeat(2001), idempotencyKey: "orders-long-" + run } });
+  await call(ordersApi, 400, { cookie: doctor, body: { request: "Prepare a CBC" } });
+  await call(ordersApi, 400, { cookie: doctor, body: { request: "Prepare a CBC", idempotencyKey: "orders-extra-" + run, patientId: "another-patient" } });
+  const orderRequest = "Prepare a CBC and amoxicillin for this patient";
+  const orderKey = "orders-1-" + run;
+  const orders = (await call(ordersApi, 201, { cookie: doctor, body: { request: orderRequest, idempotencyKey: orderKey } })).json;
+  assert.deepEqual([orders.mode, orders.catalogVersion, orders.patientId, orders.encounterId], ["specific", "test-1", "fic-pt-1", "fic-enc-1"]);
+  assert.deepEqual(orders.lines.map((line: { catalogItemId: string; basis: string; status: string }) => [line.catalogItemId, line.basis, line.status]), [["lab-cbc", "requested", "pending"], ["med-amox", "requested", "pending"]]);
+  assert.ok(orders.lines.every((line: { decidedBy?: string; decidedAt?: string }) => !line.decidedBy && !line.decidedAt), "Drafting approves nothing");
+  // The code and the dose are the catalog's own.
+  assert.deepEqual(orders.lines[0].code, { system: "urn:test", code: "CBC-1" });
+  assert.deepEqual(orders.lines[1].medication, { product: "Amoxicillin", dose: "500 mg", route: "oral", frequency: "every 8 hours", duration: "7 days" });
+  // The chart's documented penicillin allergy flags the amoxicillin, citing the EHR's own record; the CBC has no flag.
+  const allergyFlag = orders.lines[1].flags.find((flag: { kind: string }) => flag.kind === "allergy");
+  assert.ok(allergyFlag, "The amoxicillin is flagged for the documented penicillin allergy");
+  assert.deepEqual(orders.lines[0].flags, []);
+  const citedFact = orders.clinicalFacts.find((fact: { id: string }) => fact.id === allergyFlag.evidenceIds[0]);
+  assert.deepEqual([citedFact.category, citedFact.source.type, citedFact.source.reference], ["allergy", "fhir", "AllergyIntolerance/alg-penicillin"]);
+  // The model chose among the catalog's names and saw no identifier, code or dose.
+  const orderModel = ehr.state.modelRequests.filter((entry) => entry.task === "order_drafting");
+  assert.equal(orderModel.length, 1);
+  for (const secret of ["Faisal", "Fictional-Example", "1970-01-01", "fic-pt-1", "fic-enc-1", "alg-penicillin", "Practitioner", "CBC-1", "urn:test", "every 8 hours", "allergyTerms"]) {
+    assert.equal(orderModel[0].body.includes(secret), false, `The order model request must not contain ${secret}`);
+  }
+  assert.ok(JSON.parse(orderModel[0].body).instructions.includes("stand-ins"), "The request went through the de-identification layer");
+  // Of each catalog order the model is shown its id, kind, name and synonyms: no code, product, dose, route, frequency, allergy words or groups.
+  const orderInput = JSON.parse(JSON.parse(orderModel[0].body).input[0].content) as { request: string; catalog: { items: object[] } };
+  assert.equal(orderInput.request, orderRequest);
+  assert.ok(orderInput.catalog.items.every((item) => JSON.stringify(Object.keys(item)) === JSON.stringify(["id", "kind", "display", "synonyms"])));
+  // The same key and request returns the stored draft and does not ask the model again; the key for another request is refused.
+  assert.equal((await call(ordersApi, 201, { cookie: doctor, body: { request: orderRequest, idempotencyKey: orderKey } })).json.id, orders.id);
+  await call(ordersApi, 409, { cookie: doctor, body: { request: "Prepare a lipid panel", idempotencyKey: orderKey } });
+  assert.equal(ehr.state.modelRequests.filter((entry) => entry.task === "order_drafting").length, 1);
+  // The same order again in this visit is a duplicate.
+  const again = (await call(ordersApi, 201, { cookie: doctor, body: { request: "Prepare a CBC", idempotencyKey: "orders-2-" + run } })).json;
+  assert.deepEqual(again.lines.map((line: { flags: { kind: string }[] }) => line.flags.map((flag) => flag.kind)), [["duplicate_order"]]);
+  // For the case: only the orders of the set the request names, each with the chart facts that support it; the invented one is dropped.
+  const proposed = (await call(ordersApi, 201, { cookie: doctor, body: { request: "Prepare the basic orders for this case", idempotencyKey: "orders-3-" + run } })).json;
+  assert.equal(proposed.mode, "case_based");
+  assert.deepEqual(proposed.lines.map((line: { catalogItemId: string }) => line.catalogItemId), ["lab-cbc", "img-cxr", "lab-trop", "nur-obs"]);
+  assert.ok(proposed.lines.every((line: { basis: string; evidenceIds: string[] }) => line.basis === "proposed" && line.evidenceIds.length > 0));
+  const storedFacts = new Set(proposed.clinicalFacts.map((fact: { id: string }) => fact.id));
+  assert.ok(proposed.lines.every((line: { evidenceIds: string[] }) => line.evidenceIds.every((id) => storedFacts.has(id))), "Every citation resolves to a fact stored with the draft");
+  assert.equal(proposed.provenance.rejectedLines, 1, "The order that is not in the catalog was dropped");
+  // A request the catalog cannot serve stores nothing.
+  const listed = (await call(ordersApi, 200, { cookie: doctor })).json;
+  assert.equal(listed.length, 3);
+  const noMatch = (await call(ordersApi, 200, { cookie: doctor, body: { request: "an MRI of the knee", idempotencyKey: "orders-4-" + run } })).json;
+  assert.deepEqual([noMatch.outcome, noMatch.unmatched], ["no_match", ["an MRI of the knee"]]);
+  assert.equal((await call(ordersApi, 200, { cookie: doctor })).json.length, 3);
+  // A non-physician can draft; their drafts are theirs alone (row-level security), and the physician's are not theirs.
+  const nurseOrders = (await call(ordersApi, 201, { cookie: observer, body: { request: "Prepare a CBC", idempotencyKey: "orders-nurse-" + run } })).json;
+  assert.deepEqual(nurseOrders.lines.map((line: { flags: { kind: string }[] }) => line.flags.map((flag) => flag.kind)), [["duplicate_order"]], "A colleague's orders in the same visit are seen by the duplicate check");
+  await call(`${ordersApi}/${nurseOrders.id}`, 404, { cookie: doctor });
+  await call(`${ordersApi}/${orders.id}`, 404, { cookie: observer });
+  assert.equal((await call(ordersApi, 200, { cookie: observer })).json.length, 1);
+  await call(`${ordersApi}/not-a-draft`, 400, { cookie: doctor });
+  await call(`${ordersApi}/${crypto.randomUUID()}`, 404, { cookie: doctor });
+  assert.deepEqual((await call(`${ordersApi}/${orders.id}`, 200, { cookie: doctor })).json, orders);
 
   // --- Only reads reached the EHR, all for the launched patient ----------------------------
   assert.ok(ehr.state.fhirRequests.length > 0);
@@ -313,6 +390,7 @@ try {
   await call("/api/auth/session", 401, { cookie: inboxCookie });
   await call("/api/patients/fic-pt-1/context", 401, { cookie: inboxCookie });
   await call(drafts, 401, { cookie: inboxCookie });
+  await call(ordersApi, 401, { cookie: inboxCookie });
   await call("/api/specialist/requests", 401, { cookie: doctor });
   assert.equal((await call("/api/specialist/session", 200, { cookie: inboxCookie })).json.service, "Fictional Cardiology Service");
   const inbox = (await call("/api/specialist/requests", 200, { cookie: inboxCookie })).json;
@@ -377,6 +455,16 @@ try {
   assert.deepEqual((await call(`${drafts}/${draft.id}`, 200, { cookie: doctor })).json, beforeRestart.draft);
   assert.deepEqual((await call(`${drafts}/${draft.id}/delivery`, 200, { cookie: doctor })).json, beforeRestart.delivery);
   await call(`${drafts}/${draft.id}`, 404, { cookie: observer });
+  assert.deepEqual((await call(`${ordersApi}/${orders.id}`, 200, { cookie: doctor })).json, orders, "Order drafts survive a new server process");
+  // Without the hospital's catalog order drafting is not offered, and nothing else changes.
+  await stop();
+  assert.equal(await start({ ORDER_CATALOG_FILE: "" }), true);
+  await call(ordersApi, 501, { cookie: doctor });
+  await call(ordersApi, 501, { cookie: doctor, body: { request: "Prepare a CBC", idempotencyKey: "orders-off-" + run } });
+  await call(`${ordersApi}/${orders.id}`, 501, { cookie: doctor });
+  assert.equal((await call("/api/auth/session", 200, { cookie: doctor })).json.clinicianId, physician.clinicianId);
+  await stop();
+  assert.equal(await start(), true);
 
   // --- Optional: the same sessions in a real browser (LIVE_E2E_BROWSER=1; needs Playwright with Chromium) ---
   if (process.env.LIVE_E2E_BROWSER === "1") {

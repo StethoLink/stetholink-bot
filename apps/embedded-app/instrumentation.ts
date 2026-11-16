@@ -8,6 +8,8 @@ export async function register() {
   const { getEnv } = await import("@/platform/tenants/env");
   try {
     getEnv();
+    // The order catalog is the hospital's own file: a malformed or oversized one is refused here, not at the first request.
+    (await import("@/platform/tenants/order-catalog")).getOrderCatalog();
   } catch (error) {
     console.error("StethoLink refused to start:", error instanceof Error ? error.message : "invalid server configuration");
     process.exit(1);

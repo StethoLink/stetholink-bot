@@ -57,6 +57,29 @@ function fakeReferral(input: AuthoringInput) {
   };
 }
 
+interface OrderInput {
+  request: string;
+  chart: { facts: Array<{ id: string; category: string; status: string }> };
+  catalog: { items: Array<{ id: string; display: string; synonyms: string[] }>; sets: Array<{ name: string; synonyms: string[]; itemIds: string[] }> };
+}
+/**
+ * Deterministic "order model": it picks the catalog orders whose name the request contains, or the order set the request names, and
+ * cites a documented chart fact for what it proposes. For a set it also names one order that the catalog does not hold, to show that the
+ * product drops it. No inference.
+ */
+function fakeOrders(input: OrderInput) {
+  const request = input.request.toLowerCase();
+  const names = (entry: { display?: string; name?: string; synonyms: string[] }) => [entry.display ?? entry.name ?? "", ...entry.synonyms].filter(Boolean).map((name) => name.toLowerCase());
+  const set = input.catalog.sets.find((entry) => names(entry).some((name) => request.includes(name)));
+  const named = input.catalog.items.filter((item) => names(item).some((name) => request.includes(name)));
+  const fact = input.chart.facts.find((entry) => entry.status === "known" && entry.category === "problem") ?? input.chart.facts.find((entry) => entry.status === "known");
+  const evidenceIds = fact ? [fact.id] : [];
+  if (set) return { mode: "case_based", items: [...set.itemIds.map((itemId) => ({ itemId, requestedText: "", reason: "Supported by the documented chart.", evidenceIds })),
+    { itemId: "made-up-order", requestedText: "", reason: "Not in the catalog.", evidenceIds }], unmatched: [] };
+  if (named.length) return { mode: "specific", items: named.map((item) => ({ itemId: item.id, requestedText: item.display, reason: "Requested by the physician.", evidenceIds: [] })), unmatched: [] };
+  return { mode: "unclear", items: [], unmatched: [input.request] };
+}
+
 /** FICTIONAL visit that the fake transcription endpoint "hears", one part per call, whatever audio it is sent. The patient is called by name, another (fictional) doctor is named and a made-up phone number is spoken, as happens in a real visit. */
 const FAKE_VISIT = [
   "هلا بك يا فيصل، كيف السكر معك هالفترة؟ والله يا دكتور القراءات الصبح بين مية وستين ومية وثمانين.",
@@ -161,7 +184,7 @@ export async function startFakeEhr(options: FakeEhrOptions) {
         state.modelRequests.push({ task, body: raw });
         const input = JSON.parse(request.input.at(-1)!.content);
         const text = JSON.stringify(task === "consultation_referral" ? fakeReferral(input) : task === "consultation_evidence_selection" ? { evidenceIds: input.eligibleEvidenceIds }
-          : task === "scribe_soap_note" ? fakeScribeNote(input) : {});
+          : task === "scribe_soap_note" ? fakeScribeNote(input) : task === "order_drafting" ? fakeOrders(input) : {});
         return json(res, 200, {
           status: "completed", model: "fictional-model-1", usage: { input_tokens: Math.ceil(raw.length / 4), output_tokens: Math.ceil(text.length / 4) },
           output: [{ type: "message", role: "assistant", status: "completed", content: [{ type: "output_text", text }] }],

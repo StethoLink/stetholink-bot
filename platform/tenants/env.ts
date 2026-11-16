@@ -37,6 +37,11 @@ const envSchema = z.object({
   OPENAI_MAX_COST_USD: z.coerce.number().positive().max(1).default(0.25),
   OPENAI_INPUT_USD_PER_MILLION: z.coerce.number().positive().max(1000).optional(),
   OPENAI_OUTPUT_USD_PER_MILLION: z.coerce.number().positive().max(1000).optional(),
+  // Order drafting. The hospital's approved orders, order sets and interaction rules as a JSON file (docs/orders.md), checked when the server starts.
+  // Without it order drafting is not offered. The product ships no clinical content.
+  ORDER_CATALOG_FILE: z.string().min(1).max(1024).optional(),
+  // Bytes of the model request for order drafting, which carries the catalog with the chart. Default: OPENAI_MAX_INPUT_TOKENS.
+  ORDER_MAX_INPUT_TOKENS: z.coerce.number().int().min(1000).max(120_000).optional(),
   // AI scribe. Off unless enabled. Audio is never stored: any value other than "none" is refused.
   SCRIBE_ENABLED: z.enum(["true", "false"]).default("false"),
   SCRIBE_AUDIO_RETENTION: z.enum(["none"]).default("none"),

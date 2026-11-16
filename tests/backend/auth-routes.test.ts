@@ -155,12 +155,12 @@ describe("SMART launch", () => {
 
 describe("SMART session permissions", () => {
   it.each([
-    ["physician", ["chart:read", "consultation:draft", "scribe:record", "consultation:approve", "consultation:route", "chart:write"]],
-    ["clinician", ["chart:read", "consultation:draft", "scribe:record"]],
+    ["physician", ["chart:read", "consultation:draft", "scribe:record", "order:draft", "consultation:approve", "consultation:route", "chart:write", "order:approve"]],
+    ["clinician", ["chart:read", "consultation:draft", "scribe:record", "order:draft"]],
   ] as const)("come from the tenant's clinician mapping after the signed launch (%s)", async (role, expected) => {
     Object.assign(env, smartEnv(role));
     // A token that claims StethoLink permissions in its scope gains nothing by it.
-    const ehr = await fakeEhr({ scope: smartEnv(role).SMART_SCOPE + " consultation:approve consultation:route" });
+    const ehr = await fakeEhr({ scope: smartEnv(role).SMART_SCOPE + " consultation:approve consultation:route order:approve" });
     vi.stubGlobal("fetch", ehr.request);
     expect((await completeSmartLaunch(routes, ehr)).status).toBe(303);
     const launched = await requireClinician();

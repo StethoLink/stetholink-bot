@@ -118,6 +118,9 @@ SCRIBE_TRANSCRIPT_RETENTION_DAYS=7
 EHR_WRITE_ENABLED=true
 FHIR_NOTE_DOC_STATUS=preliminary
 
+ORDER_CATALOG_FILE=/etc/stetholink/orders.json   # the hospital's own order catalog, docs/orders.md; without it order drafting is off
+ORDER_MAX_INPUT_TOKENS=<only for a catalog of more than about 30 orders; at most 120000>
+
 PROVIDER_DIRECTORY=[{"id":"cardiology-service","displayName":"Cardiology consult service","specialties":["Cardiology"],"transport":"portal"}]
 PROVIDER_ALLOWLIST=cardiology-service
 SPECIALIST_MAP=[{"specialistId":"<new UUID>","providerId":"cardiology-service","displayName":"Dr <name>","subject":"<sub>","fhirUser":"Practitioner/<id>"}]
@@ -171,6 +174,7 @@ Technical, with a test patient in the hospital's test EHR first:
 - [ ] Consultation: every statement opens its source; approval and sending each show their confirmation
 - [ ] The specialist opens the inbox from the EHR, sees no patient identifiers, accepts and replies; the physician sees the reply
 - [ ] "Write to chart" creates the notes in the EHR once; repeating it creates nothing more
+- [ ] Orders (`docs/orders.md`): "prepare a CBC and a chest X-ray" drafts those two and no others; "prepare the basic orders for this case" proposes only orders of the hospital's catalog, each with the chart facts it rests on; an order for a documented allergy shows its flag; a nurse can draft and cannot approve; the server does not start with a malformed catalog
 - [ ] Scribe: the microphone works in the EHR window (or the "open in a new window" message appears); recording does not start without the consent confirmation
 - [ ] A recorded test visit produces a note; a new allergy is offered unselected; a conflict with the chart is shown and cannot be selected
 - [ ] The approved note and the selected allergy appear in the EHR, authored by the physician, for the right visit; the transcript is gone from StethoLink

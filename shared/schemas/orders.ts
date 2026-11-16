@@ -1,5 +1,7 @@
 import { z } from "zod";
-import type { InteractionRule, OrderCatalog, OrderCatalogItem, OrderDecisionRequest, OrderDraft, OrderFlag, OrderLine, OrderSet } from "@/shared/contracts";
+import type {
+  CreateOrderDraftRequest, InteractionRule, OrderCatalog, OrderCatalogItem, OrderDecisionRequest, OrderDraft, OrderDraftSummary, OrderFlag, OrderLine, OrderNoMatch, OrderSet,
+} from "@/shared/contracts";
 import { dataClassificationSchema } from "./classification";
 import { clinicalFactSchema, missingInformationSchema } from "./clinical-data";
 
@@ -68,6 +70,24 @@ export const orderDraftSchema = z.object({
   provenance: z.object({ provider: z.string().min(1).max(100), model: z.string().min(1).max(200), promptVersion: z.string().min(1).max(64), dataClassification: dataClassificationSchema, rejectedLines: z.number().int().min(0) }).strict(),
   version: z.number().int().min(0), createdAt: isoDateTime, updatedAt: isoDateTime,
 }).strict() satisfies z.ZodType<OrderDraft>;
+
+export const createOrderDraftRequestSchema = z.object({
+  request: z.string().trim().min(2).max(2000), idempotencyKey: id,
+}).strict() satisfies z.ZodType<CreateOrderDraftRequest>;
+
+export const orderNoMatchSchema = z.object({
+  outcome: z.literal("no_match"), request: z.string().min(1).max(2000), unmatched: z.array(z.string().max(300)).max(20), rejectedLines: z.number().int().min(0).max(1000),
+}).strict() satisfies z.ZodType<OrderNoMatch>;
+
+export const orderDraftSummarySchema = z.object({
+  id, mode: z.enum(["specific", "case_based"]), request: z.string().min(1).max(2000),
+  lines: z.number().int().min(0).max(40), pending: z.number().int().min(0).max(40), approved: z.number().int().min(0).max(40), rejected: z.number().int().min(0).max(40),
+  version: z.number().int().min(0), createdAt: isoDateTime, updatedAt: isoDateTime,
+}).strict() satisfies z.ZodType<OrderDraftSummary>;
+export const orderDraftListSchema = z.array(orderDraftSummarySchema).max(50);
+
+/** POST /api/orders/drafts: a stored draft (201), or the answer that nothing could be drafted (200, nothing stored). */
+export const createOrderResultSchema = z.union([orderNoMatchSchema, orderDraftSchema]);
 
 export const orderDecisionRequestSchema = z.object({
   draftId: id, expectedVersion: z.number().int().min(0), idempotencyKey: id,

@@ -2,6 +2,7 @@ import { z } from "zod";
 import type { ClinicalFact, KnownClinicalFact, OrderCatalog, OrderCatalogItem, OrderMode } from "@/shared/contracts";
 import { RouteError } from "@/core/errors";
 import type { PatientDemographics } from "@/core/consultation/demographics";
+import { PRIVACY_NOTE } from "@/core/privacy/provider";
 import { containsPhrase } from "./text";
 
 export const ORDERS_PROMPT_VERSION = "order-authoring@1.0.0";
@@ -79,6 +80,20 @@ export function buildOrderInput(context: OrderAuthoringContext): string {
   });
 }
 
+/** What the chart's facts add to the request to the model for a typical chart (a few thousand bytes). A chart with many facts needs more, and the provider refuses a request over its limit. */
+export const ORDER_FACTS_ALLOWANCE_BYTES = 6_000;
+
+/**
+ * Bytes of the model request before the chart's facts: instructions, the privacy note the de-identification layer adds,
+ * the output schema, the catalog, and a request of 300 letters and a visit reason of 100, written in Arabic (two bytes a letter).
+ * A catalog whose floor plus `ORDER_FACTS_ALLOWANCE_BYTES` exceeds the model input limit leaves no room for a chart, so it is refused when the server starts.
+ */
+export function orderRequestFloorBytes(catalog: OrderCatalog): number {
+  const bytes = (text: string) => new TextEncoder().encode(text).length;
+  const input = buildOrderInput({ request: "ع".repeat(300), demographics: { age: "90 years or older", sex: "unknown" }, reasonForVisit: "ع".repeat(100), facts: [], eligibleFacts: [], catalog });
+  return bytes(ORDER_INSTRUCTIONS) + bytes(PRIVACY_NOTE) + bytes(JSON.stringify(orderFormat.schema)) + bytes(input) + 1024;
+}
+
 export interface ValidatedOrderLine {
   item: OrderCatalogItem;
   basis: "requested" | "proposed";
@@ -115,14 +130,15 @@ export function validateOrders(raw: string, context: OrderAuthoringContext): Val
     // Only the catalog's own ids, once each.
     if (!item) { rejected++; continue; }
     if (seen.has(item.id)) continue;
-    const asked = names(item).some((name) => containsPhrase(context.request, name));
-    const reason = squash(entry.reason);
+    const asked = names(item).find((name) => containsPhrase(context.request, name));
+    // An order the physician named does not depend on the model's sentence: without one, their own words are the reason.
+    const reason = squash(entry.reason) || (asked ? squash(asked) : "");
     const evidenceIds = [...new Set(entry.evidenceIds)].filter((id) => eligible.has(id));
     if (!reason) { rejected++; continue; }
     if (asked) {
       // The physician wrote its name: the request is the justification, and any cited fact is kept.
       seen.add(item.id);
-      lines.push({ item, basis: "requested", requestedText: names(item).find((name) => containsPhrase(context.request, name)), reason, evidenceIds });
+      lines.push({ item, basis: "requested", requestedText: asked, reason, evidenceIds });
       continue;
     }
     // Not asked for by name: only a case-based request may propose it, and only with a cited chart fact.

@@ -27,13 +27,13 @@ function observe(event: ModelCallEvent) {
 }
 
 /**
- * The only place a concrete provider is built, for every model task (consultation drafting and the
- * scribe's note). What it returns is always the de-identification layer around the provider:
+ * The only place a concrete provider is built, for every model task (consultation drafting, the
+ * scribe's note and order drafting). What it returns is always the de-identification layer around the provider:
  * there is no way to get the bare provider from here, and the provider itself refuses a request
  * that did not pass through the layer. There is no stand-in: server configuration is refused at
  * startup without the provider's key and rates.
  */
-export function getModelProvider(privacy: ModelPrivacy, task: "consultation" | "scribe_note" = "consultation"): ModelProvider {
+export function getModelProvider(privacy: ModelPrivacy, task: "consultation" | "scribe_note" | "order_drafting" = "consultation"): ModelProvider {
   const env = getEnv();
   const scribe = task === "scribe_note";
   const provider = createOpenAIProvider({
@@ -45,7 +45,9 @@ export function getModelProvider(privacy: ModelPrivacy, task: "consultation" | "
       maxInputTokens: 120_000, maxOutputTokens: 12_000, maxCostUsd: Math.min(1, env.SCRIBE_MAX_VISIT_USD), reasoningEffort: env.SCRIBE_NOTE_REASONING_EFFORT,
       inputUsdPerMillion: env.SCRIBE_NOTE_INPUT_USD_PER_MILLION ?? env.OPENAI_INPUT_USD_PER_MILLION, outputUsdPerMillion: env.SCRIBE_NOTE_OUTPUT_USD_PER_MILLION ?? env.OPENAI_OUTPUT_USD_PER_MILLION,
     } : {
-      maxInputTokens: env.OPENAI_MAX_INPUT_TOKENS, maxOutputTokens: env.OPENAI_MAX_OUTPUT_TOKENS, maxCostUsd: env.OPENAI_MAX_COST_USD, reasoningEffort: env.OPENAI_REASONING_EFFORT,
+      // Order drafting sends the hospital's catalog with the chart, so it may have its own, larger input limit; every other bound is the consultation's.
+      maxInputTokens: task === "order_drafting" ? env.ORDER_MAX_INPUT_TOKENS ?? env.OPENAI_MAX_INPUT_TOKENS : env.OPENAI_MAX_INPUT_TOKENS,
+      maxOutputTokens: env.OPENAI_MAX_OUTPUT_TOKENS, maxCostUsd: env.OPENAI_MAX_COST_USD, reasoningEffort: env.OPENAI_REASONING_EFFORT,
       inputUsdPerMillion: env.OPENAI_INPUT_USD_PER_MILLION, outputUsdPerMillion: env.OPENAI_OUTPUT_USD_PER_MILLION,
     }),
     liveDataApproved: env.MODEL_LIVE_DATA_APPROVED === "true",

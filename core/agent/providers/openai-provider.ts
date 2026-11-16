@@ -45,7 +45,7 @@ export interface OpenAIProviderOptions {
   observe?(event: ModelCallEvent): void;
 }
 /** The only structured tasks this provider will run. Free-form chat is never sent. */
-export const OPENAI_STRUCTURED_TASKS = ["consultation_evidence_selection", "consultation_referral", "scribe_soap_note"] as const;
+export const OPENAI_STRUCTURED_TASKS = ["consultation_evidence_selection", "consultation_referral", "scribe_soap_note", "order_drafting"] as const;
 class CallFailure extends Error {
   constructor(readonly reason: NonNullable<ModelCallEvent["reason"]>, readonly httpStatus?: number) { super(reason); }
 }

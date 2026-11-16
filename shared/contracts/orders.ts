@@ -91,6 +91,43 @@ export interface OrderDraft {
   updatedAt: IsoDateTime;
 }
 
+/**
+ * What the physician sends to have orders drafted: their own words, and a key to reuse after a timeout.
+ * The patient and the visit are never sent; the server takes them from the verified session.
+ * The same key with another request is refused with 409.
+ */
+export interface CreateOrderDraftRequest {
+  request: string;
+  idempotencyKey: string;
+}
+
+/**
+ * The answer to a request the catalog could not turn into any order (nothing matched, or nothing the chart supports was proposed).
+ * Nothing is stored; the physician sees which of their words matched nothing and can rewrite the request.
+ */
+export interface OrderNoMatch {
+  outcome: "no_match";
+  request: string;
+  /** The request phrases the catalog could not match. */
+  unmatched: string[];
+  /** Orders the model named that were dropped (not in the catalog, or not asked for and not supported by a chart fact). */
+  rejectedLines: number;
+}
+
+/** One row of the list of the visit's order drafts. */
+export interface OrderDraftSummary {
+  id: string;
+  mode: OrderMode;
+  request: string;
+  lines: number;
+  pending: number;
+  approved: number;
+  rejected: number;
+  version: number;
+  createdAt: IsoDateTime;
+  updatedAt: IsoDateTime;
+}
+
 /** The physician's decision on one line. */
 export interface OrderLineDecision {
   lineId: string;

@@ -3,41 +3,10 @@ import { MAX_PROPOSED_ORDERS, buildOrderInput, validateOrders, type OrderAuthori
 import { flagsFor, requiresOverride } from "@/core/orders/flags";
 import { containsPhrase, mentionsTerm, normalize } from "@/core/orders/text";
 import { orderCatalogSchema } from "@/shared/schemas";
-import type { ClinicalFact, KnownClinicalFact, OrderCatalog, OrderCatalogItem } from "@/shared/contracts";
+import type { ClinicalFact, KnownClinicalFact, OrderCatalog } from "@/shared/contracts";
+// The fictional catalog and chart live in tests/fixtures/orders.ts, shared with the service tests.
+import { ORDER_CATALOG as CATALOG, ORDER_FACTS as FACTS, knownFact as known, orderItem as item, unknownFact as unknown } from "@/tests/fixtures/orders";
 
-/** Every item, person and fact here is fictional. The catalog is a test catalog, not clinical guidance. */
-const item = (over: Partial<OrderCatalogItem> & Pick<OrderCatalogItem, "id" | "kind" | "display">): OrderCatalogItem =>
-  ({ synonyms: [], matchTerms: [], groups: [], allergyTerms: [], ...over });
-const CATALOG: OrderCatalog = {
-  version: "test-1",
-  items: [
-    item({ id: "lab-cbc", kind: "lab", display: "Complete blood count", synonyms: ["CBC", "full blood count", "عد دم كامل"], code: { system: "urn:test", code: "CBC-1" } }),
-    item({ id: "img-cxr", kind: "imaging", display: "Chest X-ray, two views", synonyms: ["chest x-ray", "CXR", "أشعة صدر"], code: { system: "urn:test", code: "CXR-2" } }),
-    item({ id: "lab-trop", kind: "lab", display: "High-sensitivity troponin", synonyms: ["troponin"] }),
-    item({ id: "lab-lipids", kind: "lab", display: "Lipid panel", synonyms: ["lipids"] }),
-    item({ id: "nur-obs", kind: "nursing", display: "Vital signs every 4 hours", synonyms: ["observations q4h"] }),
-    item({ id: "med-amox", kind: "medication", display: "Amoxicillin 500 mg capsule", synonyms: ["amoxicillin"], matchTerms: ["amoxicillin"], allergyTerms: ["penicillin"],
-      medication: { product: "Amoxicillin", dose: "500 mg", route: "oral", frequency: "every 8 hours", duration: "7 days" } }),
-    item({ id: "med-ibu", kind: "medication", display: "Ibuprofen 400 mg tablet", synonyms: ["ibuprofen"], matchTerms: ["ibuprofen"], groups: ["nsaid"],
-      medication: { product: "Ibuprofen", dose: "400 mg", route: "oral", frequency: "every 8 hours" } }),
-    item({ id: "med-warf", kind: "medication", display: "Warfarin 5 mg tablet", synonyms: ["warfarin"], matchTerms: ["warfarin"], groups: ["anticoagulant"],
-      medication: { product: "Warfarin", dose: "5 mg", route: "oral", frequency: "once daily" } }),
-  ],
-  sets: [{ id: "set-chest", name: "Chest pain basics", synonyms: ["basic orders", "الطلبات الأساسية"], itemIds: ["lab-cbc", "img-cxr", "lab-trop", "nur-obs"] }],
-  interactions: [{ groups: ["nsaid", "anticoagulant"], severity: "major", text: "An NSAID with an anticoagulant raises the risk of bleeding." }],
-};
-const known = (id: string, category: ClinicalFact["category"], label: string, value: KnownClinicalFact["value"] = true): KnownClinicalFact =>
-  ({ id, category, label, status: "known", value, source: { type: "fhir", reference: `R/${id}` }, timestamp: "2026-01-15T10:00:00.000Z" });
-const unknown = (id: string, category: ClinicalFact["category"], label: string): ClinicalFact =>
-  ({ id, category, label, status: "unknown", reason: "not_recorded", source: { type: "fhir", reference: `R/${id}` }, timestamp: "2026-01-15T10:00:00.000Z" });
-
-const FACTS: ClinicalFact[] = [
-  known("symptom-1", "symptom", "Chest pain", "two hours, pressing"),
-  known("problem-1", "problem", "Essential hypertension"),
-  known("allergy-1", "allergy", "Penicillins", "Reaction: urticaria"),
-  known("med-1", "medication", "Warfarin 5 mg oral tablet", "5 mg once daily"),
-  unknown("lab-none", "investigation", "Laboratory results in the last 365 days"),
-];
 const context = (request: string, over: Partial<OrderAuthoringContext> = {}): OrderAuthoringContext => ({
   request, demographics: { age: "58 years", sex: "female" }, reasonForVisit: "Chest pain", facts: FACTS,
   eligibleFacts: FACTS.filter((fact): fact is KnownClinicalFact => fact.status === "known"), catalog: CATALOG, ...over,
@@ -127,6 +96,12 @@ describe("what the model is allowed to turn into orders", () => {
     expect(result.lines.map((entry) => [entry.item.id, entry.basis])).toEqual([["lab-trop", "proposed"], ["lab-cbc", "requested"]]);
     const arabic = validateOrders(reply("case_based", [line("lab-lipids", { reason: "x", evidenceIds: ["problem-1"] })]), context("جهّز الطلبات الأساسية"));
     expect(arabic.lines).toEqual([]);
+  });
+
+  it("keeps an order the physician named when the model gave no reason, with the physician's own words as the reason", () => {
+    const result = validateOrders(reply("specific", [line("lab-cbc", { requestedText: "CBC", reason: "" }), line("lab-lipids", { reason: "", evidenceIds: ["problem-1"] })]), context("Prepare a CBC"));
+    expect(result.lines.map((entry) => [entry.item.id, entry.basis, entry.reason])).toEqual([["lab-cbc", "requested", "CBC"]]);
+    expect(result.rejected).toBe(1);
   });
 
   it("returns nothing for a request it cannot match, repeats an order once, and caps what it proposes", () => {

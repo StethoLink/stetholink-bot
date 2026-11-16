@@ -143,8 +143,8 @@ function smartIdentityAdapter(reg: Registration): { verify(launch: { pending: z.
           clinicianId: mapped.clinicianId, tenantId: reg.tenantId, roles: [mapped.role],
           // StethoLink permissions come from the tenant's clinician mapping, never from the EHR token:
           // every mapped clinician may draft; only a mapped physician may approve and send.
-          // Recording a visit is open to every mapped clinician; approving a note and writing to the chart are the physician's.
-          scopes: ["chart:read", "consultation:draft", "scribe:record", ...(mapped.role === "physician" ? ["consultation:approve", "consultation:route", "chart:write"] : []),
+          // Recording a visit and drafting orders are open to every mapped clinician; approving a note or an order and writing to the chart are the physician's.
+          scopes: ["chart:read", "consultation:draft", "scribe:record", "order:draft", ...(mapped.role === "physician" ? ["consultation:approve", "consultation:route", "chart:write", "order:approve"] : []),
             ...scopes.map((scope) => "smart:" + scope)], patientId: patient.patientId, encounterId: encounter.encounterId,
           expiresAt, authorization: "active", dataClassification: reg.dataClassification,
         },
