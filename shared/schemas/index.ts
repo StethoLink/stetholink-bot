@@ -234,3 +234,4 @@ export const consultationHistorySchema = z.object({
 
 /** POST /api/consultations/drafts: a stored draft (201), or the assistant's questions about the request (200, nothing stored). */
 export const createConsultationResultSchema = z.union([consultationClarificationNeededSchema, consultationDraftSchema]);
+export * from "./orders";

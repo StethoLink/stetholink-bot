@@ -37,9 +37,11 @@ test("SMART launch binds the registered issuer and callback to PKCE", async () =
 for (const factory of [createFhirConnector, createOpenEmrConnector]) {
   test(`${factory.name} keeps requests inside the authorized patient context`, async () => {
     const paths: string[] = [];
+    const searches: URL[] = [];
     const request: typeof fetch = async (url, init) => {
       const path = new URL(String(url)).pathname;
       paths.push(path);
+      if (!/\/(Patient|Encounter)\/[^/]+$/.test(path)) searches.push(new URL(String(url)));
       assert.equal(new Headers(init?.headers).get("authorization"), "Bearer synthetic-token");
       assert.equal(init?.redirect, "error");
       if (path.endsWith("/Patient/a")) return Response.json({ resourceType: "Patient", id: "a", name: [{ text: "Synthetic" }] });
@@ -52,7 +54,13 @@ for (const factory of [createFhirConnector, createOpenEmrConnector]) {
     assert.deepEqual(paths, []);
     assert.equal((await connector.getPatient("a"))?.displayName, "Synthetic");
     assert.equal(await connector.getEncounter("e"), null);
-    // One patient read, five patient-scoped searches (allergies, problems, medication orders, vital signs, laboratory) and one encounter read.
-    assert.equal(paths.length, 7);
+    // One patient read and one encounter read, and the searches of the chart: allergies, problems, medication orders, vital signs, laboratory.
+    // An EHR that answers a filtered search with an empty bundle (OpenEMR 7.0.3 does, for problems and medications) gets the same search again
+    // with fewer filters, so this server, which answers every search with an empty bundle, sees allergies once, problems twice, medication orders
+    // three times, vital signs twice and laboratory twice: 1 + 1 + (1 + 2 + 3 + 2 + 2).
+    assert.equal(paths.length, 12);
+    assert.equal(searches.length, 10);
+    // Every retry stays inside the authorized patient.
+    for (const search of searches) assert.equal(search.searchParams.get("patient"), "a", search.pathname);
   });
 }

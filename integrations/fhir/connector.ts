@@ -134,6 +134,22 @@ export function createFhirConnector(grant: FhirLaunchGrant, request: typeof fetc
     return loaded;
   }
 
+  /**
+   * A search whose filters the EHR may not support. Some servers (OpenEMR 7.0.3 answers `Condition?clinical-status=active`
+   * and `MedicationRequest?...&_include=...` this way) accept the request and return an empty bundle, which would read as
+   * "nothing recorded" for a chart that has records. So an empty or failed answer is asked again with fewer filters, down
+   * to none; the caller then applies the filter itself, on the records it receives. The first attempt that returns records wins.
+   */
+  async function searchWithFallback(resourceType: string, attempts: Record<string, string>[]): Promise<Loaded> {
+    let best: Loaded | undefined;
+    for (const filters of attempts) {
+      const loaded = await search(resourceType, filters);
+      if (loaded.resources.length) return loaded;
+      if (!best || (best.failed && !loaded.failed)) best = loaded;
+    }
+    return best!;
+  }
+
   const factId = (prefix: string, reference: string) =>
     `${prefix}-${createHmac("sha256", options.factIdKey ?? "stetholink-fact-id").update(`${root}|${reference}`).digest("hex").slice(0, 16)}`;
 
@@ -151,10 +167,16 @@ export function createFhirConnector(grant: FhirLaunchGrant, request: typeof fetc
       const windows = { vitalDays: 14, laboratoryDays: 365 };
       const [allergies, conditions, medications, vitals, laboratory] = await Promise.all([
         search("AllergyIntolerance", {}),
-        search("Condition", { "clinical-status": "active" }),
-        search("MedicationRequest", { status: "active", _include: "MedicationRequest:medication" }),
-        search("Observation", { category: "vital-signs", date: `ge${sinceDate(windows.vitalDays)}`, _sort: "-date" }),
-        search("Observation", { category: "laboratory", date: `ge${sinceDate(windows.laboratoryDays)}`, _sort: "-date" }),
+        // The facts builder keeps only active conditions and active orders itself, so dropping the filter loses nothing.
+        searchWithFallback("Condition", [{ "clinical-status": "active" }, {}]),
+        searchWithFallback("MedicationRequest", [{ status: "active", _include: "MedicationRequest:medication" }, { status: "active" }, {}]),
+        // The category and the date window stay: an undated observation must not come back as a current result. Only the sort is dropped.
+        searchWithFallback("Observation", [
+          { category: "vital-signs", date: `ge${sinceDate(windows.vitalDays)}`, _sort: "-date" }, { category: "vital-signs", date: `ge${sinceDate(windows.vitalDays)}` },
+        ]),
+        searchWithFallback("Observation", [
+          { category: "laboratory", date: `ge${sinceDate(windows.laboratoryDays)}`, _sort: "-date" }, { category: "laboratory", date: `ge${sinceDate(windows.laboratoryDays)}` },
+        ]),
       ]);
       const chart = normalizeChart({ allergies, conditions, medications, vitals, laboratory }, { factId, now: now(), windows });
       const sex: PatientContext["sex"] = patient.gender === "male" || patient.gender === "female" || patient.gender === "other"

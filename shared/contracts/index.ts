@@ -4,6 +4,7 @@ export type * from "./patient";
 export type * from "./encounter";
 export type * from "./chat";
 export type * from "./consultation";
+export type * from "./orders";
 export type * from "./errors";
 export type * from "./clinical-data";
 export type * from "./clinician";

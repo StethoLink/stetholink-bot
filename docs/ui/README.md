@@ -41,11 +41,11 @@ Wide (the full width of OpenEMR's dialog): ![](after/workspace-wide.png)
 | --- | --- | --- | --- |
 | ![](after/draft-questions-420.png) | ![](after/draft-420.png) | ![](after/approve-dialog-420.png) | ![](after/approved-420.png) |
 
-**The work areas in Arabic, 420 px.** The same sequence as above with the panel in Arabic: the request typed in Arabic, the real model's questions, "Prepare anyway", the draft, the approval dialog (the destination list is the tenant's own, so its name is data), the delivery panel after approval, the History tab, and the microphone refusal. The model answered an Arabic request with English questions and suggestions; they are shown as it wrote them, left to right inside the right-to-left page (see the findings below).
+**The work areas in Arabic, 420 px.** The same sequence with the panel in Arabic: a request typed in Arabic, the real model's draft (it drafted at once in this run; in an earlier run it asked English questions first), the approval dialog (the destination list is the tenant's own, so its name is data), the delivery panel after approval, the History tab, and the microphone refusal. What the model writes (here its concerns about missing information and its suggestions) came back in English; it is shown as written, left to right inside the right-to-left page (see the findings below).
 
-| Composer | The assistant's questions | The draft | Approval dialog |
-| --- | --- | --- | --- |
-| ![](after/workspace-ar-420.png) | ![](after/draft-questions-ar-420.png) | ![](after/draft-ar-420.png) | ![](after/approve-dialog-ar-420.png) |
+| Composer | The draft | Approval dialog |
+| --- | --- | --- |
+| ![](after/workspace-ar-420.png) | ![](after/draft-ar-420.png) | ![](after/approve-dialog-ar-420.png) |
 
 | After approval | History | Microphone not allowed in the frame |
 | --- | --- | --- |
@@ -54,7 +54,7 @@ Wide (the full width of OpenEMR's dialog): ![](after/workspace-wide.png)
 **What these screenshots do not show, and what they show wrongly**
 
 - **Not shot inside OpenEMR:** recording and the scribe's note, the specialist's inbox and reply, the send confirmation, writing to the chart. They need a specialist session, a microphone allowed in the frame and the write-back, which is T7's run. The older screenshots of those screens are in `archive-staging/` (synthetic staging, before T3) and are not evidence about a real EHR.
-- **The chart looks emptier than the EHR's.** In these shots "Active problems" and "Medications" read "None recorded" and the draft says that active medication orders are "not recorded", but the test patient has two active problems and a medication in OpenEMR. StethoLink asks `Condition?clinical-status=active` and `MedicationRequest?status=active&_include=MedicationRequest:medication`; OpenEMR 7.0.3 answers `200` with an empty bundle (it does not support `clinical-status` on `Condition`, and the medication search was also empty over HTTP). This is a fault of the chart reads, found while taking these screenshots and **not fixed** here; see the handoff. The allergy list loaded.
+- **Fixed while taking these screenshots:** the first set showed "Active problems" and "Medications" as "None recorded" and the draft said that active medication orders were "not recorded", although the test patient has two active problems and a medication in OpenEMR. OpenEMR 7.0.3 answers `Condition?clinical-status=active` and `MedicationRequest?...&_include=MedicationRequest:medication` with an empty bundle. The connector now asks again with fewer filters when an answer is empty (`integrations/fhir/connector.ts`, `searchWithFallback`), and the screenshots above were taken after that change: the chart lists the two problems and the medication, and the draft cites them.
 - **"Reviewed by" shows the clinician's identifier** (the UUID from `SMART_CLINICIAN_MAP`), not a name. Noticed, not changed.
 - **The model writes in English.** Asked in Arabic, the model's questions, its missing-information sentences and its suggestions came back in English. They are data and are shown as written; whether the prompt should ask it to answer in the physician's language is a product decision that was not made here.
 - The scribe's recording and note, the specialist's inbox and the send confirmation are translated and covered by tests, but were not shot inside OpenEMR (see above).

@@ -3,7 +3,7 @@ import type {
   ApprovalRequest, ConsultationClarification, ConsultationClarificationNeeded, ConsultationDraft, DataClassification, KnownClinicalFact, ConsultationGrounding,
   ConsultationRequest, CreateConsultationDraftRequest, ModelRevisionRequest, ModelUsage,
 } from "@/shared/contracts";
-import { classificationOfSource, consultationDraftSchema, consultationRequestSchema, createConsultationDraftRequestSchema, encounterContextSchema, patientContextSchema } from "@/shared/schemas";
+import { classificationOfSource, consultationDraftSchema, consultationRequestSchema, createConsultationDraftRequestSchema } from "@/shared/schemas";
 import type { ConsultationRepository, DurableConsultationRepository } from "@/core/consultation/repository";
 import type { ModelProvider } from "@/core/agent/providers/types";
 import type { SafetyGuard } from "@/core/agent/safety/guard";
@@ -15,7 +15,8 @@ import {
   AUTHORING_INSTRUCTIONS, AUTHORING_PROMPT_VERSION, MAX_AUTHORING_ATTEMPTS, buildAuthoringInput, clarificationsExhausted, referralFormat, renderReferral, validateReferral,
   type AuthoringContext, type ValidatedReferral,
 } from "./authoring";
-import { demographicLines, patientDemographics } from "./demographics";
+import { demographicLines } from "./demographics";
+import { loadVerifiedChart } from "./chart";
 import { SUGGESTION_PREFIX } from "@/shared/utils/referral-text";
 
 export interface ConsultationServiceDeps {
@@ -46,26 +47,7 @@ export function createConsultationService(deps: ConsultationServiceDeps) {
   const classification = deps.dataClassification;
   const MISMATCH = "Clinical data does not belong to this session's data classification";
 
-  /** Reads and validates the chart for one request. Nothing outside the verified chart is loaded. */
-  async function loadChart(input: { patientId: string; encounterId?: string }) {
-    if (classificationOfSource(deps.adapter.source) !== classification) throw new RouteError("forbidden", MISMATCH);
-    const rawPatient = await deps.adapter.getPatient(input.patientId);
-    if (!rawPatient) throw new RouteError("not_found", "Patient not found");
-    const patientResult = patientContextSchema.safeParse(rawPatient);
-    if (!patientResult.success) throw new RouteError("safety_blocked", "Invalid clinical patient context");
-    const patient = patientResult.data;
-    if (classificationOfSource(patient.source) !== classification) throw new RouteError("forbidden", MISMATCH);
-    if (patient.patientId !== input.patientId) throw new RouteError("safety_blocked", "Patient context mismatch");
-    const rawEncounter = input.encounterId ? await deps.adapter.getEncounter(input.encounterId) : null;
-    const encounterResult = rawEncounter ? encounterContextSchema.safeParse(rawEncounter) : null;
-    if (encounterResult && !encounterResult.success) throw new RouteError("safety_blocked", "Invalid clinical encounter context");
-    const encounter = encounterResult?.success ? encounterResult.data : null;
-    if (input.encounterId && (!encounter || encounter.patientId !== patient.patientId || encounter.encounterId !== input.encounterId)) {
-      throw new RouteError("invalid_request", "Encounter does not belong to this patient");
-    }
-    // What the connector left out or could not load is carried into the draft for the physician.
-    return { patient, encounter, demographics: patientDemographics(patient), grounded: groundContext(patient, encounter, classification), chartNotes: patient.chartNotes ?? [] };
-  }
+  const loadChart = (input: { patientId: string; encounterId?: string }) => loadVerifiedChart(deps.adapter, classification, input);
 
   /**
    * One or two model calls, each validated against the chart. A response is used only if it

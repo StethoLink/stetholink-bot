@@ -208,3 +208,52 @@ describe("FHIR encounter", () => {
     expect(await connect().connector.getEncounter("another-encounter")).toBeNull();
   });
 });
+
+describe("a server that ignores or refuses a search filter", () => {
+  // OpenEMR 7.0.3 answers Condition?clinical-status=active and MedicationRequest?...&_include=... with an empty bundle.
+  const refusesFilters: Handler = (path, query) => {
+    if (path === "/Condition" && query.has("clinical-status")) return bundle([]);
+    if (path === "/MedicationRequest" && query.has("_include")) return bundle([]);
+    return undefined;
+  };
+
+  it("asks again without the filter, so a chart that has problems and medications does not read as empty", async () => {
+    const { connector, calls } = connect(refusesFilters);
+    const patient = patientContextSchema.parse(await connector.getPatient(FICTIONAL_PATIENT_ID));
+    expect(patient.activeProblems).toEqual(expect.arrayContaining(["Essential hypertension", "Type 2 diabetes mellitus"]));
+    expect(patient.medications).toContain("Metformin 500 mg oral tablet");
+    // The filter the server cannot honour is applied here: a resolved or stopped record is still not an active one.
+    const facts = patient.clinicalFacts!;
+    for (const excluded of ["Condition/cond-asthma", "Condition/cond-error", "Condition/cond-pneumonia", "MedicationRequest/rx-stopped"]) expect(fact(facts, excluded)).toBeUndefined();
+    const conditionQueries = calls.filter((url) => url.pathname === "/fhir/Condition").map((url) => url.searchParams.has("clinical-status"));
+    expect(conditionQueries).toEqual([true, false]);
+    // Every request stayed on the registered base with the same patient.
+    for (const url of calls) expect(url.href.startsWith(BASE + "/")).toBe(true);
+  });
+
+  it("asks once when the filter works, and a failed first answer is also retried", async () => {
+    const working = connect();
+    await working.connector.getPatient(FICTIONAL_PATIENT_ID);
+    expect(working.calls.filter((url) => url.pathname === "/fhir/Condition")).toHaveLength(1);
+    expect(working.calls.filter((url) => url.pathname === "/fhir/MedicationRequest")).toHaveLength(1);
+
+    const failing = connect((path, query) => path === "/Condition" && query.has("clinical-status") ? new Response("unsupported", { status: 400 }) : undefined);
+    const patient = (await failing.connector.getPatient(FICTIONAL_PATIENT_ID))!;
+    expect(patient.activeProblems).toContain("Essential hypertension");
+  });
+
+  it("still reports a chart the EHR refuses to search as not loaded, never as empty", async () => {
+    const { connector } = connect((path) => path === "/Condition" ? new Response("forbidden", { status: 403 }) : undefined);
+    const patient = (await connector.getPatient(FICTIONAL_PATIENT_ID))!;
+    expect(patient.activeProblems).toEqual([]);
+    expect(patient.clinicalFacts!.find((entry) => entry.category === "problem")).toMatchObject({ status: "unknown", source: { reference: "Condition/not-loaded" } });
+  });
+
+  it("does not turn a really empty list into a record, and an empty answer to every attempt stays 'not recorded'", async () => {
+    const { connector, calls } = connect((path) => path === "/Condition" ? bundle([]) : undefined);
+    const patient = (await connector.getPatient(FICTIONAL_PATIENT_ID))!;
+    expect(patient.activeProblems).toEqual([]);
+    expect(patient.clinicalFacts!.find((entry) => entry.category === "problem")).toMatchObject({ status: "unknown", reason: "not_recorded" });
+    expect(calls.filter((url) => url.pathname === "/fhir/Condition")).toHaveLength(2);
+  });
+});
