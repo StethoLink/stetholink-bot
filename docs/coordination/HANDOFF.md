@@ -45,6 +45,10 @@ Written at the end of each working session so the next one starts from this file
 - **Left as it was:** free-text chat still answers 501 for every session. It would pass through the layer if switched on (it uses `getModelProvider`), but the model client only runs the three structured tasks; whether to offer chat is the owner's decision, not made here.
 - **Small things noticed, not changed:** a date written in two forms in one request comes back in the form seen first; a lower-case transliteration variant of a short name (under six letters, for example "sami" for a patient Sami) is not replaced unless capitalised, so that words like "same" survive; the exact spelling is always replaced.
 
+## Blocker for the owner: the next session was not started
+
+The session that finished T5 sub-step 1 tried to start the next one (`create_session`, as the AUTO-CONTINUE instruction says) and the call was **denied by the environment's permission check**. Nothing was started and nothing was worked around. The chain is stopped until the owner either (a) pastes [next-session-prompt.md](../agent-handoffs/next-session-prompt.md) (below its line) into a new session with model `claude-fable-5-2` on this branch, or (b) allows `mcp__claude-code-remote__create_session` in the settings and asks for the session to be started. The prompt is for T5 sub-step 2 and carries the AUTO-CONTINUE section, so it goes on to T6 by itself.
+
 ## T5 sub-step 1 done: StethoLink runs inside the EHR's frame, English and Arabic shell, states
 
 - **Commits:** `a100a8f` (claim), `012f844` and `b60821c` (code, tests, script, runbook), and the commit that wrote this section (docs, screenshots, board).
