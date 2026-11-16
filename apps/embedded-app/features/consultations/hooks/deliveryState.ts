@@ -35,7 +35,11 @@ export function awaitingProvider(view: ConsultationDeliveryView | null | undefin
 
 export class DeliveryError extends Error {}
 /** A failure in words a clinician can act on: what happened and what to do next. */
-export function describeFailure(status: number, error?: { code: string; message: string }): string {
+export function describeFailure(status: number, error?: { code: string; message: string; requestId?: string }): string {
+  // A failure on the server's side carries the reference of its log line.
+  return `${failureText(status, error)}${error?.requestId ? ` Reference for your administrator: ${error.requestId}` : ""}`;
+}
+function failureText(status: number, error?: { code: string; message: string }): string {
   if (status === 401) return "Your session has ended. Reopen StethoLink from the patient's chart in the EHR.";
   if (status === 503) return "The assistant is not available right now. Nothing was saved or sent. Wait a minute and try again; if it keeps failing, tell your StethoLink administrator.";
   if (status === 501) return error?.message && !/not configured|not implemented/i.test(error.message) ? error.message : "This is not set up for your hospital yet. Ask your StethoLink administrator.";

@@ -1,9 +1,11 @@
 import { ApiClientError } from "@/shared/api-client";
+import type { ApiErrorCode } from "@/shared/contracts";
 
 export type ResourceState<T> =
   | { status: "loading" }
   | { status: "ready"; data: T }
-  | { status: "error"; message: string };
+  /** `code` and `reference` are present when the server answered with an error (the reference only when it logged one). */
+  | { status: "error"; message: string; code?: ApiErrorCode; reference?: string };
 
 /** Runs a loader and reports each state transition. `isActive` guards against stale updates. */
 export async function loadResource<T>(
@@ -17,6 +19,8 @@ export async function loadResource<T>(
     const data = await load();
     if (isActive()) set({ status: "ready", data });
   } catch (e) {
-    if (isActive()) set({ status: "error", message: e instanceof ApiClientError ? e.message : fallback });
+    if (!isActive()) return;
+    if (e instanceof ApiClientError) set({ status: "error", message: e.message, code: e.code, ...(e.requestId ? { reference: e.requestId } : {}) });
+    else set({ status: "error", message: fallback });
   }
 }

@@ -33,7 +33,8 @@ export function draftReducer(state: DraftState, action: DraftAction): DraftState
   }
 }
 
-const message = (e: unknown, fallback: string) => (e instanceof ApiClientError ? e.message : fallback);
+/** The server's explanation, with the reference it logged when the failure was on its side. */
+const message = (e: unknown, fallback: string) => (e instanceof ApiClientError ? `${e.message}${e.requestId ? ` (reference ${e.requestId})` : ""}` : fallback);
 
 /** True when no further clinician decision can be recorded. */
 export function isFinalStatus(status: ConsultationDraft["status"]): boolean {

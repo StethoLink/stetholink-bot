@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
+import { useT } from "@/apps/embedded-app/i18n/client";
 import { Button } from "./Button";
 import { Skeleton } from "./Skeleton";
 
@@ -8,6 +9,7 @@ import { Skeleton } from "./Skeleton";
  * has taken, a skeleton of the result and a way to stop waiting.
  */
 export function WorkInProgress({ label, steps, onCancel, expectedSeconds = 30 }: { label: string; steps?: readonly string[]; onCancel?: () => void; expectedSeconds?: number }) {
+  const { t } = useT();
   const [seconds, setSeconds] = useState(0);
   useEffect(() => {
     const timer = setInterval(() => setSeconds((value) => value + 1), 1000);
@@ -24,10 +26,10 @@ export function WorkInProgress({ label, steps, onCancel, expectedSeconds = 30 }:
         <div className="h-full rounded-full bg-sky-600 transition-[width] duration-1000 ease-linear" style={{ width: `${Math.min(95, (seconds / expectedSeconds) * 100)}%` }} />
       </div>
       {step && <p className="text-xs text-slate-700">{step}</p>}
-      <Skeleton label="The result will appear here" lines={3} />
+      <Skeleton label={t.progress.resultHere} lines={3} />
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="text-xs text-slate-700">{seconds > expectedSeconds ? "This is taking longer than usual. It can take up to two minutes." : `Usually ${Math.round(expectedSeconds / 2)} to ${expectedSeconds} seconds.`}</p>
-        {onCancel && <Button size="sm" onClick={onCancel}>Cancel</Button>}
+        <p className="text-xs text-slate-700">{seconds > expectedSeconds ? t.progress.longer : t.progress.usually(expectedSeconds)}</p>
+        {onCancel && <Button size="sm" onClick={onCancel}>{t.common.cancel}</Button>}
       </div>
     </div>
   );

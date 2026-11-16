@@ -18,7 +18,7 @@
 }
 .assistant {
   background: #f0f9ff;
-  border-left: 3px solid #075985;
+  border-inline-start: 3px solid #075985;
 }
 .clinician {
   background: #f8fafc;

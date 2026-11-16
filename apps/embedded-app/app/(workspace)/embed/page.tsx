@@ -4,6 +4,8 @@ import { AuthError, requireClinician } from "@/platform/auth/session";
 import { getTenant } from "@/platform/tenants";
 import { describeAssistant } from "@/platform/tenants/model-provider";
 import { classificationOfSource } from "@/shared/schemas";
+import { messages } from "@/apps/embedded-app/i18n/messages";
+import { getLocale } from "@/apps/embedded-app/i18n/server";
 
 export default async function EmbedPage() {
   const session = await requireClinician({ navigation: true }).catch((error: unknown) => {
@@ -11,11 +13,12 @@ export default async function EmbedPage() {
     throw error;
   });
   if (!session) {
+    const t = messages[await getLocale()];
     return (
       <main className="mx-auto w-full max-w-md p-4">
-        <h1 className="sr-only">StethoLink</h1>
-        <Alert tone="warning" role="alert" title="Open StethoLink from the patient chart">
-          <p>StethoLink opens from the active patient chart in your EHR. If it was open, your session has ended: reopen it from the chart.</p>
+        <h1 className="sr-only">{t.appName}</h1>
+        <Alert tone="warning" role="alert" title={t.session.noneTitle}>
+          <p>{t.session.noneText}</p>
         </Alert>
       </main>
     );

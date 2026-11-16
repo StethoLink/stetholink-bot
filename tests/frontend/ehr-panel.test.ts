@@ -24,7 +24,7 @@ describe("loadResource", () => {
 
   it("surfaces API error messages", async () => {
     const s = await run(() => client.getEncounterContext("missing"));
-    expect(s.at(-1)).toEqual({ status: "error", message: "Encounter not found" });
+    expect(s.at(-1)).toEqual({ status: "error", message: "Encounter not found", code: "not_found" });
   });
 
   it("uses the fallback for unknown errors", async () => {

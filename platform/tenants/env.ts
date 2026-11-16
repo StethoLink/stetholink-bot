@@ -1,6 +1,7 @@
 import "server-only";
 import { z } from "zod";
 import { responsesEndpoint } from "@/core/agent/providers/openai-provider";
+import { frameOriginProblems } from "@/platform/http/security-headers";
 
 const envSchema = z.object({
   TENANT_ID: z.string().min(1).max(128),
@@ -80,6 +81,10 @@ const envSchema = z.object({
   SESSION_ENCRYPTION_KEYS_PREVIOUS: z.string().optional(),
   // lax: top-level window. embedded: inside the EHR's iframe (SameSite=None; Secure; Partitioned).
   COOKIE_MODE: z.enum(["lax", "embedded"]).default("lax"),
+  // Who may put StethoLink in a frame. Default: the origin of SMART_AUTHORIZATION_URL (the EHR's own sign-in page).
+  EHR_FRAME_ORIGINS: z.string().optional(),
+  // Language of the interface until the clinician chooses one: en or ar.
+  UI_DEFAULT_LOCALE: z.enum(["en", "ar"]).default("en"),
   STETHOLINK_DATABASE_URL: z.string().optional(),
   STETHOLINK_DATABASE_CA: z.string().optional(),
 });
@@ -104,6 +109,7 @@ export function configurationProblems(env: ServerEnv): string[] {
     problems.push("OPENAI_API_KEY, OPENAI_INPUT_USD_PER_MILLION and OPENAI_OUTPUT_USD_PER_MILLION must be set");
   }
   if (env.SCRIBE_ENABLED === "true") problems.push(...scribeProblems(env).map((problem) => `scribe: ${problem}`));
+  problems.push(...frameOriginProblems(env));
   return problems;
 }
 

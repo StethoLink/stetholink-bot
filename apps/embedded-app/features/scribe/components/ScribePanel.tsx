@@ -7,8 +7,8 @@ import { scribeApi } from "../hooks/scribeApi";
 import { useRecorder, type MicrophoneProblem, type RecordedChunk } from "../hooks/useRecorder";
 import { ScribeReview } from "./ScribeReview";
 
-const PROBLEM: Record<MicrophoneProblem, { title: string; text: string; newWindow?: boolean }> = {
-  blocked_by_frame: { title: "The microphone is not allowed inside the EHR window", text: "Your EHR has not given this panel access to the microphone. Open StethoLink in its own window to record this visit. Ask your EHR administrator to allow the microphone for StethoLink so this step is not needed.", newWindow: true },
+const PROBLEM: Record<MicrophoneProblem, { title: string; text: string }> = {
+  blocked_by_frame: { title: "The microphone is not allowed inside the EHR window", text: "Your EHR has not given this panel access to the microphone, so a visit cannot be recorded here. Ask your EHR administrator to allow the microphone for StethoLink's frame. The rest of StethoLink works as usual." },
   denied: { title: "The microphone was not allowed", text: "Allow microphone access for this site in your browser's address bar, then start again." },
   no_device: { title: "No microphone was found", text: "Connect a microphone, then start again." },
   unsupported: { title: "This browser cannot record", text: "Use a current version of Chrome or Edge to record a visit." },
@@ -133,7 +133,7 @@ export function ScribePanel({ openSessionId, onOpenSession }: { openSessionId?: 
     <Card aria-label="Visit scribe" className="space-y-3">
       <CardHeader title="Visit scribe" description={`Records the visit, then drafts a note for you to review. Spoken language: ${capabilities.spokenLanguage}. Note language: ${capabilities.noteLanguage === "ar" ? "Arabic" : "English"}.`} />
       {problem && (
-        <Alert tone="danger" title={problem.title} action={problem.newWindow ? <Button size="sm" onClick={() => window.open(window.location.href, "_blank", "noopener")}>Open in a new window</Button> : undefined}>{problem.text}</Alert>
+        <Alert tone="danger" title={problem.title}>{problem.text}</Alert>
       )}
       {busy === "generating" ? (
         <WorkInProgress label="Writing the note from the visit" steps={STEPS} expectedSeconds={40} onCancel={() => abort.current?.abort()} />

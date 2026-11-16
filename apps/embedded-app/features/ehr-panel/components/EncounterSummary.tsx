@@ -2,52 +2,38 @@
 
 import type { StethoLinkApiClient } from "@/shared/api-client";
 import type { EncounterContext } from "@/shared/contracts";
+import { useT } from "@/apps/embedded-app/i18n/client";
 import { useEncounterContext } from "../hooks/useEncounterContext";
 import { ErrorWithRetry, SkeletonBlock } from "./StateViews";
 
-const TYPE: Record<EncounterContext["type"], string> = {
-  inpatient: "Inpatient",
-  outpatient: "Outpatient",
-  emergency: "Emergency",
-  virtual: "Virtual",
-};
-const STATUS: Record<EncounterContext["status"], string> = {
-  planned: "Planned",
-  arrived: "Arrived",
-  triaged: "Triaged",
-  in_progress: "In progress",
-  on_leave: "On leave",
-  finished: "Finished",
-  cancelled: "Cancelled",
-};
-
 export function EncounterSummaryView({ encounter }: { encounter: EncounterContext }) {
+  const { t, locale } = useT();
   const e = encounter;
   const started = new Date(e.startedAt);
   return (
-    <section aria-label="Encounter" className="card card-pad text-sm">
+    <section aria-label={t.chart.encounterLabel} className="card card-pad text-sm">
       <h2 className="font-semibold">
-        {TYPE[e.type]} encounter · {STATUS[e.status]}
+        {t.chart.encounterHeading(t.patient.visitType[e.type], t.patient.visitStatus[e.status])}
       </h2>
       <dl className="mt-1 grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5">
         {e.reasonForVisit && (
           <>
-            <dt className="text-slate-700">Reason</dt>
-            <dd className="break-words">{e.reasonForVisit}</dd>
+            <dt className="text-slate-700">{t.chart.reason}</dt>
+            <dd dir="auto" className="break-words">{e.reasonForVisit}</dd>
           </>
         )}
         {e.location && (
           <>
-            <dt className="text-slate-700">Location</dt>
-            <dd className="break-words">{e.location}</dd>
+            <dt className="text-slate-700">{t.chart.location}</dt>
+            <dd dir="auto" className="break-words">{e.location}</dd>
           </>
         )}
-        <dt className="text-slate-700">Started</dt>
+        <dt className="text-slate-700">{t.chart.started}</dt>
         <dd>
           <time dateTime={e.startedAt}>
             {Number.isNaN(started.getTime())
               ? e.startedAt
-              : started.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })}
+              : started.toLocaleString(locale === "ar" ? "ar-SA-u-ca-gregory-nu-latn" : undefined, { dateStyle: "medium", timeStyle: "short" })}
           </time>
         </dd>
       </dl>
@@ -56,14 +42,15 @@ export function EncounterSummaryView({ encounter }: { encounter: EncounterContex
 }
 
 export function EncounterSummary({ encounterId, client }: { encounterId: string; client?: StethoLinkApiClient }) {
+  const { t } = useT();
   const { state, reload } = useEncounterContext(encounterId, client);
   if (state.status === "ready") return <EncounterSummaryView encounter={state.data} />;
   return (
-    <section aria-label="Encounter" className="card card-pad">
+    <section aria-label={t.chart.encounterLabel} className="card card-pad">
       {state.status === "loading" ? (
-        <SkeletonBlock label="Loading encounter…" lines={2} />
+        <SkeletonBlock label={t.chart.loadingEncounter} lines={2} />
       ) : (
-        <ErrorWithRetry message={state.message} onRetry={reload} />
+        <ErrorWithRetry message={state.message} code={state.code} reference={state.reference} onRetry={reload} />
       )}
     </section>
   );

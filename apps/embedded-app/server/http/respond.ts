@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import type { z } from "zod";
 import type { ApiErrorCode } from "@/shared/contracts";
 import { AuthError } from "@/platform/auth/session";
+import { newCorrelationId } from "@/platform/auth/smart-launch-failure";
 import postgres from "postgres";
 
 import { RouteError } from "@/core/errors";
@@ -22,8 +23,21 @@ const STATUS: Record<ApiErrorCode, number> = {
   internal_error: 500,
 };
 
-export function errorResponse(code: ApiErrorCode, message: string) {
-  return NextResponse.json({ error: { code, message } }, { status: STATUS[code], headers: { "Cache-Control": "no-store", "Referrer-Policy": "no-referrer" } });
+/** The caller already logged this failure under its own correlation ID (the SMART launch does). */
+export interface Trace { correlationId: string }
+
+/**
+ * A failure on the server's side (5xx) carries a reference: `error.requestId` in the body and `X-Correlation-Id`,
+ * the same value as one `api.request_failed` log line. The line holds the error code and the reference only:
+ * no path, no identifier, no message. A refusal the clinician caused or can fix (4xx) is not logged and has none.
+ */
+export function errorResponse(code: ApiErrorCode, message: string, trace?: Trace) {
+  const headers: Record<string, string> = { "Cache-Control": "no-store", "Referrer-Policy": "no-referrer" };
+  const correlationId = trace?.correlationId ?? (STATUS[code] >= 500 ? newCorrelationId() : undefined);
+  if (!correlationId) return NextResponse.json({ error: { code, message } }, { status: STATUS[code], headers });
+  if (!trace) console.error(JSON.stringify({ action: "api.request_failed", code, correlationId, at: new Date().toISOString() }));
+  headers["X-Correlation-Id"] = correlationId;
+  return NextResponse.json({ error: { code, message, requestId: correlationId } }, { status: STATUS[code], headers });
 }
 
 /** Validates the outgoing body against its contract. A contract violation is a server bug and returns 500. */
@@ -41,18 +55,18 @@ export async function readJson(request: Request): Promise<unknown> {
   return request.json().catch(() => null);
 }
 
-export function handleRouteError(err: unknown) {
-  if (err instanceof AuthError) return errorResponse(err.code, err.message);
-  if (err instanceof RouteError) return errorResponse(err.code, err.message);
-  if (err instanceof ChartUnavailableError) return errorResponse(err.code, err.message);
+export function handleRouteError(err: unknown, trace?: Trace) {
+  if (err instanceof AuthError) return errorResponse(err.code, err.message, trace);
+  if (err instanceof RouteError) return errorResponse(err.code, err.message, trace);
+  if (err instanceof ChartUnavailableError) return errorResponse(err.code, err.message, trace);
   if (err instanceof postgres.PostgresError) {
-    if (err.code === "P0002") return errorResponse("not_found", "Draft not found");
-    if (err.code === "P0001") return errorResponse("conflict", "Consultation command conflicts with its state, version or idempotency key");
-    if (err.code === "22023") return errorResponse("invalid_request", "Invalid consultation command");
+    if (err.code === "P0002") return errorResponse("not_found", "Draft not found", trace);
+    if (err.code === "P0001") return errorResponse("conflict", "Consultation command conflicts with its state, version or idempotency key", trace);
+    if (err.code === "22023") return errorResponse("invalid_request", "Invalid consultation command", trace);
     if (["23505", "40001", "40P01", "55P03"].includes(err.code)) return errorResponse("conflict", "Consultation changed; retry with the same idempotency key or reload");
-    if (err.code === "42501") return errorResponse("forbidden", "Access denied");
-    return errorResponse("provider_unavailable", "Database is temporarily unavailable");
+    if (err.code === "42501") return errorResponse("forbidden", "Access denied", trace);
+    return errorResponse("provider_unavailable", "Database is temporarily unavailable", trace);
   }
   console.error("Unhandled route error", err instanceof Error ? err.name : "unknown");
-  return errorResponse("internal_error", "Unexpected server error");
+  return errorResponse("internal_error", "Unexpected server error", trace);
 }

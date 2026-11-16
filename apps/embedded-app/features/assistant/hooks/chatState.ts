@@ -63,7 +63,7 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
 }
 
 export function errorMessage(e: unknown, fallback: string): string {
-  return e instanceof ApiClientError ? e.message : fallback;
+  return e instanceof ApiClientError ? `${e.message}${e.requestId ? ` (reference ${e.requestId})` : ""}` : fallback;
 }
 
 /** Sends one clinician message (or re-sends a failed one) and dispatches the outcome. */

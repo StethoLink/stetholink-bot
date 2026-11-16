@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useId, useRef, type ReactNode } from "react";
+import { useT } from "@/apps/embedded-app/i18n/client";
 import { Button, type ButtonVariant } from "./Button";
 
 /**
@@ -36,11 +37,12 @@ export function Dialog({ open, onClose, title, children, footer }: { open: boole
 export function ConfirmDialog({ open, onClose, onConfirm, title, confirmLabel, variant = "primary", busy = false, canConfirm = true, error, children }: {
   open: boolean; onClose(): void; onConfirm(): void; title: string; confirmLabel: string; variant?: ButtonVariant; busy?: boolean; canConfirm?: boolean; error?: string; children: ReactNode;
 }) {
+  const { t } = useT();
   return (
     <Dialog open={open} onClose={() => { if (!busy) onClose(); }} title={title} footer={
       <>
-        <Button onClick={onClose} disabled={busy}>Cancel</Button>
-        <Button variant={variant} onClick={onConfirm} busy={busy} busyLabel="Working…" disabled={!canConfirm}>{confirmLabel}</Button>
+        <Button onClick={onClose} disabled={busy}>{t.common.cancel}</Button>
+        <Button variant={variant} onClick={onConfirm} busy={busy} busyLabel={t.common.working} disabled={!canConfirm}>{confirmLabel}</Button>
       </>
     }>
       {children}
