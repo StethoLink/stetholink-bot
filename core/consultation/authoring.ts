@@ -8,7 +8,7 @@ import {
   type ReferralSectionKey, type ReferralStatement,
 } from "@/shared/utils/referral-text";
 
-export const AUTHORING_PROMPT_VERSION = "referral-authoring@2.0.0";
+export const AUTHORING_PROMPT_VERSION = "referral-authoring@2.0.1";
 export const REFERRAL_TASK = "consultation_referral";
 export const MAX_AUTHORING_ATTEMPTS = 2;
 
@@ -26,7 +26,7 @@ export const AUTHORING_INSTRUCTIONS = [
   "2. Never cite a fact whose status is \"unknown\" in sections. List the unknown facts that matter for the question in missingInformation, each with its id.",
   "3. Put each fact in the section for its category: problem and history in relevantHistory; symptom in presentingSymptoms; vital_sign in examinationFindings; investigation in investigations; medication in currentMedications; allergy and anything else in clinicalContext.",
   "4. Include the facts relevant to the physician's question and leave out unrelated ones. A section with nothing relevant is an empty array. Age and sex are added to the consultation automatically: do not restate them in sections.",
-  "5. specialty is the specialty the physician asked for, in the request or in a later answer (a later answer wins). Use the exact spelling from availableSpecialties when one matches. If the physician names no specialty, return an empty string.",
+  "5. specialty is the specialty the physician asked for, in the request or in a later answer (a later answer wins). Use the exact spelling from availableSpecialties when one matches. If the physician names no specialty, return an empty string. Return the specialty in every response, also when requestReview.verdict is \"clarify\": questioning the request does not change which specialty was asked for.",
   "6. clinicalQuestion restates what the physician wants the specialist to answer, in one or two sentences, using only what the request and the answers say. When the physician lists several things to ask, keep every one of them. Keep the physician's own uncertainty (for example \"possible\"); never state a diagnosis as established.",
   "7. suggestedAdditionalInformation lists at most five kinds of information that are absent from the chart and that the specialist would usually need. Name the information only. Do not state results, recommend treatment or tell anyone to order anything. Use an empty array when there is none.",
   "8. Do not use square brackets, markup or line breaks inside any text value.",
@@ -40,7 +40,7 @@ export const AUTHORING_INSTRUCTIONS = [
   "   Otherwise use verdict \"proceed\" with an empty concerns array. Never raise a concern only to be thorough, about wording or style, about missing information that does not block the question, or about anything the physician already answered. A request that is clear, fits the chart and asks a specific question is not challenged.",
   "11. Each concern states the problem plainly and directly in one or two sentences, naming the chart facts in their own terms (concern), asks the physician one direct question that resolves it (question), and lists the facts it relies on (evidenceIds; empty when it is about the request itself). At most four concerns. Do not diagnose, and do not soften a real concern.",
   "12. The physician's answers in clarifications are their decisions. Never ask the same thing again. When the physician confirms the request or explains it, accept that and proceed unless a different problem remains.",
-  "13. With verdict \"clarify\", return an empty clinicalQuestion and empty sections, missingInformation and suggestedAdditionalInformation: nothing is drafted until the physician answers. When physicianChoseToProceed is true, the physician has read your concerns and wants the draft anyway: fill every field fully, and still return the concerns that remain with verdict \"clarify\".",
+  "13. With verdict \"clarify\", return an empty clinicalQuestion and empty sections, missingInformation and suggestedAdditionalInformation: nothing is drafted until the physician answers. The specialty is not part of the draft: still return it as rule 5 says. When physicianChoseToProceed is true, the physician has read your concerns and wants the draft anyway: fill every field fully, and still return the concerns that remain with verdict \"clarify\".",
 ].join("\n");
 
 const statementSchema = { type: "object", additionalProperties: false, required: ["text", "evidenceIds"],

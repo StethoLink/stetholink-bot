@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 import { ageText as demographicsAge } from "@/core/consultation/demographics";
 import { normalizeChart } from "@/integrations/fhir/facts";
 import { renderReferral } from "@/core/consultation/authoring";
-import { ageText, chartNote, factLabel, missingLine, planNote } from "@/apps/embedded-app/i18n/chart-text";
+import type { ChartWriteItem } from "@/core/tools/chart-writer";
+import { createFhirWriter } from "@/integrations/fhir/writer";
+import { ageText, chartNote, factLabel, missingLine, planNote, writeFailure } from "@/apps/embedded-app/i18n/chart-text";
 
 const ARABIC = /[؀-ۿ]/;
 const LATIN_WORDS = /[A-Za-z]{3,}/;
@@ -98,5 +100,40 @@ describe("the connector's own chart texts in Arabic", () => {
     expect(planNote(note, "ar")).toMatch(ARABIC);
     expect(planNote(note, "en")).toBe(note);
     expect(planNote("A physician's own line", "ar")).toBe("A physician's own line");
+  });
+});
+
+describe("the EHR writer's failure reasons in Arabic", () => {
+  // Found on a real OpenEMR 7.0.3 (O-T7): the reason a write is refused ("The EHR did not give StethoLink permission to create DocumentReference")
+  // stayed English on the Arabic screens. Each reason below is produced by the real writer, so a changed sentence there fails here.
+  const grant: Parameters<typeof createFhirWriter>[0] = { baseUrl: "https://ehr.example.test/fhir", accessToken: "fictional-token", patientId: "patient-1", encounterId: "encounter-1", grantedScopes: ["patient/DocumentReference.c"] };
+  const note: ChartWriteItem = { kind: "document", itemKey: "sl-aaaaaaaa-note", documentType: "soap_note", title: "Visit note", text: "Fictional text.", language: "en" };
+  const reply = (status: number, body: unknown = {}) => new Response(JSON.stringify(body), { status });
+  const capability = (types: string[]) => reply(200, { rest: [{ resource: types.map((type) => ({ type, interaction: [{ code: "create" }] })) }] });
+  const answering = (answer: () => Response): typeof fetch => async (target) => (String(target).endsWith("/metadata") ? capability(["DocumentReference"]) : answer());
+  async function reasons() {
+    const out: string[] = [];
+    const run = async (writerGrant: typeof grant, item: ChartWriteItem, fetcher: typeof fetch) => { out.push((await createFhirWriter(writerGrant, fetcher).create(item)).failure!); };
+    await run({ ...grant, grantedScopes: [] }, note, async () => reply(200));
+    await run(grant, note, async (target) => (String(target).endsWith("/metadata") ? capability(["Condition"]) : reply(200)));
+    await run(grant, note, async (target) => { if (String(target).endsWith("/metadata")) return capability(["DocumentReference"]); throw new Error("down"); });
+    for (const status of [403, 412, 500]) await run(grant, note, answering(() => reply(status)));
+    await run(grant, note, answering(() => reply(201)));
+    await run(grant, { ...note, itemKey: "x" }, async () => reply(200));
+    return out;
+  }
+
+  it("translates every reason the writer can give, and keeps the resource name as written", async () => {
+    const all = await reasons();
+    expect(all).toHaveLength(8);
+    expect(new Set(all).size).toBe(8);
+    for (const reason of all) {
+      const arabic = writeFailure(reason, "ar");
+      expect(arabic, reason).toMatch(ARABIC);
+      expect(arabic.replace(/StethoLink|DocumentReference/g, ""), reason).not.toMatch(LATIN_WORDS);
+      expect(writeFailure(reason, "en")).toBe(reason);
+    }
+    expect(writeFailure(all[0], "ar")).toContain("DocumentReference");
+    expect(writeFailure("Something the EHR wrote itself", "ar")).toBe("Something the EHR wrote itself");
   });
 });

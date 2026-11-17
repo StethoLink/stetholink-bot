@@ -124,6 +124,20 @@ describe.skipIf(!enabled)("LIVE: model-authored consultation from a synthetic ch
       .resolves.toMatchObject({ outcome: "clarification_needed", concerns: expect.arrayContaining([expect.objectContaining({ kind: "missing_specialty" })]) });
   }, 150_000);
 
+  // Found on a real OpenEMR chart (O-T7): with a request that conflicts with the chart, the model sometimes answered "clarify" and blanked the
+  // specialty with the rest of the draft (2 of 8 calls at low reasoning effort), so the physician was asked which specialty a request that says
+  // "cardiology" meant. The instructions now say the specialty is returned with every verdict.
+  it("keeps the specialty the physician named when it questions the request for another reason", async () => {
+    const request = "Prepare a cardiology consultation for this patient asking about the rash on both legs.";
+    const results = await Promise.all([1, 2, 3, 4].map(() => liveService().service.author(chart, request)));
+    for (const result of results) {
+      if ("outcome" in result) {
+        expect(result.specialty).toBe("Cardiology");
+        expect(result.concerns.map((entry) => entry.kind)).not.toContain("missing_specialty");
+      } else expect(result.grounding?.specialty).toBe("Cardiology");
+    }
+  }, 300_000);
+
   it("questions a cardiology request that names nothing to answer, and drafts once the physician answers", async () => {
     const first = await liveService().service.author(chart, "Prepare a cardiology consultation");
     expect(first).toMatchObject({ outcome: "clarification_needed", concerns: expect.arrayContaining([expect.objectContaining({ kind: "unclear_question" })]) });

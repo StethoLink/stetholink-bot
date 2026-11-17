@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { ChartWriteResult, ConsultationDeliveryView } from "@/shared/contracts";
 import { Alert, Badge, Button, ConfirmDialog } from "@/apps/embedded-app/components/ui";
+import { writeFailure } from "@/apps/embedded-app/i18n/chart-text";
 import { useT } from "@/apps/embedded-app/i18n/client";
 import { formatDateTime } from "@/apps/embedded-app/i18n/format";
 import { awaitingProvider, deliveryApi, DeliveryError, describeDelivery } from "../hooks/deliveryState";
@@ -167,7 +168,7 @@ export function ConsultationDelivery({ draftId, canRoute, onChanged, onView }: {
                   {done ? <Badge tone="success" dot>{d.inChart}</Badge> : entry.status === "pending" ? <Badge tone="neutral" dot>{d.notWrittenYet}</Badge>
                     : <Badge tone={entry.status === "failed" ? "danger" : "warning"} dot>{d.notWrittenCopy}</Badge>}
                   {!done && entry.status !== "pending" && entry.copyText && <Button size="sm" onClick={() => void navigator.clipboard.writeText(entry.copyText!)}>{d.copyToChart}</Button>}
-                  {entry.failure && <span className="w-full text-xs text-slate-700" dir="auto">{entry.failure}.</span>}
+                  {entry.failure && <span className="w-full text-xs text-slate-700" dir="auto">{writeFailure(entry.failure, locale)}.</span>}
                 </li>
               );
             })}

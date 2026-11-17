@@ -104,6 +104,24 @@ The Orders tab sits between Consultations and History (Alt + 3). A physician say
 - *Arabic:* the screen builds each check's sentence from its kind, its severity and the labels of the chart facts it cites, so no English sentence of the server is shown; a name or a value the catalog, the chart or the model wrote (a medicine, a fact such as "Penicillin (criticality: high)", the assistant's reason, which came back in English) is shown as written, in its own direction. A chart value inside a sentence is kept in one piece so that it does not break across two lines.
 - *Not shot inside OpenEMR:* the view of a clinician who is not a physician (no decision or write control; it is in the fake-EHR browser step of `tests/e2e/live-ehr-flow.mts`, `orders-nurse.png`), the write to an EHR that accepts orders (only a fake FHIR server took it), the decision dialog for a major interaction (the fictional chart has no active anticoagulant in OpenEMR; the same dialog is the allergy one), the screens in a hospital's own OpenEMR.
 
+## The write-back and the scribe on a real OpenEMR (T7, 2026-11-17)
+
+Taken inside the frame of a real OpenEMR 7.0.3 (Docker, a fictional patient made in it), with the real model and the real transcription service; the speech was synthetic. `docs/openemr.md` ("The whole flow on a real OpenEMR") has the table of what passed and what could not be done.
+
+| A consultation the EHR cannot receive, English 420 px | The same, Arabic 360 px |
+| --- | --- |
+| ![](after/t7-consultation-not-written-420.png) | ![](after/t7-consultation-not-written-ar-360.png) |
+
+- *Not written:* OpenEMR 7.0.3 gives an app no scope to create a `DocumentReference`, so the physician's "Write to chart" is answered "Not written: copy it" with the reason, and a Copy button holds the text. The Arabic screenshot shows the reason in Arabic (it was English until this check). "Reviewed by" still shows the clinician's UUID, and the badge says "Real patient data" for a test EHR.
+
+| Recording starts | The note with its sources | After approval |
+| --- | --- | --- |
+| ![](after/t7-scribe-recording-420.png) | ![](after/t7-scribe-note-420.png) | ![](after/t7-scribe-result-420.png) |
+
+- *Recording:* possible only because the throwaway OpenEMR's frame was given `allow="microphone https://127.0.0.1:3082"` (a test-only change; OpenEMR as it ships refuses, see the "Microphone" screenshot above). The red indicator and the pause, end and discard controls are the ones a physician has; the screenshot is the first second.
+- *The note:* 85 seconds of fictional speech in four parts, transcribed by the real service and written by `gpt-5-mini`; every statement carries the number of the sentence of the visit behind it. The cost line says $0.0108 for the visit.
+- *After approval:* the conflict between "no allergies" said in the visit and the penicillin in the chart is shown and written nowhere; the one new item the physician ticked (a medicine the patient reported) and the note are both "Not written: copy it", because OpenEMR 7.0.3 offers no create scope, and the transcript stays until the note is in the chart or its expiry date.
+
 ## Problems found in the old interface
 
 1. **One endless page.** At 360 px the draft screen was 5,190 px tall: chart, visit, request, draft, sources, revision and decision in a single scroll, with no way to move between them.

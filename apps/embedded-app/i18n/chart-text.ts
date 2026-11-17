@@ -86,6 +86,24 @@ export function missingLine(text: string, locale: Locale): string {
   return chartNote(text, locale);
 }
 
+/**
+ * The reason the EHR writer gives when an item could not be written to the chart (`integrations/fhir/writer.ts`). Product text, so it is
+ * translated; the FHIR resource name inside it stays as written. `tests/frontend/chart-text.test.ts` drives the real writer into each case.
+ */
+export function writeFailure(text: string, locale: Locale): string {
+  if (locale !== "ar") return text;
+  let m: RegExpExecArray | null;
+  if (text === "The item has no valid key") return "ليس لهذا العنصر مفتاح صالح";
+  if ((m = /^The EHR did not give StethoLink permission to create (\w+)$/.exec(text))) return `لم يمنح النظام الطبي StethoLink إذنًا بإنشاء سجل من نوع ${m[1]}`;
+  if ((m = /^The EHR does not accept new (\w+) records from applications$/.exec(text))) return `لا يقبل النظام الطبي من التطبيقات سجلات جديدة من نوع ${m[1]}`;
+  if (text === "The EHR could not be reached. Nothing was written") return "تعذّر الوصول إلى النظام الطبي. لم يُكتب شيء";
+  if (text === "The EHR refused the write for this session") return "رفض النظام الطبي الكتابة لهذه الجلسة";
+  if (text === "The EHR already holds more than one record with this key") return "يحتفظ النظام الطبي بأكثر من سجل بهذا المفتاح";
+  if ((m = /^The EHR did not accept the record \(status (\d+)\)$/.exec(text))) return `لم يقبل النظام الطبي السجل (الحالة ${m[1]})`;
+  if (text === "The EHR did not return the identifier of the record") return "لم يُرجع النظام الطبي معرّف السجل";
+  return text;
+}
+
 /** A fixed note the core adds to the plan of a draft. */
 export function planNote(note: string, locale: Locale): string {
   if (locale === "ar" && note === "Physician review required: check each statement against its source before deciding.") return "يلزم أن يراجع الطبيب: تحقق من كل عبارة مقابل مصدرها قبل اتخاذ القرار.";

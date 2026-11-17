@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import type { ChartWriteResult, ChartWriteStatus, OrderDraft } from "@/shared/contracts";
 import { Alert, Badge, Button, Card, CardHeader, ConfirmDialog, Skeleton, type Tone } from "@/apps/embedded-app/components/ui";
+import { writeFailure } from "@/apps/embedded-app/i18n/chart-text";
 import { useT } from "@/apps/embedded-app/i18n/client";
 import { DeliveryError } from "@/apps/embedded-app/features/consultations/hooks/deliveryState";
 import { ordersApi } from "../hooks/ordersApi";
@@ -45,7 +46,7 @@ export function OrderChartView({ draft, canWrite, results, error, onRetry, onRes
   onRetry?(): void;
   onResults?(results: ChartWriteResult[]): void;
 }) {
-  const { t } = useT();
+  const { t, locale } = useT();
   const o = t.work.orders;
   const c = o.chart;
   const approved = draft.lines.filter((line) => line.status === "approved");
@@ -94,7 +95,7 @@ export function OrderChartView({ draft, canWrite, results, error, onRetry, onRes
                     <Badge tone={TONE[status]} dot>{c.status[status]}</Badge>
                   </div>
                   <p className="text-sm font-medium break-words"><bdi>{line.display}</bdi></p>
-                  {result?.status === "failed" && result.failure && <p className="text-xs text-slate-700">{c.serverDetail} <span dir="auto">{result.failure}</span></p>}
+                  {result?.status === "failed" && result.failure && <p className="text-xs text-slate-700">{c.serverDetail} <span dir="auto">{writeFailure(result.failure, locale)}</span></p>}
                   {!inChart(result) && result?.copyText && (
                     <div className="space-y-1">
                       {(status === "unsupported" || status === "failed") && (

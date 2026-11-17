@@ -4,6 +4,7 @@ import type { ChartWriteResult, NoteStatement, ScribeSessionView, SoapSection } 
 import { SOAP_SECTIONS } from "@/shared/contracts";
 import { AiBadge, Alert, Badge, Button, Card, CardHeader, ConfirmDialog, SegmentedControl, useToast } from "@/apps/embedded-app/components/ui";
 import { DeliveryError } from "@/apps/embedded-app/features/consultations/hooks/deliveryState";
+import { writeFailure } from "@/apps/embedded-app/i18n/chart-text";
 import { useT } from "@/apps/embedded-app/i18n/client";
 import { formatDate } from "@/apps/embedded-app/i18n/format";
 import { scribeApi } from "../hooks/scribeApi";
@@ -13,7 +14,7 @@ const clock = (ms: number) => `${Math.floor(ms / 60_000)}:${String(Math.floor(ms
 
 function WriteRow({ write, label }: { write: ChartWriteResult; label: string }) {
   const notify = useToast();
-  const { t } = useT();
+  const { t, locale } = useT();
   const r = t.work.scribeReview;
   const done = write.status === "created" || write.status === "existing";
   return (
@@ -25,7 +26,7 @@ function WriteRow({ write, label }: { write: ChartWriteResult; label: string }) 
           : write.status === "failed" ? <Badge tone="danger" dot>{r.failed}</Badge> : <Badge tone="neutral" dot>{r.waiting}</Badge>}
         {write.resourceId && <span className="text-xs text-slate-600"><bdi dir="ltr">{r.ehrRecord(write.resourceId)}</bdi></span>}
       </div>
-      {write.failure && <p className="text-xs text-slate-700" dir="auto">{write.failure}.</p>}
+      {write.failure && <p className="text-xs text-slate-700" dir="auto">{writeFailure(write.failure, locale)}.</p>}
       {write.copyText && (
         <Button size="sm" onClick={() => void navigator.clipboard.writeText(write.copyText!).then(() => notify(r.copied), () => notify(r.copyBlocked, "danger"))}>{r.copyToChart}</Button>
       )}

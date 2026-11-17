@@ -3,8 +3,8 @@
 // Setup and the commands are in docs/openemr.md ("Checking the embedded frame"). Never point it at real patients.
 //
 //   OPENEMR_URL=https://localhost:9300 OPENEMR_USER=admin OPENEMR_PASS=... APP_ORIGIN=https://stetholink.test:3082 \
-//   APP_NAME=StethoLink OPENEMR_PID=1 [VISIT=none|<encounter number>] [FRAME_WIDTH=360] [UI=ar] [SHOTS=out] [EXPECT=chart|no-visit|not-shared] \
-//   [DRAFT=1] [ORDERS=1|not-set-up] [SCRIBE=1] [HISTORY=1] [ORDER_REQUEST="..."] \
+//   APP_NAME=StethoLink OPENEMR_PID=1 [VISIT=none|<encounter number>] [VISIT_REASON="..."] [FRAME_WIDTH=360] [UI=ar] [SHOTS=out] [EXPECT=chart|no-visit|not-shared] \
+//   [DRAFT=1] [ORDERS=1|not-set-up] [SCRIBE=1|record] [SCRIBE_AUDIO=visit.wav] [SCRIBE_SECONDS=105] [HISTORY=1] [ORDER_REQUEST="..."] \
 //   NODE_PATH=/opt/node-tools/node_modules node tests/e2e/browser/openemr-frame.mjs
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
@@ -18,8 +18,10 @@ const width = Number(env.FRAME_WIDTH ?? 0);
 const shot = async (target, name) => { if (env.SHOTS) await target.screenshot({ path: `${env.SHOTS}/${name}.png` }); };
 
 // A test host name that is a different site from OpenEMR's resolves to this machine.
-// A fake microphone, so that no permission prompt hides the frame's own policy.
-const browser = await chromium.launch({ args: [`--host-resolver-rules=MAP ${app.hostname} 127.0.0.1`, "--no-proxy-server", "--use-fake-ui-for-media-stream", "--use-fake-device-for-media-stream"] });
+// A fake microphone, so that no permission prompt hides the frame's own policy. With SCRIBE_AUDIO (a WAV of a FICTIONAL visit, made by
+// tests/e2e/browser/scribe-speech.mjs) the fake microphone plays that file once, then silence.
+const browser = await chromium.launch({ args: [`--host-resolver-rules=MAP ${app.hostname} 127.0.0.1`, "--no-proxy-server", "--use-fake-ui-for-media-stream", "--use-fake-device-for-media-stream",
+  ...(env.SCRIBE_AUDIO ? [`--use-file-for-fake-audio-capture=${env.SCRIBE_AUDIO}%noloop`] : [])] });
 const context = await browser.newContext({ ignoreHTTPSErrors: true, viewport: { width: 1280, height: 900 }, locale: "en-US", deviceScaleFactor: env.SHOTS ? 2 : 1 });
 const popups = [];
 const page = await context.newPage();
@@ -75,12 +77,28 @@ if (/^\d+$/.test(env.VISIT ?? "")) {
   // Open a visit the way a clinician does: the new-visit form, saved.
   await page.waitForTimeout(3000);
   await page.evaluate(() => window.navigateTab(`${window.webroot_url}/interface/forms/newpatient/new.php?autoloaded=1&calenc=`, "enc", () => window.activateTabByName("enc", true)));
-  let form;
-  for (let i = 0; i < 80 && !form; i++) { form = page.frames().find((candidate) => candidate.url().includes("newpatient/new.php")); if (!form) await page.waitForTimeout(500); }
-  await form.locator("select[name=pc_catid]").waitFor();
-  await form.locator("select[name=pc_catid]").selectOption({ label: "Office Visit" }).catch(() => form.locator("select[name=pc_catid]").selectOption({ index: 1 }));
-  await form.locator("textarea[name=reason]").fill("Follow-up visit (test)");
-  await form.locator("#saveEncounter").click();
+  // OpenEMR goes straight to today's visit when the patient already has one (it replaces the form at once), so the first run of a day
+  // shows the form and every later run shows that visit. Either way a visit is then open in the chart; VISIT_REASON applies to a new visit only.
+  let form, existing;
+  for (let i = 0; i < 160 && !form && !existing; i++) {
+    for (const candidate of page.frames()) {
+      if (/encounter_top\.php\?set_encounter=|encounter\/forms\.php/.test(candidate.url())) { existing = candidate; break; }
+      if (candidate.url().includes("newpatient/new.php") && await candidate.locator("select[name=pc_catid]").count().catch(() => 0)) { form = candidate; break; }
+    }
+    if (!form && !existing) await page.waitForTimeout(250);
+  }
+  if (!form && !existing) { await shot(page, "failed-new-visit"); throw new Error(`neither the new-visit form nor an open visit appeared (pass VISIT=<encounter number> to reuse a visit). Frames: ${page.frames().map((frame) => frame.url().replace(emr, "")).join(" | ")}`); }
+  if (form) {
+    // The form can be shown for a moment before OpenEMR replaces it with today's visit: let it settle, then look again.
+    await page.waitForTimeout(3000);
+    if (!form.url().includes("newpatient/new.php") || !(await form.locator("select[name=pc_catid]").count().catch(() => 0))) { existing = form; form = undefined; }
+  }
+  if (existing) console.log("VISIT today's visit was already open: " + (existing.url().match(/set_encounter=(\d+)/)?.[1] ?? "number not shown"));
+  else {
+    await form.locator("select[name=pc_catid]").selectOption({ label: "Office Visit" }).catch(() => form.locator("select[name=pc_catid]").selectOption({ index: 1 }));
+    await form.locator("textarea[name=reason]").fill(env.VISIT_REASON ?? "Follow-up visit (test)");
+    await form.locator("#saveEncounter").click();
+  }
   chart = await reopenDashboard();
 }
 // The app's own Launch button on the dashboard. The "SMART Enabled Apps" card may be collapsed, so the button is
@@ -147,12 +165,14 @@ const L = rtl ? {
   start: "بدء التسجيل", refusal: /الميكروفون غير مسموح به داخل نافذة النظام الطبي/, newWindow: /نافذة جديدة/,
   prepare: "إعداد الاستشارة", clinicalQuestion: "السؤال السريري", questions: "المساعد يستوضح هذا الطلب", answerPlaceholder: "إجابتك",
   answerContinue: "أجب وتابع", prepareAnyway: "أعدّها على أي حال", approve: "اعتماد", confirmApprove: "تأكيد الاعتماد",
+  writeToChart: "الكتابة في الملف", copyToChart: "نسخ إلى الملف", inChart: "في الملف", recording: "جارٍ التسجيل",
   request: "جهّز استشارة قلبية لهذا المريض: هل يحتاج ألم الصدر إلى تقييم عاجل لمتلازمة الشريان التاجي الحادة وما الخطوة الأولى؟",
   answer: "تقييم عاجل: هل تذهب إلى قسم الطوارئ الآن، وما الفحوص التي تأتي أولًا؟",
 } : {
   start: "Start recording", refusal: /microphone is not allowed inside the EHR window/i, newWindow: /new window/i,
   prepare: "Prepare consultation", clinicalQuestion: "Clinical question", questions: "The assistant questions this request", answerPlaceholder: "Your answer",
   answerContinue: "Answer and continue", prepareAnyway: "Prepare anyway", approve: "Approve", confirmApprove: "Confirm approve",
+  writeToChart: "Write to chart", copyToChart: "Copy to chart", inChart: "In the chart", recording: "Recording",
   request: "Prepare a cardiology consultation for this patient asking whether the chest pain needs urgent evaluation for acute coronary syndrome and what to do first.",
   answer: "Urgent evaluation: should she go to the emergency department now, and which tests come first?",
 };
@@ -210,14 +230,75 @@ if (expectState === "no-visit") {
     await frame.getByRole("checkbox").check();
     await frame.getByRole("dialog").getByRole("button", { name: L.start }).click();
     const refusal = frame.getByText(L.refusal);
-    if (attributes.allow && /microphone/.test(attributes.allow)) await frame.getByText(/Recording|Pause/).first().waitFor();
-    else {
-      await refusal.waitFor({ timeout: 20000 });
+    // What the browser decided, not what the frame's attribute suggests: allow="microphone" names the origin of the frame's src (OpenEMR's own
+    // launch page), not the page StethoLink serves after the launch redirects, so that spelling can still be refused (docs/openemr.md).
+    const recordingNow = frame.getByText(L.recording, { exact: true }).first();
+    await refusal.or(recordingNow).first().waitFor({ timeout: 20000 });
+    const refused = await refusal.count() > 0;
+    if (refused) {
       assert.equal(await frame.getByText(L.newWindow).count(), 0, "the panel still offers a new window");
       await shot(element, name("scribe-blocked"));
-    }
+    } else await shot(element, name("scribe-recording-start"));
+    if (!(attributes.allow && /microphone/.test(attributes.allow))) assert.ok(refused, "the frame has no allow=microphone, yet the browser did not refuse");
     assert.equal(popups.length, 0, "recording opened a window");
-    console.log("SCRIBE " + JSON.stringify({ frameAllow: attributes.allow, refused: !(attributes.allow && /microphone/.test(attributes.allow)) }));
+    console.log("SCRIBE " + JSON.stringify({ frameAllow: attributes.allow, refused }));
+  }
+  if (env.SCRIBE === "record") {
+    // The whole scribe, inside OpenEMR's frame: consent, recording a FICTIONAL visit (SCRIBE_AUDIO is played by Chromium as its microphone),
+    // real transcription of each part, the real note model, the physician's selection and approval, and the write the EHR allows or not.
+    // Needs a frame that grants the microphone. OpenEMR 7.0.3 does not (the refusal is the SCRIBE=1 check), so for this mode the throwaway
+    // test OpenEMR's dialog.js is changed to add allow="microphone" to the frame it opens (docs/openemr.md); a hospital's OpenEMR would need the same.
+    assert.ok(env.SCRIBE_AUDIO, "SCRIBE=record needs SCRIBE_AUDIO, a WAV made by tests/e2e/browser/scribe-speech.mjs");
+    assert.ok(attributes.allow && /microphone/.test(attributes.allow), `the frame OpenEMR opened has allow=${JSON.stringify(attributes.allow)}: the microphone is refused; see docs/openemr.md ("Recording inside the frame")`);
+    const S = rtl ? {
+      start: "بدء التسجيل", recording: "جارٍ التسجيل", transcribed: /تم تفريغ \d+/, end: "إنهاء الزيارة وكتابة الملاحظة", review: "مراجعة ملاحظة الزيارة", noteTitle: /ملاحظة الزيارة/,
+      awaiting: "بانتظار مراجعة الطبيب", source: /^المصدر: الزيارة/, quoted: /^اقتباس:/, approveWrite: "اعتماد وكتابة في الملف", confirm: "اعتماد وكتابة", resultTitle: "النتيجة في الملف", newLegend: /جديد/,
+    } : {
+      start: "Start recording", recording: "Recording", transcribed: /[1-9]\d* parts? transcribed/, end: "End visit and write note", review: "Visit note review", noteTitle: "Visit note (SOAP)",
+      awaiting: "Awaiting physician review", source: /^Source: visit/, quoted: /^Quoted:/, approveWrite: "Approve and write to chart", confirm: "Approve and write", resultTitle: "Result in the chart", newLegend: /^New:/,
+    };
+    const chartBox = frame.locator("button[aria-controls=chart-summary]");
+    if (await chartBox.getAttribute("aria-expanded") === "true") await chartBox.click();
+    await frame.getByRole("tab").nth(TAB.scribe).click();
+    await frame.getByRole("button", { name: S.start }).first().click();
+    await frame.getByRole("checkbox").check();
+    await shot(element, name("scribe-consent"));
+    await frame.getByRole("dialog").getByRole("button", { name: S.start }).click();
+    await frame.getByText(S.recording, { exact: true }).first().waitFor({ timeout: 20000 });
+    await shot(element, name("scribe-recording"));
+    // Parts are cut at a pause after 20 s of sound (30 s at the latest) and transcribed while the visit goes on.
+    await frame.getByText(S.transcribed).first().waitFor({ timeout: 90000 });
+    console.log("SCRIBE first part transcribed");
+    await shot(element, name("scribe-part"));
+    await page.waitForTimeout(Number(env.SCRIBE_SECONDS ?? 105) * 1000 - 30000);
+    await frame.getByRole("button", { name: S.end }).click();
+    const note = frame.getByRole("region", { name: S.review });
+    await note.getByRole("heading", { name: S.noteTitle }).waitFor({ timeout: 110000 });
+    await note.getByText(S.awaiting).first().waitFor();
+    await shot(element, name("scribe-note"));
+    // One press on a statement's source shows the words of the visit behind it.
+    await note.getByRole("button", { name: S.source }).first().click();
+    await note.getByText(S.quoted).first().waitFor();
+    await shot(element, name("scribe-source"));
+    const statements = await note.getByRole("button", { name: S.source }).count();
+    // New chart items start unselected: the physician ticks them (never the allergy confirmation, which the physician alone may give).
+    const fresh = note.getByRole("group", { name: S.newLegend });
+    let ticked = 0;
+    for (const box of await fresh.getByRole("checkbox").all()) {
+      const label = await box.evaluate((node) => node.closest("label")?.innerText ?? "");
+      if (/confirm this allergy|أؤكد/.test(label)) continue;
+      await box.check(); ticked++;
+    }
+    console.log("SCRIBE note: " + statements + " cited statements, " + ticked + " new chart items ticked");
+    await note.getByRole("button", { name: S.approveWrite }).click();
+    await frame.getByRole("dialog").waitFor();
+    await shot(element, name("scribe-approve"));
+    await frame.getByRole("dialog").getByRole("button", { name: S.confirm }).click();
+    await note.getByText(S.resultTitle).waitFor({ timeout: 30000 });
+    await note.getByText(S.resultTitle).scrollIntoViewIfNeeded();
+    await shot(element, name("scribe-result"));
+    console.log("SCRIBE result: " + (await note.innerText()).replace(/\s+/g, " ").match(new RegExp(`${S.resultTitle}.{0,500}`))?.[0]);
+    assert.equal(popups.length, 0, "the scribe opened a window");
   }
   if (env.DRAFT === "1") {
     // A consultation drafted by the real model from this chart, then the physician's approval dialog. Needs the model
@@ -253,6 +334,27 @@ if (expectState === "no-visit") {
       await frame.getByRole("button", { name: L.confirmApprove }).click();
       await frame.getByRole("heading", { name: /Send to/ }).or(frame.getByRole("button", { name: /^Send/ })).first().waitFor({ timeout: 30000 }).catch(() => undefined);
       await shot(element, name("approved"));
+      if (env.WRITE !== "0") {
+        // The approved consultation into the patient's chart. OpenEMR 7.0.3 has no scope a SMART app can be given to create a
+        // DocumentReference (docs/openemr.md), so the write must come back as "not written" with the text to copy, never as a silent success.
+        await frame.getByRole("button", { name: L.writeToChart, exact: true }).first().scrollIntoViewIfNeeded();
+        await frame.getByRole("button", { name: L.writeToChart, exact: true }).first().click();
+        await frame.getByRole("dialog").waitFor();
+        await shot(element, name("consultation-write-confirm"));
+        await frame.getByRole("dialog").getByRole("button", { name: L.writeToChart }).click();
+        const copyButton = frame.getByRole("button", { name: L.copyToChart }).first();
+        const inChart = frame.getByText(L.inChart, { exact: true }).first();
+        await copyButton.or(inChart).waitFor({ timeout: 30000 });
+        const written = await inChart.count() > 0 && await copyButton.count() === 0;
+        console.log("CONSULTATION write: " + (written ? "written to the chart" : "not written, text offered to copy"));
+        await copyButton.scrollIntoViewIfNeeded().catch(() => undefined);
+        await shot(element, name("consultation-write-result"));
+        if (!written) {
+          await copyButton.click();
+          await page.waitForTimeout(500);
+          console.log("CONSULTATION after copy: " + (await frame.locator("[role=status]").allInnerTexts()).join(" | ").slice(0, 200));
+        }
+      }
     }
   }
   if (env.ORDERS === "not-set-up") {
