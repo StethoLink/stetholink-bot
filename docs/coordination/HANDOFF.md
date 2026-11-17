@@ -2,6 +2,12 @@
 
 Written at the end of each working session so the next one starts from this file instead of re-reading the whole history. Update it, commit it and push it before handing off. Newest state only; the detail is in [WORKBOARD.md](WORKBOARD.md).
 
+## Blocker for the owner: the next session was not started
+
+The session that finished T7 sub-steps 1 and 2 tried to start the next one (`create_session`, as the AUTO-CONTINUE instruction says) and the environment **refused it: "this session is at lineage depth 8 (limit 8)"**. The same limit stops a session from creating reminders or scheduled tasks, and no setting changes it. Nothing was started and nothing was worked around. A session the owner starts by hand begins a new chain, so the work goes on when the owner starts a new session on branch `claude/wizardly-ptolemy-wyp0dh` (with the model and the max effort the owner chose) and gives it the prompt below plus the AUTO-CONTINUE section of the owner's own brief message, which makes it go on to T8 by itself. The session that wrote this ended its last message with the complete prompt.
+
+Short form: *Read `AGENTS.md`, `docs/coordination/HANDOFF.md`, `docs/agent-handoffs/fable-openemr-privacy-orders.md` and the T7 row and newest entries of `docs/coordination/WORKBOARD.md`; run `npm ci`; work on `claude/wizardly-ptolemy-wyp0dh` only. Do T7 sub-step 3 (section "Next: T7 sub-step 3" of "T7 sub-steps 1 and 2 done"): the specialist's side on the real OpenEMR and the close-out of T7; then T8, the owner's final report in Arabic.*
+
 ## Where things stand (2026-11-17, T7 of the OpenEMR brief: sub-steps 1 and 2 done; sub-step 3 next)
 
 - **Brief in progress:** [fable-openemr-privacy-orders.md](../agent-handoffs/fable-openemr-privacy-orders.md), tasks T1 to T9, one per conversation (its "Rule zero"). On the workboard they are `O-T1` to `O-T9`. **T1 to T6 are done. T7 (verify the whole flow on real systems) is split into three sub-steps; 1 and 2 are done (section "T7 sub-steps 1 and 2 done"), 3 is next (the specialist's inbox, sending, the reply and its write-back, and the close-out of T7). After T7 comes T8, the owner's final report in Arabic.**
