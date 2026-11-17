@@ -120,7 +120,7 @@ Taken inside the frame of a real OpenEMR 7.0.3 (Docker, a fictional patient made
 
 - *Recording:* possible only because the throwaway OpenEMR's frame was given `allow="microphone https://127.0.0.1:3082"` (a test-only change; OpenEMR as it ships refuses, see the "Microphone" screenshot above). The red indicator and the pause, end and discard controls are the ones a physician has; the screenshot is the first second.
 - *The note:* 85 seconds of fictional speech in four parts, transcribed by the real service and written by `gpt-5-mini`; every statement carries the number of the sentence of the visit behind it. The cost line says $0.0108 for the visit.
-- *After approval:* the conflict between "no allergies" said in the visit and the penicillin in the chart is shown and written nowhere; the one new item the physician ticked (a medicine the patient reported) and the note are both "Not written: copy it", because OpenEMR 7.0.3 offers no create scope, and the transcript stays until the note is in the chart or its expiry date.
+- *After approval:* a "Differs from the chart" notice is shown (its text is above what the screenshot captures; the visit says no allergies and the chart lists penicillin) and its content is written nowhere; the one new item the physician ticked (a medicine the patient reported) and the note are both "Not written: copy it", because OpenEMR 7.0.3 offers no create scope, and the transcript stays until the note is in the chart or its expiry date.
 
 ## Problems found in the old interface
 
