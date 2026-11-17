@@ -6,7 +6,7 @@ core/auth/               Provider-neutral clinician authorization context
 core/agent/              Model interfaces, prompts, orchestration and safety checks
 core/privacy/            De-identification before the model and the way back (ports: IdentitySource, SurrogateVault)
 core/consultation/       Draft generation, grounding and approval
-core/orders/             Order drafting: catalog-only selection, grounding in cited chart facts, safety flags (allergy, duplicate, interaction). Not wired to a service or route yet (T6 sub-step 2)
+core/orders/             Order drafting and the physician's decision: catalog-only selection, grounding in cited chart facts, safety flags (allergy, duplicate, interaction), write-back as ServiceRequest and MedicationRequest (docs/orders.md)
 core/routing/            Provider registry, router, transport port and callback ingestion
 core/patient-context/    Patient-context service
 core/scribe/             Transcription port, sentence splitting, SOAP note generation and validation, scribe service
