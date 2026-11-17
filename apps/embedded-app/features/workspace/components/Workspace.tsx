@@ -5,11 +5,14 @@ import { useT } from "@/apps/embedded-app/i18n/client";
 import type { DataClassification } from "@/shared/contracts";
 import { Alert, Button, Dialog, Tabs, ToastProvider } from "@/apps/embedded-app/components/ui";
 import { ConsultationComposer, ConsultationHistory, type AssistantInfo } from "@/apps/embedded-app/features/consultations";
+import { OrderComposer, type OrderAccess } from "@/apps/embedded-app/features/orders";
 import { ScribeHistory, ScribePanel } from "@/apps/embedded-app/features/scribe";
 import { PatientBar } from "./PatientBar";
 
-type TabKey = "scribe" | "consultations" | "history";
-const TAB_KEYS = ["scribe", "consultations", "history"] as const;
+type TabKey = "scribe" | "consultations" | "orders" | "history";
+const TAB_KEYS = ["scribe", "consultations", "orders", "history"] as const;
+/** Nothing is offered when the page does not say what the session may do. The server decides again on every request. */
+const NO_ORDERS: OrderAccess = { draft: false, approve: false, write: false };
 
 export interface WorkspaceProps {
   patientId: string;
@@ -17,6 +20,8 @@ export interface WorkspaceProps {
   classification: DataClassification;
   canReview: boolean;
   canRoute: boolean;
+  /** What the session may do with orders: prepare them, approve them (a physician), write approved ones to the EHR (a physician). */
+  orders?: OrderAccess;
   /** False when the hospital has not switched the assistant on for EHR data: the chart is read-only. */
   assistantEnabled: boolean;
   assistant: AssistantInfo;
@@ -37,6 +42,7 @@ export function Workspace(props: WorkspaceProps) {
   const [tab, setTab] = useState<TabKey>(props.initialTab ?? "consultations");
   const [visitId, setVisitId] = useState<string>();
   const [draftId, setDraftId] = useState<string>();
+  const [orderId, setOrderId] = useState<string>();
   const [help, setHelp] = useState(false);
   const [expired, setExpired] = useState(false);
 
@@ -48,7 +54,7 @@ export function Workspace(props: WorkspaceProps) {
 
   useEffect(() => {
     function onKey(event: KeyboardEvent) {
-      if (event.altKey && ["1", "2", "3"].includes(event.key)) {
+      if (event.altKey && ["1", "2", "3", "4"].includes(event.key)) {
         event.preventDefault();
         setTab(TAB_KEYS[Number(event.key) - 1]);
       }
@@ -96,6 +102,8 @@ export function Workspace(props: WorkspaceProps) {
                     assistant={props.assistant} openDraftId={draftId} onOpenDraft={setDraftId} />
                   {!props.canReview && <p className="text-xs text-slate-700">{t.draftsOnly}</p>}
                 </>
+              ) : tab === "orders" ? (
+                <OrderComposer access={props.orders ?? NO_ORDERS} assistant={props.assistant} openDraftId={orderId} onOpenDraft={setOrderId} />
               ) : (
                 <>
                   <ScribeHistory onOpen={(id) => { setVisitId(id); setTab("scribe"); }} />

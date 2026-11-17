@@ -1,4 +1,12 @@
-import type { Locale } from "./messages";
+import type { ClinicalFact } from "@/shared/contracts";
+import type { Locale, Messages } from "./messages";
+
+/** What a chart fact says, as the clinician reads it: its value and unit, "documented" for a yes/no finding, or why it is not available. */
+export function factValue(fact: ClinicalFact, chart: Messages["chart"]): string {
+  if (fact.status === "unknown") return chart.unavailable[fact.reason] ?? chart.notAvailable;
+  if (typeof fact.value === "boolean") return chart.documented;
+  return `${String(fact.value)}${fact.unit ? ` ${fact.unit}` : ""}`;
+}
 
 /**
  * Texts about the chart that StethoLink's own connector writes in English (the labels of the facts it builds,

@@ -5,15 +5,9 @@ import { MISSING_INFORMATION_TITLE, SUGGESTION_PREFIX, citedEvidenceIds, parseRe
 import { AiBadge, Badge, DataBadge } from "@/apps/embedded-app/components/ui";
 import { useT } from "@/apps/embedded-app/i18n/client";
 import { formatDateTime } from "@/apps/embedded-app/i18n/format";
-import { ageText, factLabel, missingLine, planNote } from "@/apps/embedded-app/i18n/chart-text";
-import type { Messages } from "@/apps/embedded-app/i18n/messages";
+import { ageText, factLabel, factValue, missingLine, planNote } from "@/apps/embedded-app/i18n/chart-text";
 import { DraftStatusBadge } from "./DraftStatusBadge";
 
-function factValue(fact: ClinicalFact, chart: Messages["chart"]) {
-  if (fact.status === "unknown") return chart.unavailable[fact.reason] ?? chart.notAvailable;
-  if (typeof fact.value === "boolean") return chart.documented;
-  return `${String(fact.value)}${fact.unit ? ` ${fact.unit}` : ""}`;
-}
 const anchor = (draftId: string, factId: string) => `source-${draftId}-${factId}`;
 const tag = "rounded-full border px-2 py-px text-xs font-medium";
 

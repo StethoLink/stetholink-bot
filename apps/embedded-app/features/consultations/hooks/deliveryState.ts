@@ -20,7 +20,10 @@ export function awaitingProvider(view: ConsultationDeliveryView | null | undefin
   return !!view && ["queued", "sent", "accepted"].includes(view.status);
 }
 
-export class DeliveryError extends Error {}
+/** A failed request, in words for the clinician. `status` and `code` are set when the server answered, so a screen can treat 501 or 409 in its own way. */
+export class DeliveryError extends Error {
+  constructor(message: string, readonly status?: number, readonly code?: string) { super(message); }
+}
 /**
  * A failure in words a clinician can act on: what happened and what to do next. In English the server's own
  * explanation is used where it has one; in another language the text for the case, because the server writes English.
@@ -56,7 +59,7 @@ export async function call<T>(schema: z.ZodType<T>, url: string, body?: unknown,
   const json: unknown = await response.json().catch(() => null);
   if (!response.ok) {
     const error = apiErrorSchema.safeParse(json);
-    throw new DeliveryError(describeFailure(response.status, error.success ? error.data.error : undefined));
+    throw new DeliveryError(describeFailure(response.status, error.success ? error.data.error : undefined), response.status, error.success ? error.data.error.code : undefined);
   }
   const parsed = schema.safeParse(json);
   if (!parsed.success) throw new DeliveryError(currentMessages().work.failures.unexpected);

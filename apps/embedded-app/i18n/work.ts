@@ -1,5 +1,6 @@
 import type {
-  ApprovalDecision, ConsultationStatus, DeliveryAttemptStatus, DeliveryFailureCode, ProposedChartUpdate, RequestConcernKind, ScribeSpeaker, ScribeStatus, SoapSection,
+  ApprovalDecision, ChartWriteStatus, ConsultationStatus, DeliveryAttemptStatus, DeliveryFailureCode, OrderFlag, OrderKind, OrderLineStatus, OrderMode, ProposedChartUpdate, RequestConcernKind,
+  ScribeSpeaker, ScribeStatus, SoapSection,
 } from "@/shared/contracts";
 
 /**
@@ -289,6 +290,179 @@ export const workEn = {
     prepared: (date: string) => `Prepared ${date}`,
     lastChanged: (date: string) => ` · last changed ${date}`,
     reviewedBy: (who: string, date: string) => `Reviewed by ${who} on ${date}`,
+  },
+
+  /**
+   * The Orders tab. The names, codes, doses and interaction rules of orders are the hospital's own (its catalog) and the
+   * reasons are the assistant's: they are shown as written. Everything else a person reads here is in this block.
+   * Texts with a value in them take plain strings and numbers only (a name, a date, a count).
+   */
+  orders: {
+    sectionLabel: "Orders",
+    newRequest: "New order request",
+    kinds: { lab: "Laboratory", imaging: "Imaging", medication: "Medication", nursing: "Nursing" } as Record<OrderKind, string>,
+    groups: { lab: "Laboratory tests", imaging: "Imaging", medication: "Medications", nursing: "Nursing orders" } as Record<OrderKind, string>,
+
+    composer: {
+      title: "Order assistant",
+      aiAssisted: "AI-assisted",
+      description: "Orders are chosen only from your hospital's own order catalog. Every order stays a draft until you approve it.",
+      busy: "Reading the chart and choosing orders from the catalog",
+      steps: ["Reading the chart", "Matching your request to the hospital's catalog", "Checking each order against the chart", "Saving the draft"],
+      requestLabel: "Which orders do you need?",
+      placeholder: "Say what you want ordered, in your own words",
+      prepare: "Prepare orders",
+      help: "The assistant prepares drafts for you to review. It can only choose orders from the hospital's catalog, it cannot change a code, a product or a dose, and it cannot approve, sign, send or write anything to the chart.",
+      examples: ["Prepare a CBC and a chest X-ray", "Prepare the basic orders for this case"],
+      error: "The orders could not be prepared. Try again.",
+    },
+    notSetUp: {
+      title: "Order drafting is not set up",
+      text: "StethoLink drafts orders only from your hospital's own order catalog, and none is configured. Ask your StethoLink administrator.",
+    },
+    noPermission: {
+      title: "This session cannot prepare orders",
+      text: "Launch StethoLink again from the patient's chart. If this keeps happening, ask your StethoLink administrator.",
+    },
+    noMatch: {
+      aria: "Nothing matched",
+      title: "Nothing in the hospital's catalog matches this request",
+      yourRequest: "Your request:",
+      nothingSaved: "No orders were drafted and nothing was saved. Change your request and try again.",
+      unmatchedHeading: "These words matched no order",
+      dropped: (count: number) => count === 1
+        ? "1 order the assistant named was dropped because it is not in the catalog or the chart does not support it."
+        : `${count} orders the assistant named were dropped because they are not in the catalog or the chart does not support them.`,
+      hint: "Use the names your hospital's catalog uses, or name an order set.",
+      change: "Change my request",
+    },
+
+    history: {
+      title: "Order drafts for this visit",
+      description: "The orders you prepared, and what you decided.",
+      loading: "Loading order drafts",
+      emptyTitle: "None yet.",
+      empty: "Orders you prepare for this visit appear here.",
+      error: "The order drafts could not be loaded. Try again.",
+      modes: { specific: "Orders you named", case_based: "Proposed for the case" } as Record<OrderMode, string>,
+      counts: { total: "Orders", pending: "Awaiting your decision", approved: "Approved", rejected: "Rejected" },
+    },
+    review: {
+      loading: "Loading the order draft",
+      error: "The order draft could not be loaded.",
+      mustApprove: "A physician must approve these orders before they can be entered in the chart.",
+    },
+
+    draft: {
+      title: "Order draft",
+      mode: { specific: "The orders you named", case_based: "Proposed for this case" } as Record<OrderMode, string>,
+      yourRequest: "Your request",
+      counts: { total: "Orders", pending: "Awaiting your decision", approved: "Approved", rejected: "Rejected" },
+      aiNote: "AI-assisted. The assistant chose these orders from your hospital's catalog. Codes, products and doses are the catalog's own and cannot be changed here. Check each order against the chart before you decide.",
+      catalogVersion: "Catalog version",
+      prepared: (date: string) => `Prepared ${date}`,
+      unmatchedTitle: "Part of your request matched nothing",
+      unmatchedText: "No order was drafted for these words:",
+      dropped: (count: number) => count === 1
+        ? "1 order the assistant named was dropped because it is not in the catalog or the chart does not support it."
+        : `${count} orders the assistant named were dropped because they are not in the catalog or the chart does not support them.`,
+      missingTitle: "What the chart did not give",
+      notesTitle: "Not everything in the chart was loaded",
+    },
+
+    line: {
+      requested: "You asked for this",
+      proposed: "Proposed by the assistant for this case",
+      yourWords: "Your words:",
+      why: "Why:",
+      basedOn: "Based on the chart:",
+      medication: { dose: "Dose", route: "Route", frequency: "Frequency", duration: "Duration" },
+      code: "Code",
+      status: { pending: "Awaiting your decision", approved: "Approved", rejected: "Rejected" } as Record<OrderLineStatus, string>,
+      approvedOn: (date: string) => `Approved ${date}`,
+      rejectedOn: (date: string) => `Rejected ${date}`,
+      acknowledged: "You acknowledged:",
+      yourReason: "Your reason:",
+    },
+
+    /** The checks on an order. The sentence of each is built from the flag's kind, its severity and the chart facts it cites; an interaction adds the hospital's own text. */
+    flags: {
+      aria: "Checks on this order",
+      kinds: {
+        allergy: "Allergy", allergies_unchecked: "Allergies not checked", duplicate_active: "Already an active medication", duplicate_order: "Already ordered this visit",
+        interaction: "Interaction", interactions_unchecked: "Interactions not checked",
+      } as Record<OrderFlag["kind"], string>,
+      interaction: { major: "Major interaction", moderate: "Moderate interaction", minor: "Minor interaction" },
+      needsAck: "To approve this order you must acknowledge this warning and give a reason.",
+      sentences: {
+        allergy: (what: string) => `The chart documents an allergy: ${what}`,
+        allergyUnknown: "The chart documents an allergy that relates to this order.",
+        allergiesUnchecked: "The chart's allergy list could not be read or holds no entry, so this order was not checked against allergies.",
+        duplicateActive: (what: string) => `The chart already lists an active medication order: ${what}`,
+        duplicateActiveUnknown: "The chart already lists an active order for this medicine.",
+        duplicateOrder: "This order is already drafted or approved for this visit.",
+        withActive: (what: string) => `With an active medication in the chart: ${what}`,
+        withDraft: (what: string) => `With another order in this draft: ${what}`,
+        interactionsUnchecked: "The chart's active medications could not be read or are not recorded, so interactions were not checked.",
+      },
+      checksNote: "These checks use only the chart and your hospital's own catalog rules. No warning does not mean an order is safe.",
+    },
+
+    decide: {
+      heading: "Your decision",
+      intro: "Choose approve or reject for each order, then record your decisions. Approving does not write anything to the EHR.",
+      choose: (order: string) => `Decision for ${order}`,
+      approve: "Approve",
+      reject: "Reject",
+      acknowledgeHeading: "Your acknowledgement is needed to approve",
+      acknowledgements: {
+        allergy: "I have read the allergy warning and I am ordering this on purpose.",
+        interaction: "I have read the major interaction warning and I am ordering this on purpose.",
+      },
+      reasonLabel: "Why you are ordering it anyway",
+      reasonHint: (min: number) => `At least ${min} characters. It is stored with the order and written into the order's note in the EHR.`,
+      record: "Record my decisions",
+      recordHint: "Choose approve or reject for at least one order.",
+      recordBlocked: "Acknowledge each warning and give a reason for the orders that need one.",
+      confirmTitle: "Record your decisions?",
+      confirmApprove: "You approve",
+      confirmReject: "You reject",
+      confirmBullets: [
+        "Your decision on each order is final. It cannot be changed afterwards.",
+        "Approving records your decision in StethoLink only. Nothing is written to the EHR until you choose to write the approved orders.",
+        "Orders you leave undecided stay as drafts.",
+      ],
+      confirm: "Record decisions",
+      recorded: "Your decisions are recorded.",
+      error: "Your decisions could not be recorded. Try again.",
+      changed: "This order draft changed while you were working, and it was reloaded. Check it, then decide again.",
+    },
+
+    chart: {
+      heading: "In the patient's chart",
+      intro: "Approved orders are not in the chart until you write them. Write them to the EHR, or enter them there yourself from the text below.",
+      loading: "Loading chart status…",
+      error: "The chart status could not be loaded. Try again.",
+      status: {
+        created: "In the chart", existing: "In the chart", pending: "Not written yet", failed: "Not written", unsupported: "Not written: your EHR cannot receive it",
+      } as Record<ChartWriteStatus, string>,
+      cannotTitle: "Your EHR cannot receive these orders",
+      cannotText: "The EHR does not accept orders from StethoLink, or writing is not switched on for it. Enter each order in the EHR yourself, using the text below.",
+      failedText: "The EHR did not take this order and nothing was changed in the chart. Try again, or enter it yourself from the text below.",
+      serverDetail: "Details from the server:",
+      textLabel: "Text to enter:",
+      copy: "Copy text",
+      copyAll: "Copy all as text",
+      copied: "Copied",
+      copyFailed: "Copying is blocked here. Select the text and copy it yourself.",
+      write: "Write approved orders to the chart",
+      writeTitle: "Write these orders to the patient's chart?",
+      writeIntro: "Each approved order is created once in the EHR, under your name, as a service request or a medication request:",
+      writeNote: "Your acknowledgement and reason go into the order's note. Your hospital's setting decides whether the EHR keeps the order as a draft for you to sign there or places it at once. Nothing already in the chart is changed, pressing twice never writes twice, and if the EHR does not accept an order you get its text to enter yourself.",
+      writeConfirm: "Write to chart",
+      writeError: "The orders could not be written. Nothing was changed in the chart. Try again.",
+      onlyPhysician: "Only a physician can write approved orders to the chart.",
+    },
   },
 
   scribe: {
@@ -787,6 +961,173 @@ export const workAr: Work = {
     prepared: (date) => `أُعدّت ${date}`,
     lastChanged: (date) => ` · آخر تعديل ${date}`,
     reviewedBy: (who, date) => `راجعها ${who} في ${date}`,
+  },
+
+  orders: {
+    sectionLabel: "الأوامر",
+    newRequest: "طلب أوامر جديد",
+    kinds: { lab: "مختبر", imaging: "أشعة", medication: "دواء", nursing: "تمريض" },
+    groups: { lab: "فحوصات المختبر", imaging: "الأشعة", medication: "الأدوية", nursing: "أوامر التمريض" },
+
+    composer: {
+      title: "مساعد الأوامر",
+      aiAssisted: "بمساعدة الذكاء الاصطناعي",
+      description: "تُختار الأوامر من كتالوج الأوامر الخاص بمستشفاك فقط، وتبقى كل مسودة مسودةً حتى تعتمدها.",
+      busy: "قراءة الملف واختيار الأوامر من الكتالوج",
+      steps: ["قراءة الملف", "مطابقة طلبك مع كتالوج المستشفى", "فحص كل أمر مقابل الملف", "حفظ المسودة"],
+      requestLabel: "ما الأوامر التي تحتاجها؟",
+      placeholder: "اذكر ما تريد طلبه بكلماتك",
+      prepare: "إعداد الأوامر",
+      help: "يُعدّ المساعد مسودات لتراجعها. لا يختار إلا من كتالوج المستشفى، ولا يستطيع تغيير رمز أو منتج أو جرعة، ولا اعتماد أي شيء أو توقيعه أو إرساله أو كتابته في الملف.",
+      examples: ["جهّز عد دم كامل وأشعة صدر", "جهّز الأوامر الأساسية لهذه الحالة"],
+      error: "تعذّر إعداد الأوامر. حاول مرة أخرى.",
+    },
+    notSetUp: {
+      title: "إعداد الأوامر غير مهيأ",
+      text: "لا يُعدّ StethoLink الأوامر إلا من كتالوج الأوامر الخاص بمستشفاك، ولم يُهيَّأ أي كتالوج. اسأل مسؤول StethoLink.",
+    },
+    noPermission: {
+      title: "لا تستطيع هذه الجلسة إعداد الأوامر",
+      text: "شغِّل StethoLink مرة أخرى من ملف المريض. وإن تكرر ذلك فاسأل مسؤول StethoLink.",
+    },
+    noMatch: {
+      aria: "لا شيء مطابق",
+      title: "لا يطابق هذا الطلب أي أمر في كتالوج المستشفى",
+      yourRequest: "طلبك:",
+      nothingSaved: "لم تُعدّ أي مسودة ولم يُحفظ شيء. غيّر طلبك ثم حاول مرة أخرى.",
+      unmatchedHeading: "كلمات لم تطابق أي أمر",
+      dropped: (count) => count === 1
+        ? "حُذف أمر واحد سمّاه المساعد لأنه ليس في الكتالوج أو لا يدعمه الملف."
+        : `حُذف ${count} من الأوامر التي سمّاها المساعد لأنها ليست في الكتالوج أو لا يدعمها الملف.`,
+      hint: "استخدم الأسماء التي يعتمدها كتالوج مستشفاك، أو اذكر مجموعة أوامر.",
+      change: "تغيير طلبي",
+    },
+
+    history: {
+      title: "مسودات الأوامر لهذه الزيارة",
+      description: "الأوامر التي أعددتها وما قررته بشأنها.",
+      loading: "جارٍ تحميل مسودات الأوامر",
+      emptyTitle: "لا شيء بعد.",
+      empty: "تظهر هنا الأوامر التي تُعدّها لهذه الزيارة.",
+      error: "تعذّر تحميل مسودات الأوامر. حاول مرة أخرى.",
+      modes: { specific: "أوامر سمّيتها", case_based: "مقترحة للحالة" },
+      counts: { total: "الأوامر", pending: "بانتظار قرارك", approved: "معتمدة", rejected: "مرفوضة" },
+    },
+    review: {
+      loading: "جارٍ تحميل مسودة الأوامر",
+      error: "تعذّر تحميل مسودة الأوامر.",
+      mustApprove: "يجب أن يعتمد الطبيب هذه الأوامر قبل أن يمكن إدخالها في الملف.",
+    },
+
+    draft: {
+      title: "مسودة الأوامر",
+      mode: { specific: "الأوامر التي سمّيتها", case_based: "مقترحة لهذه الحالة" },
+      yourRequest: "طلبك",
+      counts: { total: "الأوامر", pending: "بانتظار قرارك", approved: "معتمدة", rejected: "مرفوضة" },
+      aiNote: "بمساعدة الذكاء الاصطناعي. اختار المساعد هذه الأوامر من كتالوج مستشفاك. الرموز والمنتجات والجرعات من الكتالوج نفسه ولا يمكن تغييرها هنا. راجع كل أمر مقابل الملف قبل أن تقرر.",
+      catalogVersion: "إصدار الكتالوج",
+      prepared: (date) => `أُعدّت ${date}`,
+      unmatchedTitle: "جزء من طلبك لم يطابق أي أمر",
+      unmatchedText: "لم يُعدّ أي أمر مقابل هذه الكلمات:",
+      dropped: (count) => count === 1
+        ? "حُذف أمر واحد سمّاه المساعد لأنه ليس في الكتالوج أو لا يدعمه الملف."
+        : `حُذف ${count} من الأوامر التي سمّاها المساعد لأنها ليست في الكتالوج أو لا يدعمها الملف.`,
+      missingTitle: "ما لم يقدّمه الملف",
+      notesTitle: "لم يُحمَّل كل ما في الملف",
+    },
+
+    line: {
+      requested: "طلبتَ هذا الأمر",
+      proposed: "اقترحه المساعد لهذه الحالة",
+      yourWords: "كلماتك:",
+      why: "السبب:",
+      basedOn: "استنادًا إلى الملف:",
+      medication: { dose: "الجرعة", route: "طريق الإعطاء", frequency: "التكرار", duration: "المدة" },
+      code: "الرمز",
+      status: { pending: "بانتظار قرارك", approved: "معتمد", rejected: "مرفوض" },
+      approvedOn: (date) => `اعتُمد ${date}`,
+      rejectedOn: (date) => `رُفض ${date}`,
+      acknowledged: "أقررتَ بالاطلاع على:",
+      yourReason: "سببك:",
+    },
+
+    flags: {
+      aria: "فحوصات هذا الأمر",
+      kinds: {
+        allergy: "حساسية", allergies_unchecked: "الحساسية لم تُفحص", duplicate_active: "دواء نشط بالفعل", duplicate_order: "مطلوب بالفعل في هذه الزيارة",
+        interaction: "تداخل دوائي", interactions_unchecked: "التداخلات لم تُفحص",
+      },
+      interaction: { major: "تداخل دوائي كبير", moderate: "تداخل دوائي متوسط", minor: "تداخل دوائي طفيف" },
+      needsAck: "لا يمكنك اعتماد هذا الأمر قبل أن تُقرّ بهذا التحذير وتذكر سببًا.",
+      sentences: {
+        allergy: (what) => `يوثّق الملف حساسية: ${what}`,
+        allergyUnknown: "يوثّق الملف حساسية لها صلة بهذا الأمر.",
+        allergiesUnchecked: "تعذّرت قراءة قائمة الحساسية في الملف أو لا يوجد فيها أي سجل، ولذلك لم يُفحص هذا الأمر مقابل الحساسية.",
+        duplicateActive: (what) => `يحتوي الملف أصلًا على أمر دواء نشط: ${what}`,
+        duplicateActiveUnknown: "يحتوي الملف أصلًا على أمر نشط للدواء نفسه.",
+        duplicateOrder: "هذا الأمر مُعدّ أو معتمد بالفعل في هذه الزيارة.",
+        withActive: (what) => `مع دواء نشط في الملف: ${what}`,
+        withDraft: (what) => `مع أمر آخر في هذه المسودة: ${what}`,
+        interactionsUnchecked: "تعذّرت قراءة الأدوية النشطة في الملف أو أنها غير مسجَّلة، ولذلك لم تُفحص التداخلات الدوائية.",
+      },
+      checksNote: "تعتمد هذه الفحوص على الملف وعلى قواعد كتالوج مستشفاك وحدها. غياب التحذير لا يعني أن الأمر آمن.",
+    },
+
+    decide: {
+      heading: "قرارك",
+      intro: "اختر اعتماد أو رفض لكل أمر ثم سجّل قراراتك. الاعتماد لا يكتب شيئًا في النظام الطبي.",
+      choose: (order) => `القرار بشأن ${order}`,
+      approve: "اعتماد",
+      reject: "رفض",
+      acknowledgeHeading: "يلزم إقرارك لاعتماد هذا الأمر",
+      acknowledgements: {
+        allergy: "قرأتُ تحذير الحساسية وأطلب هذا الأمر عن قصد.",
+        interaction: "قرأتُ تحذير التداخل الدوائي الكبير وأطلب هذا الأمر عن قصد.",
+      },
+      reasonLabel: "لماذا تطلبه رغم ذلك",
+      reasonHint: (min) => `${min} أحرف على الأقل. يُحفظ مع الأمر ويُكتب في ملاحظة الأمر في النظام الطبي.`,
+      record: "تسجيل قراراتي",
+      recordHint: "اختر اعتماد أو رفض لأمر واحد على الأقل.",
+      recordBlocked: "أقرّ بكل تحذير واذكر سببًا للأوامر التي تحتاج إلى ذلك.",
+      confirmTitle: "تسجيل قراراتك؟",
+      confirmApprove: "ستعتمد",
+      confirmReject: "سترفض",
+      confirmBullets: [
+        "قرارك بشأن كل أمر نهائي ولا يمكن تغييره بعد ذلك.",
+        "الاعتماد يسجّل قرارك في StethoLink فقط. ولا يُكتب شيء في النظام الطبي حتى تختار كتابة الأوامر المعتمدة.",
+        "تبقى الأوامر التي لم تقرر بشأنها مسودات.",
+      ],
+      confirm: "تسجيل القرارات",
+      recorded: "سُجّلت قراراتك.",
+      error: "تعذّر تسجيل قراراتك. حاول مرة أخرى.",
+      changed: "تغيّرت مسودة الأوامر أثناء عملك وأُعيد تحميلها. راجعها ثم قرّر من جديد.",
+    },
+
+    chart: {
+      heading: "في ملف المريض",
+      intro: "لا تظهر الأوامر المعتمدة في الملف حتى تكتبها. اكتبها في النظام الطبي، أو أدخلها هناك بنفسك من النص أدناه.",
+      loading: "جارٍ تحميل حالة الملف…",
+      error: "تعذّر تحميل حالة الملف. حاول مرة أخرى.",
+      status: {
+        created: "في الملف", existing: "في الملف", pending: "لم يُكتب بعد", failed: "لم يُكتب", unsupported: "لم يُكتب: لا يستقبله نظامك الطبي",
+      },
+      cannotTitle: "لا يستطيع نظامك الطبي استقبال هذه الأوامر",
+      cannotText: "النظام الطبي لا يقبل أوامر من StethoLink، أو أن الكتابة غير مفعّلة له. أدخل كل أمر في النظام الطبي بنفسك مستعينًا بالنص أدناه.",
+      failedText: "لم يقبل النظام الطبي هذا الأمر ولم يتغيّر شيء في الملف. حاول مرة أخرى، أو أدخله بنفسك من النص أدناه.",
+      serverDetail: "تفاصيل من الخادم:",
+      textLabel: "النص المراد إدخاله:",
+      copy: "نسخ النص",
+      copyAll: "نسخ الكل كنص",
+      copied: "نُسخ",
+      copyFailed: "النسخ محجوب هنا. حدّد النص وانسخه بنفسك.",
+      write: "كتابة الأوامر المعتمدة في الملف",
+      writeTitle: "كتابة هذه الأوامر في ملف المريض؟",
+      writeIntro: "يُنشأ كل أمر معتمد مرة واحدة في النظام الطبي باسمك، طلب خدمة أو طلب دواء:",
+      writeNote: "يُكتب إقرارك وسببك في ملاحظة الأمر. وإعداد مستشفاك هو الذي يحدد هل يحتفظ النظام الطبي بالأمر مسودةً لتوقّعه هناك أم يضعه فورًا. لا يتغيّر شيء مما هو في الملف، والضغط مرتين لا يكتب مرتين، وإن لم يقبل النظام الطبي أمرًا فستحصل على نصه لتدخله بنفسك.",
+      writeConfirm: "كتابة في الملف",
+      writeError: "تعذّرت كتابة الأوامر. لم يتغيّر شيء في الملف. حاول مرة أخرى.",
+      onlyPhysician: "الطبيب وحده يستطيع كتابة الأوامر المعتمدة في الملف.",
+    },
   },
 
   scribe: {

@@ -27,12 +27,15 @@ export default async function EmbedPage() {
   const physician = session.context.roles.includes("physician");
   const canReview = physician && session.context.scopes.includes("consultation:approve");
   const canRoute = physician && session.context.scopes.includes("consultation:route");
+  // Orders: every mapped clinician may prepare them; only a physician approves, and only a physician with the write scope writes them to the EHR.
+  const scopes = session.context.scopes;
+  const orders = { draft: scopes.includes("order:draft"), approve: physician && scopes.includes("order:approve"), write: physician && scopes.includes("order:approve") && scopes.includes("chart:write") };
   // The assistant works on a chart only when the session, the tenant and the chart source share one data classification.
   const tenant = getTenant();
   const assistantEnabled = session.context.dataClassification === tenant.dataClassification &&
     classificationOfSource(tenant.connector) === tenant.dataClassification && session.context.scopes.includes("consultation:draft");
   return (
     <Workspace patientId={session.context.patientId} encounterId={session.context.encounterId} classification={session.context.dataClassification}
-      canReview={canReview} canRoute={canRoute} assistantEnabled={assistantEnabled} assistant={describeAssistant()} expiresAt={session.context.expiresAt} />
+      canReview={canReview} canRoute={canRoute} orders={orders} assistantEnabled={assistantEnabled} assistant={describeAssistant()} expiresAt={session.context.expiresAt} />
   );
 }

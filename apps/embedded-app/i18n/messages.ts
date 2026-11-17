@@ -21,11 +21,11 @@ export type ChartPart = "allergy" | "problem" | "medication" | "observation";
 export const en = {
   appName: "StethoLink",
   description: "Clinical documentation and consultation assistant inside the patient chart",
-  tabs: { label: "StethoLink sections", scribe: "Scribe", consultations: "Consultations", history: "History" },
+  tabs: { label: "StethoLink sections", scribe: "Scribe", consultations: "Consultations", orders: "Orders", history: "History" },
   shortcuts: {
     title: "Keyboard shortcuts",
     items: [
-      ["Alt + 1, 2, 3", "Open Scribe, Consultations or History"],
+      ["Alt + 1, 2, 3, 4", "Open Scribe, Consultations, Orders or History"],
       ["Ctrl + Enter", "Submit the text you are typing"],
       ["Esc", "Close a dialog"],
       ["?", "Show this list"],
@@ -125,11 +125,11 @@ export type Messages = typeof en;
 export const ar: Messages = {
   appName: "StethoLink",
   description: "مساعد التوثيق السريري وطلبات الاستشارة داخل ملف المريض",
-  tabs: { label: "أقسام StethoLink", scribe: "المدوِّن", consultations: "الاستشارات", history: "السجل" },
+  tabs: { label: "أقسام StethoLink", scribe: "المدوِّن", consultations: "الاستشارات", orders: "الأوامر", history: "السجل" },
   shortcuts: {
     title: "اختصارات لوحة المفاتيح",
     items: [
-      ["Alt + 1, 2, 3", "فتح المدوِّن أو الاستشارات أو السجل"],
+      ["Alt + 1, 2, 3, 4", "فتح المدوِّن أو الاستشارات أو الأوامر أو السجل"],
       ["Ctrl + Enter", "إرسال النص الذي تكتبه"],
       ["Esc", "إغلاق النافذة الحوارية"],
       ["?", "عرض هذه القائمة"],

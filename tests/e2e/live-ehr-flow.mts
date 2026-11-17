@@ -559,11 +559,16 @@ try {
     const { chromium } = createRequire(import.meta.url)("playwright") as typeof import("playwright");
     const browser = await chromium.launch();
     try {
-      const open = async (cookie: string, path: string) => {
-        const context = await browser.newContext({ ignoreHTTPSErrors: true, viewport: { width: 420, height: 900 } });
+      const opened: Array<Awaited<ReturnType<typeof browser.newPage>>> = [];
+      const open = async (cookie: string, path: string, options: { width?: number; locale?: "en" | "ar" } = {}) => {
+        const context = await browser.newContext({ ignoreHTTPSErrors: true, viewport: { width: options.width ?? 420, height: 900 } });
         const [name, value] = cookie.split("=");
-        await context.addCookies([{ name, value, domain: "localhost", path: "/", secure: true, httpOnly: true, sameSite: "Lax" }]);
+        await context.addCookies([{ name, value, domain: "localhost", path: "/", secure: true, httpOnly: true, sameSite: "Lax" },
+          ...(options.locale ? [{ name: "stetholink_locale", value: options.locale, domain: "localhost", path: "/", secure: true, httpOnly: false, sameSite: "Lax" as const }] : [])]);
+        // What "Copy text" puts on the clipboard can be read back only with these permissions.
+        await context.grantPermissions(["clipboard-read", "clipboard-write"], { origin: base });
         const page = await context.newPage();
+        opened.push(page);
         await page.goto(base + path);
         return page;
       };
@@ -591,6 +596,149 @@ try {
       const refused = await open(doctor, "/inbox");
       await refused.getByText("Open the inbox from your EHR").waitFor();
       console.log("live-ehr-flow: browser step passed (specialist inbox, live workspace, history, chart status)");
+
+      // If a step of the Orders part fails, what every page showed at that moment is printed, and saved when screenshots are asked for.
+      try {
+        // === The Orders tab, in the browser: the physician drafts, decides and writes; a nurse only reads; Arabic at 360 px; no catalog ===
+        const noSidewaysScroll = async (page: typeof chartPage, what: string) =>
+          assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth), `${what}: the page must not scroll sideways`);
+        const ordersPage = await open(doctor, "/embed");
+        await ordersPage.getByRole("heading", { name: "Faisal Fictional-Example" }).waitFor();
+        await ordersPage.getByRole("tab", { name: "Orders" }).click();
+        await ordersPage.getByRole("heading", { name: "Order assistant" }).waitFor();
+        // Earlier drafts of the visit, newest first: the three the HTTP stages made for the physician (a colleague's draft is not listed).
+        const earlier = ordersPage.getByRole("region", { name: "Order drafts for this visit" });
+        await earlier.getByText(orderRequest).waitFor();
+        assert.equal(await earlier.getByRole("button").count(), 3);
+        if (shots) await ordersPage.screenshot({ path: `${shots}/orders-start.png`, fullPage: true });
+        await noSidewaysScroll(ordersPage, "Orders tab, English, 420 px");
+        // An approved draft: the allergy in words with the chart fact it rests on, what the physician acknowledged and why, and what is already in the chart.
+        await earlier.getByRole("button", { name: new RegExp(orderRequest) }).click();
+        const decided = ordersPage.getByRole("article", { name: "Order draft", exact: true });
+        await decided.waitFor();
+        const decidedAmoxicillin = decided.getByRole("article", { name: "Amoxicillin 500 mg capsule" });
+        await decidedAmoxicillin.getByText("The chart documents an allergy:").waitFor();
+        await decidedAmoxicillin.getByText("You acknowledged: Allergy").waitFor();
+        await decidedAmoxicillin.getByText(overrideReason).waitFor();
+        assert.equal(await decided.getByRole("button", { name: /^(Approve|Reject)$/ }).count(), 0, "A decided order has no decision control");
+        const chartPanel = ordersPage.getByRole("region", { name: "In the patient's chart" });
+        await chartPanel.getByText("In the chart", { exact: true }).first().waitFor();
+        assert.equal(await chartPanel.getByRole("button", { name: "Write approved orders to the chart" }).count(), 0, "Everything approved is already in the chart");
+        if (shots) await ordersPage.screenshot({ path: `${shots}/orders-decided.png`, fullPage: true });
+
+        // A new request typed by the physician: a pending draft with the checks in words (the penicillin allergy; the CBC is already ordered in this visit).
+        await ordersPage.getByRole("button", { name: "New order request" }).click();
+        await ordersPage.getByRole("button", { name: "Prepare a CBC and a chest X-ray" }).waitFor();
+        await ordersPage.getByLabel("Which orders do you need?").fill(orderRequest);
+        await ordersPage.getByRole("button", { name: "Prepare orders" }).click();
+        const fresh = ordersPage.getByRole("article", { name: "Order draft", exact: true });
+        await fresh.waitFor();
+        const freshCbc = fresh.getByRole("article", { name: "Complete blood count" });
+        const freshAmoxicillin = fresh.getByRole("article", { name: "Amoxicillin 500 mg capsule" });
+        await freshCbc.getByText("Already ordered this visit").waitFor();
+        await freshAmoxicillin.getByText("To approve this order you must acknowledge this warning and give a reason.").waitFor();
+        if (shots) await ordersPage.screenshot({ path: `${shots}/orders-draft.png`, fullPage: true });
+        // The allergy is approved only with its acknowledgement and a reason; until then recording is blocked, and a reason that is too short is not enough.
+        const record = ordersPage.getByRole("button", { name: "Record my decisions" });
+        assert.equal(await record.isDisabled(), true, "Nothing chosen: nothing to record");
+        await freshAmoxicillin.getByRole("group", { name: "Decision for Amoxicillin 500 mg capsule" }).getByRole("button", { name: "Approve" }).click();
+        assert.equal(await record.isDisabled(), true, "An approval that lacks its acknowledgement and reason cannot be recorded");
+        await ordersPage.getByText("Acknowledge each warning and give a reason for the orders that need one.").waitFor();
+        await freshCbc.getByRole("group", { name: "Decision for Complete blood count" }).getByRole("button", { name: "Approve" }).click();
+        await freshAmoxicillin.getByRole("checkbox", { name: /I have read the allergy warning/ }).check();
+        await freshAmoxicillin.getByLabel("Why you are ordering it anyway").fill("too short");
+        await ordersPage.getByText("Acknowledge each warning and give a reason for the orders that need one.").waitFor();
+        if (shots) await ordersPage.screenshot({ path: `${shots}/orders-acknowledge.png`, fullPage: true });
+        await freshAmoxicillin.getByLabel("Why you are ordering it anyway").fill("Fictional: reviewed with the patient in the clinic.");
+        await ordersPage.getByText("Acknowledge each warning and give a reason for the orders that need one.").waitFor({ state: "detached" });
+        await record.click();
+        const confirmDecisions = ordersPage.getByRole("dialog", { name: "Record your decisions?" });
+        await confirmDecisions.getByText("You approve").waitFor();
+        assert.ok(await confirmDecisions.getByText("Amoxicillin 500 mg capsule").isVisible());
+        if (shots) await ordersPage.screenshot({ path: `${shots}/orders-confirm.png` });
+        const draftsBefore = (await call(ordersApi, 200, { cookie: doctor })).json.length;
+        await confirmDecisions.getByRole("button", { name: "Record decisions" }).click();
+        await freshAmoxicillin.getByText("Approved", { exact: true }).waitFor();
+        await freshCbc.getByText("Approved", { exact: true }).waitFor();
+        assert.equal(await fresh.getByRole("button", { name: /^(Approve|Reject)$/ }).count(), 0, "Decided orders have no decision control");
+        assert.equal((await call(ordersApi, 200, { cookie: doctor })).json.length, draftsBefore, "Deciding makes no new draft");
+        // Nothing is in the chart yet. An EHR that takes no order (as OpenEMR 7.0.3) gets nothing, and the orders come back as text to enter and copy.
+        const resourcesBefore = orderResources().length;
+        await chartPanel.getByText("Not written yet").first().waitFor();
+        assert.equal(await chartPanel.getByText("Not written yet").count(), 2);
+        ehr.state.noCreate = new Set(["ServiceRequest", "MedicationRequest"]);
+        await chartPanel.getByRole("button", { name: "Write approved orders to the chart" }).click();
+        const confirmWrite = ordersPage.getByRole("dialog", { name: "Write these orders to the patient's chart?" });
+        await confirmWrite.getByText("Amoxicillin 500 mg capsule").waitFor();
+        await confirmWrite.getByRole("button", { name: "Write to chart" }).click();
+        await chartPanel.getByText("Your EHR cannot receive these orders").waitFor();
+        await chartPanel.getByText("Laboratory: Complete blood count (CBC-1, urn:test)").waitFor();
+        await chartPanel.getByText("Medication: Amoxicillin, 500 mg, oral, every 8 hours, 7 days").waitFor();
+        assert.equal(orderResources().length, resourcesBefore, "Nothing was created in an EHR that takes no orders");
+        if (shots) await ordersPage.screenshot({ path: `${shots}/orders-cannot-receive.png`, fullPage: true });
+        await chartPanel.getByRole("button", { name: "Copy all as text" }).click();
+        await chartPanel.getByText("Copied", { exact: true }).waitFor();
+        assert.equal(await ordersPage.evaluate(() => navigator.clipboard.readText()), "Laboratory: Complete blood count (CBC-1, urn:test)\nMedication: Amoxicillin, 500 mg, oral, every 8 hours, 7 days");
+        // An EHR that takes them: each approved order is created once, and the controls to write are gone.
+        ehr.state.noCreate = new Set();
+        await chartPanel.getByRole("button", { name: "Write approved orders to the chart" }).click();
+        await ordersPage.getByRole("dialog", { name: "Write these orders to the patient's chart?" }).getByRole("button", { name: "Write to chart" }).click();
+        await chartPanel.getByText("In the chart", { exact: true }).nth(1).waitFor();
+        assert.equal(orderResources().length, resourcesBefore + 2);
+        assert.equal(await chartPanel.getByRole("button", { name: "Write approved orders to the chart" }).count(), 0);
+        assert.equal(await chartPanel.getByText("Your EHR cannot receive these orders").count(), 0);
+        if (shots) await ordersPage.screenshot({ path: `${shots}/orders-written.png`, fullPage: true });
+        await noSidewaysScroll(ordersPage, "A written order draft, English, 420 px");
+
+        // A clinician who is not a physician reads their own draft: no approve, reject or write control, and the reason why.
+        const nursePage = await open(observer, "/embed");
+        await nursePage.getByRole("tab", { name: "Orders" }).click();
+        await nursePage.getByRole("region", { name: "Order drafts for this visit" }).getByRole("button", { name: /Prepare a CBC/ }).click();
+        await nursePage.getByRole("article", { name: "Order draft", exact: true }).waitFor();
+        await nursePage.getByText("A physician must approve these orders before they can be entered in the chart.").waitFor();
+        assert.equal(await nursePage.getByRole("button", { name: /^(Approve|Reject)$|Record my decisions|Write approved orders/ }).count(), 0, "A nurse has no decision or write control");
+        if (shots) await nursePage.screenshot({ path: `${shots}/orders-nurse.png`, fullPage: true });
+
+        // Arabic, right to left, at 360 px: the same draft, the checks in Arabic, no sideways scroll.
+        const arabicPage = await open(doctor, "/embed", { width: 360, locale: "ar" });
+        assert.equal(await arabicPage.locator("html").getAttribute("dir"), "rtl");
+        await arabicPage.getByRole("tab", { name: "الأوامر" }).click();
+        await arabicPage.getByRole("heading", { name: "مساعد الأوامر" }).waitFor();
+        await noSidewaysScroll(arabicPage, "Orders tab, Arabic, 360 px");
+        await arabicPage.getByLabel("ما الأوامر التي تحتاجها؟").fill("جهّز عد دم كامل و amoxicillin");
+        await arabicPage.getByRole("button", { name: "إعداد الأوامر" }).click();
+        const arabicDraft = arabicPage.getByRole("article", { name: "مسودة الأوامر", exact: true });
+        await arabicDraft.waitFor();
+        const arabicAmoxicillin = arabicDraft.getByRole("article", { name: "Amoxicillin 500 mg capsule" });
+        await arabicAmoxicillin.getByText("يوثّق الملف حساسية:").waitFor();
+        await arabicAmoxicillin.getByText("لا يمكنك اعتماد هذا الأمر قبل أن تُقرّ بهذا التحذير وتذكر سببًا.").waitFor();
+        await arabicDraft.getByText("مطلوب بالفعل في هذه الزيارة").first().waitFor();
+        assert.equal(await arabicDraft.getByText("The chart documents an allergy").count(), 0, "The English sentence of a flag is not shown in Arabic");
+        assert.equal(await arabicDraft.getByRole("group", { name: "القرار بشأن Amoxicillin 500 mg capsule" }).count(), 1);
+        await arabicAmoxicillin.getByRole("group", { name: "القرار بشأن Amoxicillin 500 mg capsule" }).getByRole("button", { name: "اعتماد" }).click();
+        await arabicAmoxicillin.getByText("يلزم إقرارك لاعتماد هذا الأمر").waitFor();
+        await noSidewaysScroll(arabicPage, "A pending order draft, Arabic, 360 px");
+        if (shots) await arabicPage.screenshot({ path: `${shots}/orders-draft-ar.png`, fullPage: true });
+        await arabicPage.getByRole("button", { name: "تسجيل قراراتي" }).waitFor();
+
+        // Without the hospital's catalog the tab says order drafting is not set up, and offers nothing.
+        await stop();
+        assert.equal(await start({ ORDER_CATALOG_FILE: "" }), true);
+        const unconfigured = await open(doctor, "/embed");
+        await unconfigured.getByRole("tab", { name: "Orders" }).click();
+        await unconfigured.getByText("Order drafting is not set up").waitFor();
+        assert.equal(await unconfigured.getByLabel("Which orders do you need?").count(), 0);
+        if (shots) await unconfigured.screenshot({ path: `${shots}/orders-not-set-up.png`, fullPage: true });
+        await stop();
+        assert.equal(await start(), true);
+        console.log("live-ehr-flow: browser step passed (Orders tab: draft, checks in words, approval with acknowledgement, write and text to enter, nurse read-only, Arabic at 360 px, not set up)");
+      } catch (error) {
+        for (const [index, page] of opened.entries()) {
+          console.log(`PAGE ${index} ${page.url()}\n${(await page.locator("body").innerText().catch(() => "")).slice(0, 1500)}`);
+          if (shots) await page.screenshot({ path: `${shots}/failed-${index}.png`, fullPage: true }).catch(() => undefined);
+        }
+        throw error;
+      }
     } finally { await browser.close(); }
   }
 

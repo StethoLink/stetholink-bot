@@ -22,6 +22,8 @@ export interface FhirResource extends ObservationValue {
   resourceType?: string;
   id?: string;
   meta?: { lastUpdated?: string };
+  /** The resource's own narrative. Read only for an allergy whose code says nothing (OpenEMR holds a free-text allergy's name there). */
+  text?: { div?: string };
   name?: HumanName[];
   gender?: string;
   birthDate?: string;
@@ -93,6 +95,9 @@ const CATEGORY_NAME: Partial<Record<ClinicalFactCategory, string>> = {
   allergy: "allergies", problem: "active problems", medication: "active medication orders", vital_sign: "vital signs", investigation: "laboratory results",
 };
 // SNOMED CT assertions of absence. They are documented statements, kept in the record's own words.
+const DATA_ABSENT_REASON = "http://terminology.hl7.org/CodeSystem/data-absent-reason";
+/** The words of a resource's own narrative (`text.div`), without markup. */
+const narrative = (resource: FhirResource, max = 160) => clean((resource.text?.div ?? "").replace(/<[^>]*>/g, " ").replace(/&(?:amp|lt|gt|quot|apos|nbsp|#\d+|#x[0-9a-f]+);/gi, " "), max);
 const NO_KNOWN_ALLERGY = new Set(["716186003", "409137002", "429625007", "428607008", "160244002"]);
 
 /** Chart text is data: brackets, markup and control characters never reach a statement or a citation. */
@@ -161,7 +166,10 @@ export function normalizeChart(input: ChartInput, options: NormalizeOptions): { 
     let listed = 0;
     for (const resource of input.allergies.resources) {
       if (["inactive", "resolved"].includes(code(resource.clinicalStatus)) || ["refuted", "entered-in-error"].includes(code(resource.verificationStatus))) continue;
-      const label = conceptText(resource.code) || conceptText(resource.reaction?.find((reaction) => reaction.substance)?.substance);
+      // The allergen's own words come first. OpenEMR sends a free-text allergy as "unknown" (a data-absent-reason code) and keeps its name in the narrative only:
+      // the name is read from there, and only an allergy with no name anywhere is shown as the code's "Unknown".
+      const named = resource.code && { ...resource.code, coding: resource.code.coding?.filter((coding) => coding.system !== DATA_ABSENT_REASON) };
+      const label = conceptText(named) || narrative(resource) || conceptText(resource.reaction?.find((reaction) => reaction.substance)?.substance) || conceptText(resource.code);
       if (!label) continue;
       listed++;
       const absence = resource.code?.coding?.some((coding) => coding.code && NO_KNOWN_ALLERGY.has(coding.code));

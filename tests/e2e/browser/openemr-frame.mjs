@@ -4,6 +4,7 @@
 //
 //   OPENEMR_URL=https://localhost:9300 OPENEMR_USER=admin OPENEMR_PASS=... APP_ORIGIN=https://stetholink.test:3082 \
 //   APP_NAME=StethoLink OPENEMR_PID=1 [VISIT=none|<encounter number>] [FRAME_WIDTH=360] [UI=ar] [SHOTS=out] [EXPECT=chart|no-visit|not-shared] \
+//   [DRAFT=1] [ORDERS=1|not-set-up] [SCRIBE=1] [HISTORY=1] [ORDER_REQUEST="..."] \
 //   NODE_PATH=/opt/node-tools/node_modules node tests/e2e/browser/openemr-frame.mjs
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
@@ -155,6 +156,20 @@ const L = rtl ? {
   request: "Prepare a cardiology consultation for this patient asking whether the chest pain needs urgent evaluation for acute coronary syndrome and what to do first.",
   answer: "Urgent evaluation: should she go to the emergency department now, and which tests come first?",
 };
+/** The tabs of the panel, left to right in English (the order of Workspace.tsx). */
+const TAB = { scribe: 0, consultations: 1, orders: 2, history: 3 };
+/** The Orders tab: the names of what the script presses, in the language of the panel (the words of apps/embedded-app/i18n/work.ts, `orders`). */
+const O = rtl ? {
+  title: "مساعد الأوامر", requestLabel: "ما الأوامر التي تحتاجها؟", request: "جهّز عد دم كامل وأشعة صدر و amoxicillin", prepare: "إعداد الأوامر", draftTitle: "مسودة الأوامر",
+  noMatchAria: "لا شيء مطابق", notSetUp: "إعداد الأوامر غير مهيأ", decisionGroup: /^القرار بشأن /, approve: "اعتماد", reasonLabel: "لماذا تطلبه رغم ذلك", reason: "اختبار تجريبي: روجع الأمر مع المريض.",
+  record: "تسجيل قراراتي", confirm: "تسجيل القرارات", chartRegion: "في ملف المريض", write: "كتابة الأوامر المعتمدة في الملف", writeConfirm: "كتابة في الملف",
+  cannot: "لا يستطيع نظامك الطبي استقبال هذه الأوامر", copyAll: "نسخ الكل كنص",
+} : {
+  title: "Order assistant", requestLabel: "Which orders do you need?", request: "Prepare a CBC, a chest X-ray and amoxicillin", prepare: "Prepare orders", draftTitle: "Order draft",
+  noMatchAria: "Nothing matched", notSetUp: "Order drafting is not set up", decisionGroup: /^Decision for /, approve: "Approve", reasonLabel: "Why you are ordering it anyway", reason: "Fictional test: reviewed with the patient.",
+  record: "Record my decisions", confirm: "Record decisions", chartRegion: "In the patient's chart", write: "Write approved orders to the chart", writeConfirm: "Write to chart",
+  cannot: "Your EHR cannot receive these orders", copyAll: "Copy all as text",
+};
 const name = (base) => `${base}${rtl ? "-ar" : ""}-${width || "wide"}`;
 if (expectState === "no-visit") {
   const alert = frame.locator("[data-state=no-open-visit]");
@@ -190,7 +205,7 @@ if (expectState === "no-visit") {
   if (env.SCRIBE === "1") {
     // The recorder inside OpenEMR's frame. OpenEMR does not put allow="microphone" on it, so the browser refuses the
     // microphone: the panel must say so and offer no new window (it used to offer one).
-    await frame.getByRole("tab").nth(0).click();
+    await frame.getByRole("tab").nth(TAB.scribe).click();
     await frame.getByRole("button", { name: L.start }).first().click();
     await frame.getByRole("checkbox").check();
     await frame.getByRole("dialog").getByRole("button", { name: L.start }).click();
@@ -209,7 +224,7 @@ if (expectState === "no-visit") {
     // configured on the server. The draft goes through the de-identification layer; nothing is sent to a specialist.
     const chartToggle = frame.locator("button[aria-controls=chart-summary]");
     if (await chartToggle.getAttribute("aria-expanded") === "true") await chartToggle.click();
-    await frame.getByRole("tab").nth(1).click();
+    await frame.getByRole("tab").nth(TAB.consultations).click();
     await frame.getByRole("textbox").first().fill(env.DRAFT_REQUEST ?? L.request);
     await frame.getByRole("button", { name: L.prepare }).click();
     await shot(element, name("draft-working"));
@@ -240,9 +255,73 @@ if (expectState === "no-visit") {
       await shot(element, name("approved"));
     }
   }
+  if (env.ORDERS === "not-set-up") {
+    // The server was started without ORDER_CATALOG_FILE: the tab says order drafting is not set up and offers nothing.
+    const chartOpen = frame.locator("button[aria-controls=chart-summary]");
+    if (await chartOpen.getAttribute("aria-expanded") === "true") await chartOpen.click();
+    await frame.getByRole("tab").nth(TAB.orders).click();
+    await frame.getByText(O.notSetUp).waitFor({ timeout: 20000 });
+    assert.equal(await frame.getByLabel(O.requestLabel).count(), 0, "the tab still offers a request box");
+    await shot(element, name("orders-not-set-up"));
+  }
+  if (env.ORDERS === "1") {
+    // Orders drafted by the real model from the hospital's catalog (ORDER_CATALOG_FILE on the server: the fictional catalog of
+    // tests/fixtures/order-catalog.ts), then the physician's decision with its acknowledgement and the write that OpenEMR 7.0.3 cannot
+    // take: the approved orders come back as text to enter. Needs the model configured on the server. Nothing is written to OpenEMR.
+    const chartToggle = frame.locator("button[aria-controls=chart-summary]");
+    if (await chartToggle.getAttribute("aria-expanded") === "true") await chartToggle.click();
+    await frame.getByRole("tab").nth(TAB.orders).click();
+    await frame.getByRole("heading", { name: O.title }).waitFor({ timeout: 20000 });
+    await shot(element, name("orders-start"));
+    await frame.getByLabel(O.requestLabel).fill(env.ORDER_REQUEST ?? O.request);
+    await frame.getByRole("button", { name: O.prepare }).click();
+    await shot(element, name("orders-working"));
+    const orderDraft = frame.getByRole("article", { name: O.draftTitle, exact: true });
+    const nothing = frame.locator(`section[aria-label="${O.noMatchAria}"]`);
+    await orderDraft.or(nothing).or(frame.locator("[role=alert].alert-danger")).first().waitFor({ timeout: 110000 });
+    if (!(await orderDraft.count())) {
+      console.log("ORDERS no draft: " + (await frame.locator("main").innerText()).slice(0, 300).replace(/\s+/g, " "));
+      await shot(element, name("orders-no-match"));
+    } else {
+      await orderDraft.scrollIntoViewIfNeeded();
+      await shot(element, name("orders-draft"));
+      const cards = orderDraft.getByRole("article");
+      console.log("ORDERS draft: " + (await cards.count()) + " orders");
+      // The allergy card, with its check in words.
+      const flagged = orderDraft.getByRole("article", { name: /amoxicillin/i });
+      if (await flagged.count()) { await flagged.first().scrollIntoViewIfNeeded(); await shot(element, name("orders-flags")); }
+      // Approve every order; the allergy needs its acknowledgement and a reason before the decisions can be recorded.
+      for (const group of await orderDraft.getByRole("group", { name: O.decisionGroup }).all()) await group.getByRole("button", { name: O.approve, exact: true }).click();
+      for (const box of await frame.getByRole("checkbox").all()) await box.check();
+      for (const field of await frame.getByLabel(O.reasonLabel).all()) await field.fill(O.reason);
+      if (await flagged.count()) { await flagged.first().scrollIntoViewIfNeeded(); await shot(element, name("orders-acknowledge")); }
+      const record = frame.getByRole("button", { name: O.record });
+      await record.scrollIntoViewIfNeeded();
+      await record.click();
+      await frame.getByRole("dialog").waitFor();
+      await shot(element, name("orders-confirm"));
+      await frame.getByRole("dialog").getByRole("button", { name: O.confirm }).click();
+      const panel = frame.getByRole("region", { name: O.chartRegion });
+      await panel.waitFor({ timeout: 20000 });
+      await panel.scrollIntoViewIfNeeded();
+      await shot(element, name("orders-approved"));
+      await panel.getByRole("button", { name: O.write }).click();
+      await frame.getByRole("dialog").waitFor();
+      await shot(element, name("orders-write-confirm"));
+      await frame.getByRole("dialog").getByRole("button", { name: O.writeConfirm }).click();
+      await panel.getByText(O.cannot).waitFor({ timeout: 30000 });
+      await panel.scrollIntoViewIfNeeded();
+      await shot(element, name("orders-cannot-receive"));
+      // Inside OpenEMR's frame the clipboard may be blocked: the panel says so instead of failing without a word.
+      await panel.getByRole("button", { name: O.copyAll }).click().catch(() => undefined);
+      await page.waitForTimeout(500);
+      console.log("ORDERS after copy: " + (await panel.locator("[role=status]").allInnerTexts()).join(" | "));
+      assert.equal(popups.length, 0, "the orders opened a window");
+    }
+  }
   if (env.HISTORY === "1") {
     // The History tab: the consultations of this visit (after DRAFT=1 there is one) and the recorded visits.
-    await frame.getByRole("tab").nth(2).click();
+    await frame.getByRole("tab").nth(TAB.history).click();
     await frame.locator("section[aria-label], [role=tabpanel] ul, [role=tabpanel] [role=status]").first().waitFor({ timeout: 20000 });
     await page.waitForTimeout(800);
     await shot(element, name("history"));
@@ -253,7 +332,7 @@ if (expectState === "no-visit") {
     console.log("BREAK_NOW");
     await page.waitForTimeout(Number(env.BREAK_HOOK));
     await frame.locator("button[aria-controls=chart-summary]").click();
-    await frame.getByRole("tab").nth(2).click();
+    await frame.getByRole("tab").nth(TAB.history).click();
     const reference = frame.getByText(/[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{4}/).first();
     await reference.waitFor({ timeout: 30000 });
     console.log("REFERENCE " + (await reference.innerText()).match(/[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{4}/)[0]);

@@ -103,7 +103,7 @@ describe("no English left in the work areas' source", () => {
       return statSync(path).isDirectory() ? files(path) : /\.tsx$/.test(path) ? [path] : [];
     });
   }
-  const areas = ["consultations", "scribe", "specialist", "workspace", "ehr-panel"].map((name) => join(root, "apps/embedded-app/features", name));
+  const areas = ["consultations", "scribe", "specialist", "workspace", "ehr-panel", "orders"].map((name) => join(root, "apps/embedded-app/features", name));
   const sources = [...areas.flatMap(files), ...files(join(root, "apps/embedded-app/components/ui"))];
 
   /** Every piece of text a person reads that is written in a component instead of the dictionary. */

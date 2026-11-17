@@ -88,6 +88,23 @@ describe("FHIR chart to clinical facts", () => {
     expect(keyed[0].id).not.toBe(first[0].id);
   });
 
+  it("names a free-text allergy from its narrative, as OpenEMR 7.0.3 sends it, so the allergy check can match it", async () => {
+    // The resource as OpenEMR 7.0.3 renders it (read from its own FHIR service, fictional patient): the code says "unknown", the name is only in the narrative.
+    const openemr = (over: object) => ({ resourceType: "AllergyIntolerance", id: "alg-openemr", patient: { reference: `Patient/${FICTIONAL_PATIENT_ID}` }, recordedDate: "2026-01-05", criticality: "high",
+      clinicalStatus: { coding: [{ system: "http://terminology.hl7.org/CodeSystem/allergyintolerance-clinical", code: "active", display: "Active" }] },
+      code: { coding: [{ system: "http://terminology.hl7.org/CodeSystem/data-absent-reason", code: "unknown", display: "Unknown" }] }, reaction: [{ manifestation: [{ text: "" }] }], ...over });
+    const labelOf = async (resource: object) => {
+      const { connector } = connect((path) => path === "/AllergyIntolerance" ? bundle([resource]) : undefined);
+      const patient = (await connector.getPatient(FICTIONAL_PATIENT_ID))!;
+      return { label: patient.clinicalFacts!.find((entry) => entry.category === "allergy")?.label, allergies: patient.allergies };
+    };
+    expect(await labelOf(openemr({ text: { status: "additional", div: "<div xmlns='http://www.w3.org/1999/xhtml'>Penicillin</div>" } }))).toEqual({ label: "Penicillin", allergies: ["Penicillin"] });
+    // Markup and entities are not words; a code with text of its own is read as before; an allergy with no name anywhere is still the code's "Unknown".
+    expect((await labelOf(openemr({ text: { div: "<div>Sulfa &amp; <b>latex</b></div>" } }))).label).toBe("Sulfa latex");
+    expect((await labelOf(openemr({ code: { text: "Latex", coding: [{ system: "http://terminology.hl7.org/CodeSystem/data-absent-reason", code: "unknown", display: "Unknown" }] }, text: { div: "<div>Other</div>" } }))).label).toBe("Latex");
+    expect((await labelOf(openemr({}))).label).toBe("Unknown");
+  });
+
   it("reports an empty allergy list as not recorded, and a no-known-allergy record in its own words", async () => {
     const empty = connect((path) => path === "/AllergyIntolerance" ? bundle([]) : undefined);
     const patient = (await empty.connector.getPatient(FICTIONAL_PATIENT_ID))!;

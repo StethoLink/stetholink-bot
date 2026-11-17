@@ -21,13 +21,13 @@ export function Tabs<K extends string>({ items, value, onChange, label, children
   }
   return (
     <>
-      <div role="tablist" aria-label={label} onKeyDown={onKeyDown} className="flex gap-1 border-b border-slate-200">
+      <div role="tablist" aria-label={label} onKeyDown={onKeyDown} className="flex gap-0.5 overflow-x-auto border-b border-slate-200 min-[400px]:gap-1">
         {items.map((item) => {
           const selected = item.key === value;
           return (
             <button key={item.key} ref={(node) => { if (node) refs.current.set(item.key, node); }} type="button" role="tab" id={`${id}-tab-${item.key}`}
               aria-selected={selected} aria-controls={`${id}-panel-${item.key}`} tabIndex={selected ? 0 : -1} onClick={() => onChange(item.key)}
-              className={`-mb-px inline-flex items-center gap-1.5 border-b-2 px-3 py-2 text-sm font-medium ${selected ? "border-sky-700 text-sky-900" : "border-transparent text-slate-700 hover:text-slate-900"}`}>
+              className={`-mb-px inline-flex shrink-0 items-center gap-1.5 border-b-2 px-2 py-2 text-sm font-medium whitespace-nowrap min-[400px]:px-3 ${selected ? "border-sky-700 text-sky-900" : "border-transparent text-slate-700 hover:text-slate-900"}`}>
               {item.label}{item.badge}
             </button>
           );

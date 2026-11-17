@@ -23,6 +23,6 @@ export const ORDER_CATALOG: OrderCatalog = {
     orderItem({ id: "med-warf", kind: "medication", display: "Warfarin 5 mg tablet", synonyms: ["warfarin"], matchTerms: ["warfarin"], groups: ["anticoagulant"],
       medication: { product: "Warfarin", dose: "5 mg", route: "oral", frequency: "once daily" } }),
   ],
-  sets: [{ id: "set-chest", name: "Chest pain basics", synonyms: ["basic orders", "الطلبات الأساسية"], itemIds: ["lab-cbc", "img-cxr", "lab-trop", "nur-obs"] }],
+  sets: [{ id: "set-chest", name: "Chest pain basics", synonyms: ["basic orders", "الطلبات الأساسية", "الأوامر الأساسية"], itemIds: ["lab-cbc", "img-cxr", "lab-trop", "nur-obs"] }],
   interactions: [{ groups: ["nsaid", "anticoagulant"], severity: "major", text: "An NSAID with an anticoagulant raises the risk of bleeding." }],
 };

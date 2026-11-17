@@ -1,5 +1,7 @@
 # Interface: the embedded panel inside the EHR
 
+> **Orders (OpenEMR brief, T6 sub-step 4, 2026-11-17).** The Orders tab is shown in [its own section](#orders-the-orders-tab-t6-sub-step-4), with screenshots from the same real OpenEMR 7.0.3 frame.
+>
 > **Status (OpenEMR brief, T5, 2026-11-16).** The screenshots in `after/` were taken **inside a real OpenEMR 7.0.3 frame** (Docker), not on the synthetic staging that the older ones came from. What they show and what they do not is below. The old staging screenshots are kept in [`archive-staging/`](archive-staging/) with their own note, because the staging mode (and the labels "Synthetic data" and "No AI inference" on them) no longer exists.
 
 ## Screenshots taken inside OpenEMR
@@ -65,6 +67,43 @@ OPENEMR_PID=1 VISIT=<encounter number> FRAME_WIDTH=360 UI=ar SHOTS=out NODE_PATH
 node tests/e2e/browser/openemr-frame.mjs        # DRAFT=1, SCRIBE=1, EXPECT=no-visit|not-shared, BREAK_HOOK=<ms>: see the file header
 ```
 
+## Orders: the Orders tab (T6, sub-step 4)
+
+The Orders tab sits between Consultations and History (Alt + 3). A physician says what to order, reviews the drafted orders with their checks in words, approves or rejects each one, and writes the approved orders to the chart or, where the EHR cannot take them, enters them by hand from text the panel offers. How it behaves is in [orders.md](../orders.md), "On the screen".
+
+**How these were taken.** Inside the real OpenEMR 7.0.3 frame, as the screenshots above: `tests/e2e/browser/openemr-frame.mjs` with `ORDERS=1`, Chromium 153 at 2x, the production build, the app on another site than OpenEMR (`COOKIE_MODE=embedded`), the fictional patient made inside that OpenEMR (a penicillin allergy, two active problems, metformin, a visit). The hospital's catalog is the **fictional** one of `tests/fixtures/order-catalog.ts`, written to a file for `ORDER_CATALOG_FILE` (a CBC, a chest X-ray, amoxicillin and others; no real clinical content). The model was OpenAI `gpt-5` at low reasoning effort through this environment's proxy, behind the de-identification layer, a few cents for each run. The registration held no create scope and OpenEMR 7.0.3 has no `ServiceRequest` and a read-only `MedicationRequest`, so the write was answered "unsupported" for each order (the server's log line says so) and nothing reached OpenEMR.
+
+**English, 420 px: from the request to the text to enter**
+
+| The tab | The draft | The allergy, in words | Acknowledgement and reason |
+| --- | --- | --- | --- |
+| ![](after/orders-start-420.png) | ![](after/orders-draft-420.png) | ![](after/orders-flags-420.png) | ![](after/orders-acknowledge-420.png) |
+
+| Confirming the decisions | After the decisions | The EHR cannot receive the orders |
+| --- | --- | --- |
+| ![](after/orders-confirm-420.png) | ![](after/orders-approved-420.png) | ![](after/orders-cannot-receive-420.png) |
+
+**Arabic (right to left), 360 px: the same walk**
+
+| The tab | The draft | The allergy, in Arabic | Acknowledgement and reason |
+| --- | --- | --- | --- |
+| ![](after/orders-start-ar-360.png) | ![](after/orders-draft-ar-360.png) | ![](after/orders-flags-ar-360.png) | ![](after/orders-acknowledge-ar-360.png) |
+
+| Confirming the decisions | After the decisions | The EHR cannot receive the orders |
+| --- | --- | --- |
+| ![](after/orders-confirm-ar-360.png) | ![](after/orders-approved-ar-360.png) | ![](after/orders-cannot-receive-ar-360.png) |
+
+**States, 360 px**
+
+| Nothing in the catalog matched (the request "an MRI of the knee") | No catalog configured on the server (501) |
+| --- | --- |
+| ![](after/orders-no-match-360.png) | ![](after/orders-not-set-up-360.png) |
+
+- *What each shows:* the request box with the two examples and the earlier drafts of the visit; the draft with the orders grouped by kind, each with who asked ("You asked for this", with the physician's words), the catalog's own code and dose, and its checks; the allergy flag in words with the chart fact it cites and the line that says an acknowledgement and a reason are needed; the acknowledgement box and the reason field that appear when Approve is chosen for that order; the confirmation, which says that the decision is final and that nothing is written to the EHR yet; the approved orders with the "Your EHR cannot receive these orders" notice and, for each, the text to enter and a Copy button (the Copy-all button put the text on the clipboard inside OpenEMR's frame: the run printed "Copied"); and the two empty states.
+- *The allergy check on a real chart.* The first run in this OpenEMR showed **no** allergy flag on the amoxicillin although the chart lists a penicillin allergy: OpenEMR 7.0.3 sends a free-text allergy with the code "unknown" and keeps its name only in the resource's narrative, so StethoLink called it "Unknown" and the catalog's allergy words did not match it. The connector now reads the name from the narrative (`integrations/fhir/facts.ts`, with a test built from the resource OpenEMR renders); the screenshots above were taken after that change. A coded problem with no display text is still dropped (an open item of the handoff).
+- *Arabic:* the screen builds each check's sentence from its kind, its severity and the labels of the chart facts it cites, so no English sentence of the server is shown; a name or a value the catalog, the chart or the model wrote (a medicine, a fact such as "Penicillin (criticality: high)", the assistant's reason, which came back in English) is shown as written, in its own direction. A chart value inside a sentence is kept in one piece so that it does not break across two lines.
+- *Not shot inside OpenEMR:* the view of a clinician who is not a physician (no decision or write control; it is in the fake-EHR browser step of `tests/e2e/live-ehr-flow.mts`, `orders-nurse.png`), the write to an EHR that accepts orders (only a fake FHIR server took it), the decision dialog for a major interaction (the fictional chart has no active anticoagulant in OpenEMR; the same dialog is the allergy one), the screens in a hospital's own OpenEMR.
+
 ## Problems found in the old interface
 
 1. **One endless page.** At 360 px the draft screen was 5,190 px tall: chart, visit, request, draft, sources, revision and decision in a single scroll, with no way to move between them.
@@ -82,7 +121,7 @@ node tests/e2e/browser/openemr-frame.mjs        # DRAFT=1, SCRIBE=1, EXPECT=no-v
 
 | Area | Now |
 | --- | --- |
-| Layout | A sticky patient bar (name, age, sex, visit, real or synthetic data, allergy state) and three tabs: Scribe, Consultations, History. Works from a 360 px side panel to a full window. The chart record opens under the bar on demand. |
+| Layout | A sticky patient bar (name, age, sex, visit, real or synthetic data, allergy state) and four tabs: Scribe, Consultations, Orders, History. Works from a 360 px side panel to a full window. The chart record opens under the bar on demand. |
 | Design tokens | `apps/embedded-app/app/globals.css`: one calm primary, cool neutrals, four semantic colours and a separate colour for AI-written content; spacing, radius, light shadows and one focus ring. Text and boundary contrasts are checked against WCAG 2.2 AA in `tests/frontend/design-tokens.test.ts`. |
 | Font | IBM Plex Sans Arabic (Latin and Arabic), served by the application through `next/font/local`. Nothing is loaded from another origin. |
 | Components | `apps/embedded-app/components/ui/`: Button, Card, Badge, Tabs, Dialog, ConfirmDialog, Toast, Skeleton, EmptyState, Alert, Textarea, Select, Tooltip, SegmentedControl, WorkInProgress. No new dependency. |
@@ -90,7 +129,7 @@ node tests/e2e/browser/openemr-frame.mjs        # DRAFT=1, SCRIBE=1, EXPECT=no-v
 | Irreversible actions | Approve, reject, reopen and send each open a dialog that states exactly what happens. The send dialog lists what the specialist receives and what is not sent. |
 | Waiting | Progress with elapsed time, the current step, a skeleton of the result and Cancel. A cancelled request can be repeated safely (same idempotency key). |
 | Errors | Say what happened and what to do next (session ended, assistant unavailable, not set up for this hospital, changed elsewhere). |
-| Keyboard | Alt+1/2/3 switch tabs, Ctrl+Enter submits the text being typed, Esc closes a dialog, `?` lists the shortcuts. Tabs follow the WAI-ARIA pattern. |
+| Keyboard | Alt+1/2/3/4 switch tabs, Ctrl+Enter submits the text being typed, Esc closes a dialog, `?` lists the shortcuts. Tabs follow the WAI-ARIA pattern. |
 | Language and right to left | English or Arabic. The panel shell, the chart views, the launch error page and the error texts are translated; the clinician switches with the button at the bottom of the panel (remembered in a cookie) and `UI_DEFAULT_LOCALE` sets the hospital's default. `dir` is on the root element, every spacing and border is logical (a test fails on a physical `left`/`right`), and names, chart entries and references keep their own direction (`bdi`, `dir="auto"`, `dir="ltr"` for references and keys). The three work areas (Scribe, Consultations with the approval and delivery panels, History) and the specialist's inbox are translated too (`apps/embedded-app/i18n/work.ts`); a test fails if a text a person reads is written in a component instead of the dictionary, and the sentences StethoLink's own connector and core write into the chart view and the draft (fact labels, chart notes, the missing-information lines, the age) are translated by `i18n/chart-text.ts` and pinned to the real connector output. What the model, the EHR or a specialist wrote stays as written. |
 | States | Loading (skeleton, then progress with Cancel), no open visit (the launch page, with its reference), a part of the chart the EHR did not grant (named, in the patient bar and the chart), an error from the server (the explanation and, for a server-side failure, the reference of its log line), a microphone the EHR frame does not allow. |
 | Inside the EHR | No popup, window or tab: the scribe's "Open in a new window" button is gone. Every response carries `frame-ancestors <EHR origin>` and a policy that lets the page load and call only its own origin. See [openemr.md, 5a](../openemr.md). |
